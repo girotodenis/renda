@@ -1,0 +1,5 @@
+tb_restaurante:
+  - id: 123
+    nome: "teste"
+  - id: 124
+    nome: "teste"
