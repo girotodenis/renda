@@ -10,7 +10,11 @@ import com.github.database.rider.core.api.dataset.DataSet;
 import org.approvaltests.JsonApprovals;
 import org.junit.jupiter.api.Test;
 
+import br.dsg.ifood.cadastro.pojo.Restaurante;
 import io.quarkus.test.junit.QuarkusTest;
+import org.junit.Assert;
+
+import javax.ws.rs.core.Response.Status;
 
 @DBRider
 @DBUnit(caseInsensitiveStrategy = Orthography.LOWERCASE)
@@ -23,10 +27,31 @@ public class RestauranteResourceTest {
         var string = given()
           .when().get("/restaurantes")
           .then()
-             .statusCode(200)
+             .statusCode(Status.CREATED.getStatusCode())
              .extract().asString();
         
         JsonApprovals.verifyJson(string);
+        
+    }
+    
+    @Test
+    @DataSet("restaurante-cenario-1.yml")
+    public void test_alterar_restaurantes_endpoint() {
+    	
+    	Restaurante dto = new Restaurante();
+    	dto.id = 123L;
+    	dto.nome = "novo nome";
+    	
+        given()
+           .with().pathParam("idRestaurante", dto.id)
+           .body(dto)
+          .when().put("/restaurantes")
+          .then()
+             .statusCode(Status.NO_CONTENT.getStatusCode());
+        
+        Restaurante entidade = Restaurante.findById(dto.id);
+        
+        Assert.assertEquals(dto.nome, entidade.nome);
         
     }
 

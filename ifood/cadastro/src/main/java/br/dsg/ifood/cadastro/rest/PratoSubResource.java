@@ -14,11 +14,16 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
 
+import br.dsg.ifood.cadastro.dto.RestauranteMapper;
 import br.dsg.ifood.cadastro.pojo.Prato;
 import br.dsg.ifood.cadastro.service.PratoService;
 
 @Singleton
 public class PratoSubResource {
+	
+	@Inject
+	RestauranteMapper restauranteMapper;
+	
 	
 	@Inject
 	PratoService pratoService;
@@ -43,7 +48,7 @@ public class PratoSubResource {
 	public Response alterar(@PathParam("id")Long id,  Prato dto) {
 		
 		pratoService.alterar(dto);
-		return Response.status(Status.OK).build();
+		return Response.status(Status.NO_CONTENT).build();
 	}
 	
 	@DELETE
@@ -52,7 +57,7 @@ public class PratoSubResource {
 	public Response deletar(@PathParam("id")Long id) {
 		
 		pratoService.deletar(id);
-		return Response.status(Status.OK).build();
+		return Response.status(Status.NO_CONTENT).build();
 	}
 
 }

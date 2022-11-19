@@ -3,28 +3,37 @@ package br.dsg.ifood.cadastro.service;
 import java.util.Optional;
 
 import javax.enterprise.context.RequestScoped;
+import javax.inject.Inject;
 import javax.transaction.Transactional;
 import javax.ws.rs.NotFoundException;
 
+import br.dsg.ifood.cadastro.dto.AdicionarRestauranteDTO;
+import br.dsg.ifood.cadastro.dto.AlterarRestauranteDTO;
+import br.dsg.ifood.cadastro.dto.RestauranteMapper;
 import br.dsg.ifood.cadastro.pojo.Restaurante;
 
 @RequestScoped
 public class RestauranteService {
 	
+	@Inject
+	RestauranteMapper restauranteMapper;
+	
 	@Transactional
-	public void adicionar(Restaurante dto) {
+	public void adicionar(AdicionarRestauranteDTO dto) {
 		
-		dto.id = null;
-		dto.persist();
+		var restaurante = restauranteMapper.toRestaurante(dto);
+		restaurante.persist();
 	}
 	
 	@Transactional
-	public void alterar(Restaurante dto) {
+	public void alterar(Long idRestaurante, AlterarRestauranteDTO dto) {
 		
-		Optional<Restaurante> restauranteOP = Restaurante.findByIdOptional(dto.id);
+		Optional<Restaurante> restauranteOP = Restaurante.findByIdOptional(idRestaurante);
 		Restaurante restaurante = restauranteOP.orElseThrow(NotFoundException::new);
-		restaurante.nome = dto.nome; 
-		restaurante.persist();
+		
+        restauranteMapper.updateRestauranteFromDto(dto, restaurante);
+		
+        restaurante.persist();
 	}
 
 	@Transactional

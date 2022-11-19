@@ -1,6 +1,7 @@
 package br.dsg.ifood.cadastro.rest;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 import javax.inject.Inject;
 import javax.ws.rs.Consumes;
@@ -15,7 +16,10 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
 
-import br.dsg.ifood.cadastro.pojo.Restaurante;
+import br.dsg.ifood.cadastro.dto.AdicionarRestauranteDTO;
+import br.dsg.ifood.cadastro.dto.AlterarRestauranteDTO;
+import br.dsg.ifood.cadastro.dto.RestauranteDTO;
+import br.dsg.ifood.cadastro.dto.RestauranteMapper;
 import br.dsg.ifood.cadastro.repository.RestauranteRepository;
 import br.dsg.ifood.cadastro.service.RestauranteService;
 
@@ -23,6 +27,9 @@ import br.dsg.ifood.cadastro.service.RestauranteService;
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
 public class RestauranteResource {
+	
+	@Inject
+	RestauranteMapper restauranteMapper;
 	
 	@Inject
 	PratoSubResource pratoSubResource;
@@ -34,13 +41,17 @@ public class RestauranteResource {
 	RestauranteService restauranteService;
 	
 	@GET
-	public List<Restaurante> todos() {
+	public List<RestauranteDTO> todos() {
 		
-		return restauranteRepository.findAll().list();
+		return restauranteRepository.findAll().list()
+				.stream()
+				.map(restauranteMapper::toRestauranteDTO)
+				.collect(Collectors.toList());
 	}
 
 	@POST
-	public Response cadastrar(Restaurante dto) {
+	public Response cadastrar(AdicionarRestauranteDTO dto) {
+		
 		
 		restauranteService.adicionar( dto );
 		return Response.status(Status.CREATED).build();
@@ -48,11 +59,10 @@ public class RestauranteResource {
 	
 	@PUT
 	@Path("{idRestaurante}")
-	public Response alterar(@PathParam("idRestaurante")Long idRestaurante, Restaurante dto) {
+	public Response alterar(@PathParam("idRestaurante")Long idRestaurante, AlterarRestauranteDTO dto) {
 		
-		dto.id = idRestaurante;
-		restauranteService.adicionar( dto );
-		return Response.status(Status.OK).build();
+		restauranteService.alterar( idRestaurante, dto );
+		return Response.status(Status.NO_CONTENT).build();
 	}
 	
 	@DELETE
@@ -60,12 +70,11 @@ public class RestauranteResource {
 	public Response deletar(@PathParam("idRestaurante")Long idRestaurante) {
 		
 		restauranteService.deletar( idRestaurante );
-		return Response.status(Status.OK).build();
+		return Response.status(Status.NO_CONTENT).build();
 	}
 	
 	@Path("{idRestaurante}/pratos")
 	public PratoSubResource acessarPratos() {
-		
 		return pratoSubResource;
 	}
 	
