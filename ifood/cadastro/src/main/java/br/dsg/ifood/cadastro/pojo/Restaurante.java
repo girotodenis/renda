@@ -1,6 +1,6 @@
 package br.dsg.ifood.cadastro.pojo;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 import javax.persistence.CascadeType;
 import javax.persistence.Entity;
@@ -33,10 +33,10 @@ public class Restaurante extends PanacheEntityBase {
 	public Localizacao localizacao; 
 	
 	@CreationTimestamp
-	public LocalDate dataCriacao;
+	public LocalDateTime dataCriacao;
 	
 	@UpdateTimestamp
-	public LocalDate dataAtualizacao;
+	public LocalDateTime dataAtualizacao;
 	
 	
 

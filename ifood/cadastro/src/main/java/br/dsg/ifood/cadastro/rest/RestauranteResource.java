@@ -3,6 +3,7 @@ package br.dsg.ifood.cadastro.rest;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import javax.annotation.security.RolesAllowed;
 import javax.enterprise.context.RequestScoped;
 import javax.inject.Inject;
 import javax.validation.Valid;
@@ -18,9 +19,15 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
 
+import org.eclipse.microprofile.openapi.annotations.enums.SecuritySchemeIn;
+import org.eclipse.microprofile.openapi.annotations.enums.SecuritySchemeType;
 import org.eclipse.microprofile.openapi.annotations.media.Content;
 import org.eclipse.microprofile.openapi.annotations.media.Schema;
 import org.eclipse.microprofile.openapi.annotations.responses.APIResponse;
+import org.eclipse.microprofile.openapi.annotations.security.OAuthFlow;
+import org.eclipse.microprofile.openapi.annotations.security.OAuthFlows;
+import org.eclipse.microprofile.openapi.annotations.security.SecurityRequirement;
+import org.eclipse.microprofile.openapi.annotations.security.SecurityScheme;
 
 import br.dsg.ifood.cadastro.dto.AdicionarRestauranteDTO;
 import br.dsg.ifood.cadastro.dto.AlterarRestauranteDTO;
@@ -34,57 +41,66 @@ import br.dsg.ifood.cadastro.service.RestauranteService;
 @Path("/restaurantes")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
+@RolesAllowed("proprietario")
+@SecurityScheme(
+	securitySchemeName = "ifood-oauth", 
+	type = SecuritySchemeType.OAUTH2, 
+	in = SecuritySchemeIn.HEADER,
+	flows = @OAuthFlows(
+					password = @OAuthFlow(
+								tokenUrl = "http://localhost:8180/auth/realms/ifood/protocol/openid-connect/token"
+					)
+	)
+)
 public class RestauranteResource {
-	
+
 	@Inject
 	RestauranteMapper restauranteMapper;
-	
+
 	@Inject
 	PratoSubResource pratoSubResource;
-	
+
 	@Inject
 	RestauranteRepository restauranteRepository;
-	
+
 	@Inject
 	RestauranteService restauranteService;
-	
+
 	@GET
 	public List<RestauranteDTO> todos() {
-		
-		return restauranteRepository.findAll().list()
-				.stream()
-				.map(restauranteMapper::toRestauranteDTO)
+
+		return restauranteRepository.findAll().list().stream().map(restauranteMapper::toRestauranteDTO)
 				.collect(Collectors.toList());
 	}
 
 	@POST
 	@APIResponse(responseCode = "201", description = "Caso restauranteseja cadastrado com sucesso")
-	@APIResponse(responseCode = "400", content = @Content(schema = @Schema(allOf = ConstraintViolationImpl.class )))
+	@APIResponse(responseCode = "400", content = @Content(schema = @Schema(allOf = ConstraintViolationImpl.class)))
 	public Response cadastrar(@Valid AdicionarRestauranteDTO dto) {
-		
-		restauranteService.adicionar( dto );
+
+		restauranteService.adicionar(dto);
 		return Response.status(Status.CREATED).build();
 	}
-	
+
 	@PUT
 	@Path("{idRestaurante}")
-	public Response alterar(@PathParam("idRestaurante")Long idRestaurante, AlterarRestauranteDTO dto) {
-		
-		restauranteService.alterar( idRestaurante, dto );
+	public Response alterar(@PathParam("idRestaurante") Long idRestaurante, AlterarRestauranteDTO dto) {
+
+		restauranteService.alterar(idRestaurante, dto);
 		return Response.status(Status.NO_CONTENT).build();
 	}
-	
+
 	@DELETE
 	@Path("{idRestaurante}")
-	public Response deletar(@PathParam("idRestaurante")Long idRestaurante) {
-		
-		restauranteService.deletar( idRestaurante );
+	public Response deletar(@PathParam("idRestaurante") Long idRestaurante) {
+
+		restauranteService.deletar(idRestaurante);
 		return Response.status(Status.NO_CONTENT).build();
 	}
-	
+
 	@Path("{idRestaurante}/pratos")
 	public PratoSubResource acessarPratos() {
 		return pratoSubResource;
 	}
-	
+
 }
