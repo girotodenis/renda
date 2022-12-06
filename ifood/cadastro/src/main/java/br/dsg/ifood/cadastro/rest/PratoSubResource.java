@@ -3,8 +3,8 @@ package br.dsg.ifood.cadastro.rest;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import javax.enterprise.context.RequestScoped;
 import javax.inject.Inject;
-import javax.inject.Singleton;
 import javax.transaction.Transactional;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
@@ -23,7 +23,7 @@ import br.dsg.ifood.cadastro.dto.RestauranteMapper;
 import br.dsg.ifood.cadastro.pojo.Prato;
 import br.dsg.ifood.cadastro.service.PratoService;
 
-@Singleton
+@RequestScoped
 public class PratoSubResource {
 
 	@Inject

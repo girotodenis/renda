@@ -3,7 +3,9 @@ package br.dsg.ifood.cadastro.rest;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import javax.enterprise.context.RequestScoped;
 import javax.inject.Inject;
+import javax.validation.Valid;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
@@ -16,13 +18,19 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
 
+import org.eclipse.microprofile.openapi.annotations.media.Content;
+import org.eclipse.microprofile.openapi.annotations.media.Schema;
+import org.eclipse.microprofile.openapi.annotations.responses.APIResponse;
+
 import br.dsg.ifood.cadastro.dto.AdicionarRestauranteDTO;
 import br.dsg.ifood.cadastro.dto.AlterarRestauranteDTO;
 import br.dsg.ifood.cadastro.dto.RestauranteDTO;
 import br.dsg.ifood.cadastro.dto.RestauranteMapper;
 import br.dsg.ifood.cadastro.repository.RestauranteRepository;
+import br.dsg.ifood.cadastro.rest.exception.ConstraintViolationImpl;
 import br.dsg.ifood.cadastro.service.RestauranteService;
 
+@RequestScoped
 @Path("/restaurantes")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
@@ -50,8 +58,9 @@ public class RestauranteResource {
 	}
 
 	@POST
-	public Response cadastrar(AdicionarRestauranteDTO dto) {
-		
+	@APIResponse(responseCode = "201", description = "Caso restauranteseja cadastrado com sucesso")
+	@APIResponse(responseCode = "400", content = @Content(schema = @Schema(allOf = ConstraintViolationImpl.class )))
+	public Response cadastrar(@Valid AdicionarRestauranteDTO dto) {
 		
 		restauranteService.adicionar( dto );
 		return Response.status(Status.CREATED).build();

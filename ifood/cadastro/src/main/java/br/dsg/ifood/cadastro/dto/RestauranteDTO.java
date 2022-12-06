@@ -1,7 +1,5 @@
 package br.dsg.ifood.cadastro.dto;
 
-import java.time.LocalDate;
-
 public class RestauranteDTO {
 	
 	public Long  id;
@@ -14,6 +12,6 @@ public class RestauranteDTO {
 	
 	public LocalizacaoDTO localizacao; 
 	
-	public LocalDate dataAtualizacao;
+	public String dataCriacao;
 	
 }
