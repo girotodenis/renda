@@ -1,0 +1,66 @@
+{
+  "realm": "sistemas",
+  "enabled": true,
+  "clients": [
+    {
+      "clientId": "editor-client",
+      "enabled": true,
+      "publicClient": true,
+      "protocol": "openid-connect",
+      "redirectUris": [
+        "http://localhost:8082/*"
+      ],
+      "webOrigins": [
+        "http://localhost:8082"
+      ],
+      "directAccessGrantsEnabled": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false
+    },
+    {
+      "clientId": "backend-rest",
+      "enabled": true,
+      "publicClient": false,
+      "protocol": "openid-connect",
+      "clientAuthenticatorType": "client-secret",
+      "redirectUris": [],
+      "webOrigins": [],
+      "directAccessGrantsEnabled": false,
+      "standardFlowEnabled": false,
+      "serviceAccountsEnabled": true,
+      "attributes": {
+        "access.token.lifespan": "300"
+      }
+    }
+  ],
+  "roles": {
+    "realm": [],
+    "client": {
+      "backend-rest": [
+        {
+          "name": "piloto",
+          "description": "Role para usuários com acesso ao backend REST"
+        }
+      ]
+    }
+  },
+  "users": [
+    {
+      "username": "dev",
+      "enabled": true,
+      "emailVerified": false,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "dev123",
+          "temporary": false
+        }
+      ],
+      "clientRoles": {
+        "backend-rest": [
+          "piloto"
+        ]
+      }
+    }
+  ]
+}
