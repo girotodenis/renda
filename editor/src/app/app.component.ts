@@ -5,15 +5,7 @@ import { EditorComponent } from '@tinymce/tinymce-angular';
   selector: 'app-root',
   standalone: true,
   imports: [EditorComponent],
-  template: `
-  <div style="width: 100%; background-color: blue;"><span style="padding-left: 10px;color: #fff;">{{[nome]}}</span></div>
-  <div class="my-custom-editor-container">
-    <editor
-      [id]="idEditor"
-      [init]="init"
-    />
-  </div>
-  `
+  templateUrl: './app.component.html',
 })
 export class AppComponent {
   idEditor = 'idEditor';
@@ -22,9 +14,9 @@ export class AppComponent {
   init: EditorComponent['init'] = {
     base_url: '/tinymce', // Root for resources
     selector:'#idEditor',
-    // skin: 'fabric', // Nome da skin
-    // content_css: '/tinymce/skins/ui/fabric/content.css', // Caminho para o arquivo de estilos do conteúdo
-    // skin_url: '/tinymce/skins/ui/fabric', // Caminho para a pasta da skin
+    skin: 'fabric', // Nome da skin
+    content_css: '/tinymce/skins/ui/fabric/content.css', // Caminho para o arquivo de estilos do conteúdo
+    skin_url: '/tinymce/skins/ui/fabric', // Caminho para a pasta da skin
     // toolbar_mode: 'floating',
     license_key: 'gpl',  // Concorda com os termos da licença GPL
     suffix: '.min'  ,
@@ -53,7 +45,6 @@ export class AppComponent {
 
         if (iframe) {
           const body = iframe.body;
-
           // Ajusta os estilos do body
           const applyStyles = () => {
             body.style.paddingLeft = '10mm';
@@ -61,15 +52,12 @@ export class AppComponent {
             body.style.minHeight = '100%';
             body.style.overflowY = 'auto';
           };
-
           // Aplica os estilos iniciais
           applyStyles();
-
           // Observa mudanças no atributo `style`
           const observer = new MutationObserver(() => {
             applyStyles(); // Reaplica os estilos sempre que o atributo `style` muda
           });
-
           observer.observe(body, { attributes: true, attributeFilter: ['style'] });
         }
       });
