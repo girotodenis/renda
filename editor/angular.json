@@ -24,7 +24,10 @@
               {
                 "glob": "**/*",
                 "input": "public"
-              }
+              },
+              { "glob": "**/*", "input": "node_modules/tinymce", "output": "/tinymce/" },
+              { "glob": "**/*", "input": "src/assets/tinymce/langs", "output": "/tinymce/langs/" },
+              { "glob": "**/*", "input": "src/assets/tinymce/plugins/variaveisMesclagem", "output": "/tinymce/plugins/variaveisMesclagem/"  }
             ],
             "styles": [
               "src/styles.css"
@@ -99,5 +102,8 @@
         }
       }
     }
+  },
+  "cli": {
+    "analytics": "89fd5277-27d3-40a2-b9e4-6a739c0f1d74"
   }
 }
