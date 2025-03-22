@@ -1,15 +1,15 @@
 services:
-  # Serviço: OnlyOffice Document Server
-  tinymce:
-    image: nginx:latest         # Usa a imagem oficial do Nginx
-    container_name: tinymce
-    ports:
-      - "8082:80"               # Mapeia a porta 80 do contêiner para a porta 8080 no host
-    volumes:
-      - ./tinymce/dist:/usr/share/nginx/html       # Monta os arquivos do editor (somente leitura)
-      - ./configs/nginx:/etc/nginx/conf.d  # Monta a configuração personalizada do Nginx (somente leitura)
-    depends_on:
-      - keycloak
+#   # Serviço: OnlyOffice Document Server
+#   tinymce:
+#     image: nginx:latest         # Usa a imagem oficial do Nginx
+#     container_name: tinymce
+#     ports:
+#       - "8082:80"               # Mapeia a porta 80 do contêiner para a porta 8080 no host
+#     volumes:
+#       - ./tinymce/dist:/usr/share/nginx/html       # Monta os arquivos do editor (somente leitura)
+#       - ./configs/nginx:/etc/nginx/conf.d  # Monta a configuração personalizada do Nginx (somente leitura)
+#     depends_on:
+#       - keycloak
       
   # Serviço: Keycloak
   keycloak:
@@ -50,7 +50,7 @@ services:
     image: liquibase/liquibase:latest
     container_name: liquibase
     depends_on:
-      - tinymce
+      - keycloak
     volumes:
       - ./configs/liquibase/onlyoffice:/liquibase/changelog
     entrypoint: ["liquibase"]
