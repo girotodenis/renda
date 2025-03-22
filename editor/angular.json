@@ -21,18 +21,18 @@
             ],
             "tsConfig": "tsconfig.app.json",
             "assets": [
-              {
-                "glob": "**/*",
-                "input": "public"
-              },
+              { "glob": "**/*", "input": "public"  },
               { "glob": "**/*", "input": "node_modules/tinymce", "output": "/tinymce/" },
-              { "glob": "**/*", "input": "src/assets/tinymce/langs", "output": "/tinymce/langs/" },
-              { "glob": "**/*", "input": "src/assets/tinymce/plugins/variaveisMesclagem", "output": "/tinymce/plugins/variaveisMesclagem/"  }
+              { "glob": "**/*", "input": "src/app/assets/tinymce/langs", "output": "/tinymce/langs" },
+              { "glob": "**/*", "input": "src/app/assets/tinymce/plugins/variaveisMesclagem", "output": "/tinymce/plugins/variaveisMesclagem"  },
+              { "glob": "**/*", "input": "src/app/assets/tinymce/skins/ui/fabric", "output": "/tinymce/skins/ui/fabric"  }
             ],
             "styles": [
               "src/styles.css"
             ],
-            "scripts": []
+            "scripts": [
+              "node_modules/tinymce/tinymce.min.js"
+            ]
           },
           "configurations": {
             "production": {
@@ -63,13 +63,7 @@
           "options": {"port": 8082},
           "configurations": {
             "production": {
-              "buildTarget": "editor:build:production",
-              "fileReplacements": [
-                {
-                  "replace": "src/environments/environment.ts",
-                  "with": "src/environments/environment.prod.ts"
-                }
-              ]
+              "buildTarget": "editor:build:production"
             },
             "development": {
               "buildTarget": "editor:build:development"
@@ -89,10 +83,11 @@
             ],
             "tsConfig": "tsconfig.spec.json",
             "assets": [
-              {
-                "glob": "**/*",
-                "input": "public"
-              }
+              { "glob": "**/*", "input": "public" },
+              { "glob": "**/*", "input": "node_modules/tinymce", "output": "/tinymce/" },
+              { "glob": "**/*", "input": "src/app/assets/tinymce/langs", "output": "/tinymce/langs" },
+              { "glob": "**/*", "input": "src/app/assets/tinymce/plugins/variaveisMesclagem", "output": "/tinymce/plugins/variaveisMesclagem"  },
+              { "glob": "**/*", "input": "src/app/assets/tinymce/skins/ui/fabric", "output": "/tinymce/skins/ui/fabric"  }
             ],
             "styles": [
               "src/styles.css"

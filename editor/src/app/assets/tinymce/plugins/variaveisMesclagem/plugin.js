@@ -1,8 +1,10 @@
 tinymce.PluginManager.add('variaveisMesclagem', function (editor) {
-  
+
   var showVariable = false; // Valor inicial do botão
 
-  let variables = {};
+  let variables = {'teste.nome': 'teste.nome',
+                    'teste.email': 'teste.email'
+                  };
 
   editor.on('loadVariables', function (data) {
       console.warn('editor.loadVariables',data)
@@ -19,7 +21,7 @@ tinymce.PluginManager.add('variaveisMesclagem', function (editor) {
         resolverSpansDoTemplate();
       }
   });
-  
+
   editor.ui.registry.addButton('showVariable', {
     text: '< - >',
     //text: '<--hide-->',
@@ -48,7 +50,7 @@ tinymce.PluginManager.add('variaveisMesclagem', function (editor) {
             let variableName = spanVar.nodeValue;
             // Se o botão estiver em 'show', mostrar o valor da variável
             if (showVariable) {
-              
+
                 element.innerHTML = '';
                 element.innerText = '';
                 var meuSpan = editor.dom.create('span');
