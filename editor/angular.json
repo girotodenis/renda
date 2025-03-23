@@ -25,6 +25,7 @@
               { "glob": "**/*", "input": "node_modules/tinymce", "output": "/tinymce/" },
               { "glob": "**/*", "input": "src/app/assets/tinymce/langs", "output": "/tinymce/langs" },
               { "glob": "**/*", "input": "src/app/assets/tinymce/plugins/variaveisMesclagem", "output": "/tinymce/plugins/variaveisMesclagem"  },
+              { "glob": "**/*", "input": "src/app/assets/tinymce/plugins/a4pages", "output": "/tinymce/plugins/a4pages"  },
               { "glob": "**/*", "input": "src/app/assets/tinymce/skins/ui/fabric", "output": "/tinymce/skins/ui/fabric"  }
             ],
             "styles": [
