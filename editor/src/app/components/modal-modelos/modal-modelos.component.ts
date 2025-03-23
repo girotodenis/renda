@@ -22,10 +22,10 @@ export class ModalModelosComponent implements OnInit {
   ngOnInit() {
     console.log('ModalModelosComponent initialized');
     this.lista = [
-      { id: 1, nome: 'Certidão de Casamento', tipo: 'Certidão', html: '<p>Certidão de Casamento</p><p>Nome: <span class="variaveisMesclagem" data-var="a.nome"><span style="color: navy; font-style: italic;">@a.nome</span></span></p>', variaveis : {'a.nome': 'aaaTeste nome', 'b.email': 'bbbsdkfi@gmail.com' } },
-      { id: 2, nome: 'Certidão de Nascimento', tipo: 'Certidão', html: '<p>Certidão de Nascimento</p><p>Nome: <span class="variaveisMesclagem" data-var="b.nome"><span style="color: navy; font-style: italic;">@b.nome</span></span></p>',variaveis : {'b.nome': 'bbbTeste nome', 'c.email': 'ccccsdkfi@gmail.com' } },
-      { id: 3, nome: 'Contrato de Aluguel', tipo: 'Contrato', html:'<p>Contrato de Aluguel</p><p>Nome: <span class="variaveisMesclagem" data-var="c.nome"><span style="color: navy; font-style: italic;">@c.nome</span></span></p> ',variaveis : {'c.nome': 'cccTeste nome', 'd.email': 'dddsdkfi@gmail.com' } },
-      { id: 4, nome: 'Contrato de Venda', tipo: 'Contrato', html: '<p>Contrato de Venda</p><p>Nome: <span class="variaveisMesclagem" data-var="d.nome"><span style="color: navy; font-style: italic;">@d.nome</span></span></p>',variaveis : {'d.nome': 'dddTeste nome', 'e.email': 'eeesdkfi@gmail.com' } },
+      { id: 1, nome: 'Certidão de Casamento', tipo: 'Certidão', html: '<p>Certidão de Casamento</p><p>Nome: <span class="variaveisMesclagem" data-var="a.nome">@a.nome</span>&nbsp;</p>', variaveis : {'a.nome': 'aaaTeste nome', 'b.email': 'bbbsdkfi@gmail.com' } },
+      { id: 2, nome: 'Certidão de Nascimento', tipo: 'Certidão', html: '<p>Certidão de Nascimento</p><p>Nome: <span class="variaveisMesclagem" data-var="b.nome">@b.nome</span>&nbsp;</p>',variaveis : {'b.nome': 'bbbTeste nome', 'c.email': 'ccccsdkfi@gmail.com' } },
+      { id: 3, nome: 'Contrato de Aluguel', tipo: 'Contrato', html:'<p>Contrato de Aluguel</p><p>Nome: <span class="variaveisMesclagem" data-var="c.nome">@c.nome</span>&nbsp;</p> ',variaveis : {'c.nome': 'cccTeste nome', 'd.email': 'dddsdkfi@gmail.com' } },
+      { id: 4, nome: 'Contrato de Venda', tipo: 'Contrato', html: '<p>Contrato de Venda</p><p>Nome: <span class="variaveisMesclagem" data-var="d.nome"><!--span style="color: navy; font-style: italic;"-->@d.nome</span>&nbsp;</p>',variaveis : {'d.nome': 'dddTeste nome', 'e.email': 'eeesdkfi@gmail.com' } },
     ];
 
     // Gerar a árvore inicial

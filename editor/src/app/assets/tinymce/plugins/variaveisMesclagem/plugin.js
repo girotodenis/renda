@@ -1,56 +1,111 @@
-tinymce.PluginManager.add('a4pages', function (editor, url) {
-  // Adiciona um botão à barra de ferramentas
-  editor.ui.registry.addButton('add_page', {
-    text: 'Adicionar Página',
-    onAction: function () {
-      const container = editor.getContainer().querySelector('.a4-container');
-      if (container) {
-        const newPage = document.createElement('div');
-        newPage.className = 'a4-page';
-        container.appendChild(newPage);
-      }
+tinymce.PluginManager.add('variaveisMesclagem', function (editor) {
+
+  var showVariable = false; // Valor inicial do botão
+
+  let variables = {
+    'teste.nome': 'teste.nome',
+    'teste.email': 'teste.email'
+  };
+
+  editor.on('loadVariables', function (event) {
+    console.warn('editor.loadVariables', event);
+    console.warn('editor.loadVariables', event.data);
+    variables = event.data;
+    if (showVariable) {
+      resolverSpansDoTemplate();
     }
   });
 
-  // Resto do código do plugin (como antes)
-  editor.on('init', function () {
-    const style = `
-      .a4-container {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-      }
-      .a4-page {
-        width: 210mm;
-        height: 297mm;
-        border: 1px solid #000;
-        margin: 10px auto;
-        padding: 20mm;
-        box-sizing: border-box;
-        overflow: hidden;
-      }
-    `;
-    editor.contentStyles.push(style);
-
-    if (!editor.getContent()) {
-      editor.setContent('<div class="a4-container"><div class="a4-page"></div></div>');
+  editor.on('loadContent', function (data) {
+    console.warn('editor.loadContent');
+    if (showVariable) {
+      resolverSpansDoTemplate();
     }
   });
 
-  editor.on('input', function () {
-    const container = editor.getContainer().querySelector('.a4-container');
-    if (!container) return;
+  editor.ui.registry.addMenuItem('item_modelos', {
+    text: 'Abrir Modelos',
+    onAction: () => editor.fire('evento_abrir_modelos', "abrir")
+  });
 
-    const pages = container.querySelectorAll('.a4-page');
+  editor.ui.registry.addButton('showVariable', {
+    text: '< - >',
+    onAction: function (botao) {
+      showVariable = !showVariable; // Alterna o valor do botão
 
-    pages.forEach(page => {
-      if (page.scrollHeight > page.offsetHeight) {
-        const newPage = document.createElement('div');
-        newPage.className = 'a4-page';
-        container.appendChild(newPage);
+      botao.setText(showVariable ? '<o>' : '< - >'); // Alterna o texto do botão
+
+      resolverSpansDoTemplate();
+    }
+  });
+
+  let resolverSpansDoTemplate = () => {
+    // Seleciona todos os elementos que possuem o atributo data-var
+    let elements = editor.dom.select('[data-var]');
+    elements.forEach(function (element) {
+      // Pega o valor do atributo data-var
+      let variableName = element.getAttribute('data-var');
+      if (variableName) {
+        // Se o botão estiver em 'show', mostrar o valor da variável
+        if (showVariable) {
+          if(variables[variableName]){
+            element.innerHTML = variables[variableName];
+            editor.dom.removeClass(element, 'variaveisMesclagem');
+            element.removeAttribute('style');
+            //remover variavel variaveisMesclagem
+          }else{
+            element.innerText = '@'+variableName;
+            element.style = 'color: navy; font-style: italic;';
+          }
+          // element.innerHTML = '';
+          // element.innerText = '';
+          // var meuSpan = editor.dom.create('span');
+          // meuSpan.textContent = variables[variableName] || variableName; // Exibe o valor ou a chave caso o valor não exista
+          // element.appendChild(meuSpan);
+          // editor.dom.addClass(element, 'valorMesclado');
+        }
+        // Se o botão estiver em 'hide', mostrar o nome da variável
+        else {
+          element.innerHTML = '';
+          element.innerText = '@' + variableName;
+          editor.dom.addClass(element, 'variaveisMesclagem');
+          element.style = 'color: navy; font-style: italic;';
+          //adicionar classe  variaveisMesclagem no elemento
+          // var meuSpan = editor.dom.create('span');
+          // meuSpan.textContent = '@' + variableName;
+          // meuSpan.style.color = 'navy';
+          // meuSpan.style.fontStyle = 'italic';
+          // element.appendChild(meuSpan);
+          // editor.dom.removeClass(element, 'valorMesclado');
+        }
       }
     });
-  });
+  };
 
-  return {};
+  editor.ui.registry.addAutocompleter('variables', {
+    ch: '@',
+    minChars: 0,
+    columns: 1,
+    fetch: function (pattern) {
+
+      let matchedVariables = Object.keys(variables).filter(item => item.includes(pattern));
+      return new Promise(function (resolve) {
+        resolve(matchedVariables.map(function (item) {
+          return {
+            value: `<span data-var="${item}" class="variaveisMesclagem" style="color: navy; font-style: italic;">@${item}</span>&nbsp;`,
+            text: item + ' = ' + variables[item],
+            icon: '@'
+          };
+        }));
+      });
+    },
+    onAction: function (autocompleteApi, rng, value) {
+      editor.selection.setRng(rng);
+      editor.insertContent(value);
+      if (showVariable) {
+        resolverSpansDoTemplate();
+      }
+      autocompleteApi.hide();
+    }
+  });
 });

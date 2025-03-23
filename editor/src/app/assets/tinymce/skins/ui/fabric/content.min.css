@@ -937,9 +937,12 @@ table[style*="border-width: 0px"] th {
   html {
     background: #f3f3f3;
     -webkit-font-smoothing: antialiased;
-    padding: 0 4px
+    padding: 0 4px;
+    height: 100% !important;
+    min-height: 200mm !important;;
   }
 }
+
 
 body {
   font-family: "Segoe UI", "Segoe UI Web (West European)", -apple-system, BlinkMacSystemFont, Roboto, "Helvetica Neue", sans-serif
@@ -955,7 +958,7 @@ body {
     max-width: 210mm;
     min-height: calc(100vh - 1rem);
     padding: 4rem 6rem 6rem 6rem;
-    height: 297mm;
+    /*height: 100%;*/
   }
 }
 

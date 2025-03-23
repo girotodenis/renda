@@ -1,46 +1,35 @@
 tinymce.PluginManager.add('a4pages', function (editor, url) {
-  // Adiciona os estilos ao conteúdo do editor
+  //Adiciona os estilos ao conteúdo do editor
   editor.on('init', function () {
-    const style = `
-      .a4-container {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
+      // Verifica se o editor está vazio
+      if (editor.getContent({ format: 'raw' }).trim() === ''||editor.getContent({ format: 'raw' }).trim() === '<p><br data-mce-bogus="1"></p>') {
+        // editor.setContent('<div class="a4-container"> <div class="a4-page" style="min-height:277mm;width: 190mm;border: 0px solid #000;"><p></p></div> </div>');
       }
-      .a4-page {
-        width: 210mm;
-        height: 297mm;
-        border: 1px solid #000;
-        margin: 10px auto;
-        padding: 20mm;
-        box-sizing: border-box;
-        overflow: hidden;
-      }
-    `;
-    editor.contentStyles.push(style);
-
-    if (!editor.getContent()) {
-      editor.setContent('<div class="a4-container"><div class="a4-page"></div></div>');
-    }
   });
 
   // Lógica de monitoramento para adicionar novas folhas
-  editor.on('input', function () {
-    const container = editor.getContainer().querySelector('.a4-container');
-    if (!container) return;
+  editor.on('input', function (data) {
 
-    const pages = container.querySelectorAll('.a4-page');
+    // if (editor.getContent({ format: 'raw' }).trim() === '' ||editor.getContent({ format: 'raw' }).trim() === '<p><br data-mce-bogus="1"></p>') {
+    //   // Define o conteúdo padrão
+    //   editor.setContent('<div class="a4-container"> <div class="a4-page" style="min-height:277mm;width: 190mm;border: 0px solid #000;"><p></p></div></div>');
+    // }
 
+    // console.log("input",data.target.innerHTML);
+    const container = editor.dom.select('.a4-container')[0];
+    const pages = editor.dom.select('.a4-page');
+    let [fim] = [...pages].reverse();;
     pages.forEach(page => {
-      // Verifica se o conteúdo ultrapassou o tamanho da folha
-      if (page.scrollHeight > page.offsetHeight) {
-        // Adiciona uma nova folha
-        const newPage = document.createElement('div');
-        newPage.className = 'a4-page';
-        container.appendChild(newPage);
-      }
+      if(fim.innerHTML === page.innerHTML){
+          if (page.scrollHeight > 1048) {
+            console.log("page.scrollHeight ", page.scrollHeight);
+            console.log("page.offsetHeight ", page.offsetHeight);
+            editor.insertContent('<hr>');
+            // container.innerHTML = '<div class="a4-page" style="min-height:277mm;width: 190mm;border: 0px solid #000;"><p></p></div>';
+            editor.insertContent('<div class="a4-page" style="min-height:277mm;width: 190mm;border: 0px solid #000;"><p></p></div>');
+          }
+        }
     });
   });
 
-  return {};
 });
