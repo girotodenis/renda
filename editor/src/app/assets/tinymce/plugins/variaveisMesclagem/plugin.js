@@ -6,10 +6,10 @@ tinymce.PluginManager.add('variaveisMesclagem', function (editor) {
                     'teste.email': 'teste.email'
                   };
 
-  editor.on('loadVariables', function (data) {
-      console.warn('editor.loadVariables',data)
-      console.warn('editor.loadVariables',data.variablesEvent)
-      variables = data.variablesEvent;
+  editor.on('loadVariables', function (event) {
+      console.warn('editor.loadVariables',event)
+      console.warn('editor.loadVariables',event.data)
+      variables = event.data;
       if (showVariable) {
         resolverSpansDoTemplate();
       }
@@ -20,6 +20,11 @@ tinymce.PluginManager.add('variaveisMesclagem', function (editor) {
       if (showVariable) {
         resolverSpansDoTemplate();
       }
+  });
+
+  editor.ui.registry.addMenuItem('item_modelos', {
+    text: 'Abrir Modelos',
+    onAction: () => editor.fire('evento_abrir_modelos', "abrir")
   });
 
   editor.ui.registry.addButton('showVariable', {
@@ -34,6 +39,8 @@ tinymce.PluginManager.add('variaveisMesclagem', function (editor) {
           // botao.icon(showVariable ? 'eye-slash' : 'eye'); // Alterna o ícone do botão
 
           resolverSpansDoTemplate();
+
+
         }
     });
 

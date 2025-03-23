@@ -1,15 +1,41 @@
-import { Component } from '@angular/core';
+import { Component, NgZone, OnInit } from '@angular/core';
 import { EditorComponent } from '@tinymce/tinymce-angular';
-
+import { EditorService } from './utils/tinymce/editor.service';
+import { SkinLoadedService } from './utils/tinymce/skin-loaded.service';
+import { ModalModelosComponent } from './components/modal-modelos/modal-modelos.component';
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [EditorComponent],
+  imports: [EditorComponent, ModalModelosComponent],
   templateUrl: './app.component.html',
 })
-export class AppComponent {
+export class AppComponent implements OnInit {
   idEditor = 'idEditor';
   nome = 'nome_arquivo';
+
+  constructor(
+    private editorService: EditorService,
+    private skinLoadedService: SkinLoadedService,
+    private ngZone: NgZone
+  ) {}
+
+  ngOnInit(): void {
+
+    this.editorService.onEditorEventAssinc('nome_arquivo', (event) => {
+      console.log('nome_arquivo: ', event);
+      this.ngZone.run(() => {
+        this.nome = event;
+        console.log('nome_arquivo: ',  this.nome);
+      });
+    });
+
+    this.editorService.onEditorEventAssinc('atualizar_content', (event, editor) => {
+      console.log('atualizar_content: ', event);
+      editor.setContent(event);
+    });
+
+  }
+
 
   init: EditorComponent['init'] = {
     base_url: '/tinymce', // Root for resources
@@ -27,7 +53,13 @@ export class AppComponent {
     // autoresize_min_height: 650,
     // pagebreak_split_block: true,
     //  toc lineheight print hr paste textcolor colorpicker textpattern imagetools
+    menu: {
+      file: { title: 'File', items: 'item_modelos' }
+    },
     menubar: true,
+    extended_valid_elements: 'span[class|data-var|style]', // Permitir atributos personalizados
+    valid_children: '+body[style],+body[span]', // Permitir spans e estilos no body
+    forced_root_block: 'p', // Garante que o conteúdo fique dentro de tags <p>
   //font_size_formats: '10px 12px 13px 14px 16px 18px 24px 32px 48px 96px', // Define os tamanhos em px
     font_size_formats: '8pt 9pt 10pt 11pt 12pt 14pt 18pt 24pt 36pt 72pt', // Define os tamanhos em px
     plugins: 'variaveisMesclagem fullscreen codesample insertdatetime advlist media lists autoresize save searchreplace nonbreaking link image charmap preview anchor pagebreak visualblocks visualchars code table directionality help',
@@ -38,29 +70,15 @@ export class AppComponent {
     ` | link image | alignleft aligncenter alignright alignjustify | numlist bullist outdent indent` +
     ` | removeformat | lineheightselect`,
     setup: (editor) => {
-      console.log('TinyMCE inicializado com skin: fabric');
-      editor.on('SkinLoaded', () => {
-        console.log('Skin carregada com sucesso!');
-        const iframe = editor.getDoc();
 
-        if (iframe) {
-          const body = iframe.body;
-          // Ajusta os estilos do body
-          const applyStyles = () => {
-            body.style.paddingLeft = '10mm';
-            body.style.paddingRight = '20mm';
-            body.style.minHeight = '100%';
-            body.style.overflowY = 'auto';
-          };
-          // Aplica os estilos iniciais
-          applyStyles();
-          // Observa mudanças no atributo `style`
-          const observer = new MutationObserver(() => {
-            applyStyles(); // Reaplica os estilos sempre que o atributo `style` muda
-          });
-          observer.observe(body, { attributes: true, attributeFilter: ['style'] });
-        }
+      // Registrar a instância do editor no serviço
+      this.editorService.setEditorInstance(editor);
+
+      this.editorService.onEditorEvent('SkinLoaded', (data, meuditor) => {
+        console.log('TinyMCE inicializado com skin: fabric');
+        this.skinLoadedService.load(meuditor);
       });
+
     },
   };
 }

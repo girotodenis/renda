@@ -1,0 +1,41 @@
+<div *ngIf="isModalOpen" class="modal-overlay">
+  <div class="modal-content">
+    <!-- <h1>Escolha um Modelo</h1> -->
+    <div style="width: 100%; background-color: blue;"><span style="padding-left: 10px;color: #fff;">Escolha um Modelo</span></div>
+    <div class="modal-body">
+      <!-- Div A: Árvore com Filtro -->
+      <div class="tree-container">
+        <input
+          type="text"
+          placeholder="Filtrar itens..."
+          [(ngModel)]="filtro"
+          (input)="filtrarArvore()"
+        />
+        <ul class="tree">
+          <li *ngFor="let grupo of arvoreFiltrada" title="{{ grupo.tipo }}">
+            <strong>{{ grupo.tipo }}</strong>
+            <ul>
+              <li title="{{ item.nome }}"
+                *ngFor="let item of grupo.itens"
+                (click)="selecionarItem(item)"
+                [class.selected]="itemSelecionado?.id === item.id"
+              >
+                {{ item.nome }}
+              </li>
+            </ul>
+          </li>
+        </ul>
+      </div>
+
+      <!-- Div B: Exibir HTML -->
+      <div class="html-container">
+        <div class="html-preview" [innerHTML]="itemSelecionado?.html"></div>
+      </div>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-primary" (click)="confirmarSelecao()">Selecionar</button>
+      <button class="btn btn-secondary" (click)="cancelarSelecao()">Cancelar</button>
+    </div>
+  </div>
+</div>
