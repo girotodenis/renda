@@ -62,13 +62,14 @@ export class AppComponent implements OnInit {
     forced_root_block: 'p', // Garante que o conteúdo fique dentro de tags <p>
   //font_size_formats: '10px 12px 13px 14px 16px 18px 24px 32px 48px 96px', // Define os tamanhos em px
     font_size_formats: '8pt 9pt 10pt 11pt 12pt 14pt 18pt 24pt 36pt 72pt', // Define os tamanhos em px
-    plugins: 'variaveisMesclagem fullscreen codesample insertdatetime advlist media lists autoresize save searchreplace nonbreaking link image charmap preview anchor pagebreak visualblocks visualchars code table directionality help',
+    plugins: 'variaveisMesclagem fullscreen codesample insertdatetime advlist media lists autoresize save searchreplace nonbreaking link image charmap preview anchor pagebreak visualblocks visualchars code table directionality help a4pages',
     external_plugins: {
-      variaveisMesclagem: 'plugins/variaveisMesclagem/plugin.js'
+      variaveisMesclagem: 'plugins/variaveisMesclagem/plugin.js',
+      a4pages: 'plugins/a4pages/plugin.js'
     },
     toolbar: `showVariable | undo redo | fontselect | fontsizeselect | styleselect | bold italic underline forecolor backcolor` +
     ` | link image | alignleft aligncenter alignright alignjustify | numlist bullist outdent indent` +
-    ` | removeformat | lineheightselect`,
+    ` | removeformat | lineheightselect add_page`,
     setup: (editor) => {
 
       // Registrar a instância do editor no serviço

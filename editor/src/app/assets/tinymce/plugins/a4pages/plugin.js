@@ -1,18 +1,5 @@
 tinymce.PluginManager.add('a4pages', function (editor, url) {
-  // Adiciona um botão à barra de ferramentas
-  editor.ui.registry.addButton('add_page', {
-    text: 'Adicionar Página',
-    onAction: function () {
-      const container = editor.getContainer().querySelector('.a4-container');
-      if (container) {
-        const newPage = document.createElement('div');
-        newPage.className = 'a4-page';
-        container.appendChild(newPage);
-      }
-    }
-  });
-
-  // Resto do código do plugin (como antes)
+  // Adiciona os estilos ao conteúdo do editor
   editor.on('init', function () {
     const style = `
       .a4-container {
@@ -37,6 +24,7 @@ tinymce.PluginManager.add('a4pages', function (editor, url) {
     }
   });
 
+  // Lógica de monitoramento para adicionar novas folhas
   editor.on('input', function () {
     const container = editor.getContainer().querySelector('.a4-container');
     if (!container) return;
@@ -44,7 +32,9 @@ tinymce.PluginManager.add('a4pages', function (editor, url) {
     const pages = container.querySelectorAll('.a4-page');
 
     pages.forEach(page => {
+      // Verifica se o conteúdo ultrapassou o tamanho da folha
       if (page.scrollHeight > page.offsetHeight) {
+        // Adiciona uma nova folha
         const newPage = document.createElement('div');
         newPage.className = 'a4-page';
         container.appendChild(newPage);
