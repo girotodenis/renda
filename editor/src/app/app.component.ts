@@ -32,6 +32,12 @@ export class AppComponent implements OnInit {
     this.editorService.onEditorEventAssinc('atualizar_content', (event, editor) => {
       console.log('atualizar_content: ', event);
       editor.setContent(event);
+      if(event.includes(`class="a4-container"`)) {
+        editor.setContent(event);
+      }else{
+        editor.setContent(`<div class="a4-container" style="width: 190mm;min-height:277mm;border: 0px solid #000;">${event}</div>`);
+      }
+      // editor.setContent(event);
     });
 
   }
@@ -73,10 +79,10 @@ export class AppComponent implements OnInit {
 
       // Registrar a instância do editor no serviço
       this.editorService.setEditorInstance(editor);
-
       this.editorService.onEditorEvent('SkinLoaded', (data, meuditor) => {
         console.log('TinyMCE inicializado com skin: fabric');
         this.skinLoadedService.load(meuditor);
+        editor.setContent(`<div class="a4-container" style="width: 190mm;min-height:277mm;border: 0px solid #000;"></div>`);
       });
 
     },

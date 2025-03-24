@@ -11,6 +11,18 @@ export class SkinLoadedService {
     console.log('Skin carregada com sucesso!');
     const iframe = editor.getDoc();
 
+    editor.on('init', function () {
+      if (editor.getContent({ format: 'raw' }).trim() === ''||editor.getContent({ format: 'raw' }).trim() === '<p><br data-mce-bogus="1"></p>') {
+        editor.setContent('<div class="a4-container"  style="min-height:277mm;width: 190mm;border: 0px solid #000;"><p></p></div>');
+      }
+    });
+
+    editor.on('input', function () {
+      if (editor.getContent({ format: 'raw' }).trim() === '' ||editor.getContent({ format: 'raw' }).trim() === '<p><br data-mce-bogus="1"></p>') {
+        editor.setContent('<div class="a4-container"  style="min-height:277mm;width: 190mm;border: 0px solid #000;"><p></p></div>');
+      }
+    });
+
     if (iframe) {
       const body = iframe.body;
       // Ajusta os estilos do body
