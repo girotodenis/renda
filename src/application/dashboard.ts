@@ -144,6 +144,20 @@ function montarDashboard(consulta: MontarConsulta): DashboardData {
   for (const [ticker, preco] of cotacoesTesouro) precoMercado.set(ticker, preco)
   const precoManual = precosManuaisDeOperacoes(operacoes)
 
+  // Tesouro Direto: a coluna `Preço Atual` da planilha é um **eco** do último
+  // valor gravado (não é uma cotação viva). Quando a API não trouxer preço,
+  // descartamos esse eco para que a **marcação manual** do usuário prevaleça
+  // (RF19/RNF04) — a cotação da API continua tendo prioridade quando existe.
+  for (const posicao of posicoes) {
+    if (
+      isTesouroDireto(posicao.categoria) &&
+      precoManual.has(posicao.ticker) &&
+      !cotacoesTesouro.has(posicao.ticker)
+    ) {
+      precoMercado.delete(posicao.ticker)
+    }
+  }
+
   const cotacoes = resolverCotacoes(montarEntradas(posicoes, precoMercado, precoManual))
   const consolidado = aplicarPrecosAtuais(posicoes, precosDeCotacoes(cotacoes))
 

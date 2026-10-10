@@ -53,6 +53,16 @@ export function isTesouroDireto(categoria: CategoriaAtivo): boolean {
   return categoria === CategoriaAtivo.TesouroDireto
 }
 
+/**
+ * `true` para as categorias que aceitam **marcação manual do valor atual**
+ * (RF19): Renda Fixa e Tesouro Direto. O valor informado pelo usuário é gravado
+ * em `Operacao.valorBrutoAtual` e usado sempre que a integração não retornar
+ * cotação — sem ser apagado por falhas de integração.
+ */
+export function permiteMarcacaoManual(categoria: CategoriaAtivo): boolean {
+  return isRendaFixa(categoria) || isTesouroDireto(categoria)
+}
+
 /** `true` quando a cotação pode vir do `GOOGLEFINANCE` (Ação, FII, BDR, ETF). */
 export function usaGoogFinance(categoria: CategoriaAtivo): boolean {
   return (

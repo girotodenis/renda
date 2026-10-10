@@ -1,4 +1,4 @@
-import { isRendaFixa, isTesouroDireto, usaGoogFinance } from '@/lib/categoria'
+import { isRendaFixa, isTesouroDireto, permiteMarcacaoManual, usaGoogFinance } from '@/lib/categoria'
 import type { CategoriaAtivo, Operacao } from '@/types/domain'
 
 /**
@@ -167,14 +167,18 @@ export function precosDeCotacoes(
 
 /**
  * Extrai a marcação a mercado manual (`Valor Bruto Atual`) mais recente por
- * ticker, a partir das operações de Renda Fixa (RF19).
+ * ticker, a partir das operações de **Renda Fixa** e **Tesouro Direto** (RF19).
+ *
+ * O valor informado pelo usuário (via modal do ativo ou formulário de operação)
+ * é a fonte usada sempre que a integração não retornar cotação — e nunca é
+ * apagado por falhas de integração.
  */
 export function precosManuaisDeOperacoes(
   operacoes: readonly Operacao[],
 ): Map<string, number> {
   const porTicker = new Map<string, { data: string; valor: number }>()
   for (const operacao of operacoes) {
-    if (!isRendaFixa(operacao.categoria)) continue
+    if (!permiteMarcacaoManual(operacao.categoria)) continue
     const valor = operacao.valorBrutoAtual
     if (!precoValido(valor)) continue
     const ticker = operacao.ticker.trim()

@@ -5,7 +5,7 @@ import {
 } from '@/domain/trocaCategoria'
 import { metasRepo, operacoesRepo, proventosRepo } from '@/services/repositories'
 import type { RepositoryContext } from '@/services/repositories'
-import type { CategoriaAtivo } from '@/types/domain'
+import type { CategoriaAtivo, Operacao } from '@/types/domain'
 
 /**
  * Casos de uso de escrita sobre as abas que guardam categoria por ticker
@@ -61,4 +61,51 @@ export async function alterarCategoriaDoTicker(
   }
 
   return resultado
+}
+
+/** Ordena operações da mais recente para a mais antiga (data, depois id). */
+function porMaisRecente(a: Operacao, b: Operacao): number {
+  return b.data.localeCompare(a.data) || b.id.localeCompare(a.id)
+}
+
+/** Resultado da atualização manual do valor atual de um ativo. */
+export interface ResultadoValorManual {
+  /** Ticker do ativo (como gravado na operação). */
+  ticker: string
+  /** Valor atual informado pelo usuário, em **centavos**. */
+  valorBrutoAtual: number
+  /** Operação que passou a carregar a marcação manual. */
+  operacaoId: string
+}
+
+/**
+ * Atualiza a **marcação manual do valor atual** de um ativo de Renda Fixa ou
+ * Tesouro Direto (RF19).
+ *
+ * A marcação é gravada na operação mais recente do ticker (coluna
+ * `Valor Bruto Atual`), de onde é lida por `precosManuaisDeOperacoes`. Assim, o
+ * valor informado pelo usuário é usado sempre que a integração não retornar
+ * cotação — e **não é apagado** por falhas de integração (RNF04), pois a
+ * sincronização do `Consolidado` nunca reescreve a aba `Operacoes`.
+ *
+ * Lança erro quando não há operação do ticker (não há onde gravar a marcação).
+ */
+export async function definirValorManualTicker(
+  context: RepositoryContext,
+  ticker: string,
+  valorBrutoAtual: number,
+): Promise<ResultadoValorManual> {
+  const alvo = ticker.trim().toUpperCase()
+  const operacoes = await operacoesRepo.refresh(context)
+  const doTicker = operacoes
+    .filter((operacao) => operacao.ticker.trim().toUpperCase() === alvo)
+    .sort(porMaisRecente)
+
+  const recente = doTicker[0]
+  if (!recente) {
+    throw new Error(`Nenhuma operação encontrada para ${ticker}.`)
+  }
+
+  await operacoesRepo.update(context, { ...recente, valorBrutoAtual })
+  return { ticker: recente.ticker, valorBrutoAtual, operacaoId: recente.id }
 }

@@ -161,7 +161,7 @@ describe('precosManuaisDeOperacoes', () => {
     }
   }
 
-  it('pega o Valor Bruto Atual mais recente por ticker de Renda Fixa', () => {
+  it('pega o Valor Bruto Atual mais recente por ticker (Renda Fixa e Tesouro)', () => {
     const precos = precosManuaisDeOperacoes([
       operacao({
         ticker: 'CDB-BANCO',
@@ -176,6 +176,12 @@ describe('precosManuaisDeOperacoes', () => {
         valorBrutoAtual: 108000,
       }),
       operacao({
+        ticker: 'Tesouro Selic 2029',
+        data: '2026-03-01',
+        categoria: CategoriaAtivo.TesouroDireto,
+        valorBrutoAtual: 1520000,
+      }),
+      operacao({
         ticker: 'PETR4',
         data: '2026-06-01',
         categoria: CategoriaAtivo.Acao,
@@ -183,6 +189,7 @@ describe('precosManuaisDeOperacoes', () => {
       }),
     ])
     expect(precos.get('CDB-BANCO')).toBe(108000)
+    expect(precos.get('Tesouro Selic 2029')).toBe(1520000)
     expect(precos.has('PETR4')).toBe(false)
   })
 })

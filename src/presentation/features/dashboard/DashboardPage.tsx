@@ -8,8 +8,11 @@ import { DetalheAtivoModal } from '@/features/dashboard/DetalheAtivoModal'
 import { NovaOperacaoModal } from '@/features/dashboard/NovaOperacaoModal'
 import { ResumoPatrimonial } from '@/features/dashboard/ResumoPatrimonial'
 import { TabelaAtivos } from '@/features/dashboard/TabelaAtivos'
+import { ValorManualModal } from '@/features/dashboard/ValorManualModal'
+import type { AlvoValorManual } from '@/features/dashboard/ValorManualModal'
 import { useDashboard } from '@/hooks/useDashboard'
 import { alocacaoPorAtivo, alocacaoPorCategoria, serieEvolucao } from '@/lib/dashboard'
+import { precosManuaisDeOperacoes } from '@/lib/cotacoes'
 import { calcularDetalheAtivo } from '@/lib/detalheAtivo'
 import type { CategoriaAtivo } from '@/types/domain'
 
@@ -75,12 +78,21 @@ function DashboardContent() {
   const serie = useMemo(() => serieEvolucao(data?.historico ?? []), [data])
   const [ativoSelecionado, setAtivoSelecionado] = useState<string | null>(null)
   const [categoriaNovaOperacao, setCategoriaNovaOperacao] = useState<CategoriaAtivo | null>(null)
+  const [valorManualAlvo, setValorManualAlvo] = useState<AlvoValorManual | null>(null)
   const detalheAtivo = useMemo(
     () =>
       ativoSelecionado && data
         ? calcularDetalheAtivo(ativoSelecionado, data.operacoes, data.proventos, data.consolidado)
         : null,
     [ativoSelecionado, data],
+  )
+  const valorManualAtual = useMemo(() => {
+    if (!valorManualAlvo) return null
+    return precosManuaisDeOperacoes(data?.operacoes ?? []).get(valorManualAlvo.ticker) ?? null
+  }, [valorManualAlvo, data])
+  const cotacaoManualAlvo = useMemo(
+    () => (valorManualAlvo ? (data?.cotacoes.get(valorManualAlvo.ticker) ?? null) : null),
+    [valorManualAlvo, data],
   )
   const cotacoesIndisponiveis = useMemo(() => {
     const lista: string[] = []
@@ -193,6 +205,7 @@ function DashboardContent() {
             cotacoes={data.cotacoes}
             onSelecionarAtivo={setAtivoSelecionado}
             onNovaOperacao={setCategoriaNovaOperacao}
+            onEditarValorManual={(ticker, categoria) => setValorManualAlvo({ ticker, categoria })}
           />
           <DetalheAtivoModal
             detalhe={detalheAtivo}
@@ -204,6 +217,13 @@ function DashboardContent() {
           <NovaOperacaoModal
             categoria={categoriaNovaOperacao}
             onClose={() => setCategoriaNovaOperacao(null)}
+            onSaved={refresh}
+          />
+          <ValorManualModal
+            alvo={valorManualAlvo}
+            valorManualAtual={valorManualAtual}
+            cotacaoAtual={cotacaoManualAlvo}
+            onClose={() => setValorManualAlvo(null)}
             onSaved={refresh}
           />
         </>

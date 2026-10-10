@@ -1,7 +1,7 @@
-import { Plus } from 'lucide-react'
+import { Pencil, Plus } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import { categoriaLabel } from '@/lib/categoria'
+import { categoriaLabel, permiteMarcacaoManual } from '@/lib/categoria'
 import { cn } from '@/lib/cn'
 import { STATUS_COTACAO_LABELS } from '@/lib/cotacoes'
 import type { CotacaoResolvida } from '@/lib/cotacoes'
@@ -34,6 +34,12 @@ interface TabelaAtivosProps {
    * é exibido.
    */
   onNovaOperacao?: (categoria: CategoriaAtivo) => void
+  /**
+   * Callback ao clicar no botão de **marcação manual do valor atual**, exibido
+   * ao lado do ticker de ativos de Renda Fixa / Tesouro Direto (RF19). Quando
+   * ausente, o botão não é exibido.
+   */
+  onEditarValorManual?: (ticker: string, categoria: CategoriaAtivo) => void
 }
 
 /**
@@ -47,6 +53,7 @@ export function TabelaAtivos({
   cotacoes,
   onSelecionarAtivo,
   onNovaOperacao,
+  onEditarValorManual,
 }: TabelaAtivosProps) {
   const grupos = useMemo(() => agruparAtivosParaTabela(consolidado), [consolidado])
 
@@ -72,6 +79,7 @@ export function TabelaAtivos({
           cotacoes={cotacoes}
           onSelecionarAtivo={onSelecionarAtivo}
           onNovaOperacao={onNovaOperacao}
+          onEditarValorManual={onEditarValorManual}
         />
       ))}
     </div>
@@ -85,11 +93,13 @@ function CategoriaAtivos({
   cotacoes,
   onSelecionarAtivo,
   onNovaOperacao,
+  onEditarValorManual,
 }: {
   grupo: GrupoCategoriaTabela
   cotacoes?: ReadonlyMap<string, CotacaoResolvida>
   onSelecionarAtivo?: (ticker: string) => void
   onNovaOperacao?: (categoria: CategoriaAtivo) => void
+  onEditarValorManual?: (ticker: string, categoria: CategoriaAtivo) => void
 }) {
   const [abaSelecionada, setAbaSelecionada] = useState<AbaCategoria>('posicoes')
   const temAbertos = grupo.abertos.length > 0
@@ -157,10 +167,11 @@ function CategoriaAtivos({
             <>
               <ConsolidadorCategoria grupo={grupo} />
               <TabelaPosicoes
-                categoria={rotulo}
+                categoria={grupo.categoria}
                 ativos={grupo.abertos}
                 cotacoes={cotacoes}
                 onSelecionarAtivo={onSelecionarAtivo}
+                onEditarValorManual={onEditarValorManual}
               />
             </>
           ) : (
@@ -255,17 +266,21 @@ function TabelaPosicoes({
   ativos,
   cotacoes,
   onSelecionarAtivo,
+  onEditarValorManual,
 }: {
-  categoria: string
+  categoria: CategoriaAtivo
   ativos: Consolidado[]
   cotacoes?: ReadonlyMap<string, CotacaoResolvida>
   onSelecionarAtivo?: (ticker: string) => void
+  onEditarValorManual?: (ticker: string, categoria: CategoriaAtivo) => void
 }) {
+  const rotulo = categoriaLabel(categoria)
+  const podeMarcarValor = permiteMarcacaoManual(categoria)
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-left text-sm">
         <caption className="sr-only">
-          Posições de {categoria} com preço médio, cotação atual, total investido, valor total,
+          Posições de {rotulo} com preço médio, cotação atual, total investido, valor total,
           lucro e variação.
         </caption>
         <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
@@ -286,7 +301,20 @@ function TabelaPosicoes({
             return (
               <tr key={ativo.ticker} className="border-t border-slate-100">
                 <td className="px-4 py-2">
-                  <TickerBotao ticker={ativo.ticker} onSelecionarAtivo={onSelecionarAtivo} />
+                  <div className="flex items-center gap-1.5">
+                    <TickerBotao ticker={ativo.ticker} onSelecionarAtivo={onSelecionarAtivo} />
+                    {onEditarValorManual && podeMarcarValor ? (
+                      <button
+                        type="button"
+                        onClick={() => onEditarValorManual(ativo.ticker, categoria)}
+                        aria-label={`Informar valor atual de ${ativo.ticker}`}
+                        title="Informar valor atual (marcação manual)"
+                        className="inline-flex h-5 w-5 items-center justify-center rounded text-slate-400 transition-colors hover:bg-brand-50 hover:text-brand-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+                      >
+                        <Pencil className="h-3.5 w-3.5" aria-hidden />
+                      </button>
+                    ) : null}
+                  </div>
                 </td>
                 <td className="px-4 py-2 text-right tabular-nums text-slate-700">
                   {ativo.quantidadeAtual.toLocaleString('pt-BR', { maximumFractionDigits: 8 })}
