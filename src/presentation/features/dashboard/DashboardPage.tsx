@@ -5,15 +5,10 @@ import { Alert } from '@/components/Alert'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { WorkspaceSetup } from '@/features/auth/WorkspaceSetup'
 import { DetalheAtivoModal } from '@/features/dashboard/DetalheAtivoModal'
-import { ExtratoProventos } from '@/features/dashboard/ExtratoProventos'
 import { ResumoPatrimonial } from '@/features/dashboard/ResumoPatrimonial'
 import { TabelaAtivos } from '@/features/dashboard/TabelaAtivos'
 import { useDashboard } from '@/hooks/useDashboard'
-import {
-  alocacaoPorAtivo,
-  alocacaoPorCategoria,
-  serieEvolucao,
-} from '@/lib/dashboard'
+import { alocacaoPorAtivo, alocacaoPorCategoria, serieEvolucao } from '@/lib/dashboard'
 import { calcularDetalheAtivo } from '@/lib/detalheAtivo'
 
 /**
@@ -22,16 +17,20 @@ import { calcularDetalheAtivo } from '@/lib/detalheAtivo'
  * (RNF06).
  */
 const AlocacaoChart = lazy(() =>
-  import('@/features/dashboard/AlocacaoChart').then((modulo) => ({ default: modulo.AlocacaoChart })),
+  import('@/features/dashboard/AlocacaoChart').then((modulo) => ({
+    default: modulo.AlocacaoChart,
+  })),
 )
 const EvolucaoChart = lazy(() =>
-  import('@/features/dashboard/EvolucaoChart').then((modulo) => ({ default: modulo.EvolucaoChart })),
+  import('@/features/dashboard/EvolucaoChart').then((modulo) => ({
+    default: modulo.EvolucaoChart,
+  })),
 )
 
 /**
  * Dashboard (RF07–RF11, RF18) — tela inicial de desempenho da carteira após o
- * login. Exibe o resumo patrimonial, a alocação, a evolução patrimonial, a
- * tabela de ativos e o extrato de proventos.
+ * login. Exibe o resumo patrimonial, a alocação, a evolução patrimonial e a
+ * tabela de ativos. O extrato de proventos vive na tela de Proventos.
  */
 export function DashboardPage() {
   const { workspace, error } = useAuth()
@@ -76,12 +75,7 @@ function DashboardContent() {
   const detalheAtivo = useMemo(
     () =>
       ativoSelecionado && data
-        ? calcularDetalheAtivo(
-            ativoSelecionado,
-            data.operacoes,
-            data.proventos,
-            data.consolidado,
-          )
+        ? calcularDetalheAtivo(ativoSelecionado, data.operacoes, data.proventos, data.consolidado)
         : null,
     [ativoSelecionado, data],
   )
@@ -129,10 +123,7 @@ function DashboardContent() {
             disabled={isRefreshing}
             className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <RefreshCw
-              className={isRefreshing ? 'h-4 w-4 animate-spin' : 'h-4 w-4'}
-              aria-hidden
-            />
+            <RefreshCw className={isRefreshing ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} aria-hidden />
             Atualizar
           </button>
           <button
@@ -199,7 +190,6 @@ function DashboardContent() {
             cotacoes={data.cotacoes}
             onSelecionarAtivo={setAtivoSelecionado}
           />
-          <ExtratoProventos proventos={data.proventos} />
           <DetalheAtivoModal
             detalhe={detalheAtivo}
             operacoes={data.operacoes}
