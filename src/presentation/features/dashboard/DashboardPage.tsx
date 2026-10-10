@@ -1,8 +1,9 @@
-import { ExternalLink, LayoutDashboard, Loader2, RefreshCw, Save } from 'lucide-react'
+import { ExternalLink, Files, LayoutDashboard, Loader2, RefreshCw, Save } from 'lucide-react'
 import { lazy, Suspense, useMemo, useState } from 'react'
 import { useAuth } from '@/app/providers/authContext'
 import { Alert } from '@/components/Alert'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { TrocarPlanilhaModal } from '@/features/auth/TrocarPlanilhaModal'
 import { WorkspaceSetup } from '@/features/auth/WorkspaceSetup'
 import { DetalheAtivoModal } from '@/features/dashboard/DetalheAtivoModal'
 import { NovaOperacaoModal } from '@/features/dashboard/NovaOperacaoModal'
@@ -79,6 +80,7 @@ function DashboardContent() {
   const [ativoSelecionado, setAtivoSelecionado] = useState<string | null>(null)
   const [categoriaNovaOperacao, setCategoriaNovaOperacao] = useState<CategoriaAtivo | null>(null)
   const [valorManualAlvo, setValorManualAlvo] = useState<AlvoValorManual | null>(null)
+  const [trocarPlanilhaAberto, setTrocarPlanilhaAberto] = useState(false)
   const detalheAtivo = useMemo(
     () =>
       ativoSelecionado && data
@@ -132,6 +134,14 @@ function DashboardContent() {
             <ExternalLink className="h-4 w-4" aria-hidden />
             Abrir no Google Sheets
           </a>
+          <button
+            type="button"
+            onClick={() => setTrocarPlanilhaAberto(true)}
+            className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100"
+          >
+            <Files className="h-4 w-4" aria-hidden />
+            Trocar planilha
+          </button>
           <button
             type="button"
             onClick={() => void refresh()}
@@ -228,6 +238,11 @@ function DashboardContent() {
           />
         </>
       )}
+
+      <TrocarPlanilhaModal
+        open={trocarPlanilhaAberto}
+        onClose={() => setTrocarPlanilhaAberto(false)}
+      />
     </section>
   )
 }
