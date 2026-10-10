@@ -57,6 +57,16 @@ export function ativosParaTabela(consolidado: readonly Consolidado[]): Consolida
   return [...posicoesAbertas(consolidado)].sort((a, b) => b.valorAtual - a.valorAtual)
 }
 
+/**
+ * Posições **totalmente vendidas** (quantidade zerada e ticker preenchido) —
+ * base da aba "Vendidos" das tabelas do dashboard.
+ */
+export function posicoesEncerradas(consolidado: readonly Consolidado[]): Consolidado[] {
+  return consolidado.filter(
+    (linha) => linha.quantidadeAtual === 0 && linha.ticker.trim().length > 0,
+  )
+}
+
 /** Agrupamento das posições abertas de uma categoria, com totais consolidados. */
 export interface GrupoCategoria {
   categoria: CategoriaAtivo
@@ -64,6 +74,25 @@ export interface GrupoCategoria {
   ativos: Consolidado[]
   quantidadePosicoes: number
   /** Totais em **centavos**. */
+  totalInvestido: number
+  valorAtual: number
+  lucroPrejuizo: number
+  lucroPrejuizoPercent: number
+  percentualCarteira: number
+}
+
+/**
+ * Grupo de uma categoria na tabela do dashboard: separa as posições **abertas**
+ * (quantidade > 0) dos ativos **completamente vendidos** (quantidade = 0), que
+ * ganham uma aba própria. Os totais consideram apenas as posições abertas.
+ */
+export interface GrupoCategoriaTabela {
+  categoria: CategoriaAtivo
+  /** Posições abertas (quantidade ≠ 0), ordenadas por valor atual decrescente. */
+  abertos: Consolidado[]
+  /** Ativos totalmente vendidos (quantidade = 0), ordenados por ticker. */
+  encerrados: Consolidado[]
+  /** Totais em **centavos** (somente posições abertas). */
   totalInvestido: number
   valorAtual: number
   lucroPrejuizo: number
@@ -81,32 +110,39 @@ const ORDEM_CATEGORIAS: readonly CategoriaAtivo[] = [
 ]
 
 /**
- * Agrupa as posições abertas por categoria (ordem canônica), calculando o
- * consolidador de cada grupo: investido, valor atual, lucro (R$ e %) e
- * participação na carteira.
+ * Agrupa o consolidado por categoria (ordem canônica) para a tabela do
+ * dashboard, separando as posições abertas dos ativos completamente vendidos e
+ * calculando o consolidador de cada grupo (somente posições abertas): investido,
+ * valor atual, lucro (R$ e %) e participação na carteira.
  */
-export function agruparAtivosPorCategoria(
+export function agruparAtivosParaTabela(
   consolidado: readonly Consolidado[],
-): GrupoCategoria[] {
+): GrupoCategoriaTabela[] {
   const abertos = posicoesAbertas(consolidado)
+  const encerrados = posicoesEncerradas(consolidado)
   const totalCarteira = round2(abertos.reduce((soma, linha) => soma + linha.valorAtual, 0))
 
-  const porCategoria = new Map<CategoriaAtivo, Consolidado[]>()
-  for (const linha of abertos) {
-    const lista = porCategoria.get(linha.categoria) ?? []
-    lista.push(linha)
-    porCategoria.set(linha.categoria, lista)
-  }
+  const categorias = new Set<CategoriaAtivo>()
+  for (const linha of abertos) categorias.add(linha.categoria)
+  for (const linha of encerrados) categorias.add(linha.categoria)
 
-  return ORDEM_CATEGORIAS.filter((categoria) => porCategoria.has(categoria)).map((categoria) => {
-    const ativos = (porCategoria.get(categoria) ?? []).sort((a, b) => b.valorAtual - a.valorAtual)
-    const totalInvestido = round2(ativos.reduce((soma, ativo) => soma + ativo.totalInvestido, 0))
-    const valorAtual = round2(ativos.reduce((soma, ativo) => soma + ativo.valorAtual, 0))
+  return ORDEM_CATEGORIAS.filter((categoria) => categorias.has(categoria)).map((categoria) => {
+    const doAbertos = abertos
+      .filter((linha) => linha.categoria === categoria)
+      .sort((a, b) => b.valorAtual - a.valorAtual)
+    const doEncerrados = encerrados
+      .filter((linha) => linha.categoria === categoria)
+      .sort((a, b) => a.ticker.localeCompare(b.ticker))
+
+    const totalInvestido = round2(
+      doAbertos.reduce((soma, ativo) => soma + ativo.totalInvestido, 0),
+    )
+    const valorAtual = round2(doAbertos.reduce((soma, ativo) => soma + ativo.valorAtual, 0))
     const lucroPrejuizo = round2(valorAtual - totalInvestido)
     return {
       categoria,
-      ativos,
-      quantidadePosicoes: ativos.length,
+      abertos: doAbertos,
+      encerrados: doEncerrados,
       totalInvestido,
       valorAtual,
       lucroPrejuizo,
@@ -115,6 +151,28 @@ export function agruparAtivosPorCategoria(
       percentualCarteira: totalCarteira === 0 ? 0 : round2((valorAtual / totalCarteira) * 100),
     }
   })
+}
+
+/**
+ * Agrupa as posições abertas por categoria (ordem canônica), calculando o
+ * consolidador de cada grupo: investido, valor atual, lucro (R$ e %) e
+ * participação na carteira. Categorias sem posições abertas são omitidas.
+ */
+export function agruparAtivosPorCategoria(
+  consolidado: readonly Consolidado[],
+): GrupoCategoria[] {
+  return agruparAtivosParaTabela(consolidado)
+    .filter((grupo) => grupo.abertos.length > 0)
+    .map((grupo) => ({
+      categoria: grupo.categoria,
+      ativos: grupo.abertos,
+      quantidadePosicoes: grupo.abertos.length,
+      totalInvestido: grupo.totalInvestido,
+      valorAtual: grupo.valorAtual,
+      lucroPrejuizo: grupo.lucroPrejuizo,
+      lucroPrejuizoPercent: grupo.lucroPrejuizoPercent,
+      percentualCarteira: grupo.percentualCarteira,
+    }))
 }
 
 function montarAlocacao(

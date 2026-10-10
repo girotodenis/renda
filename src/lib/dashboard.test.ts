@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  agruparAtivosParaTabela,
   agruparAtivosPorCategoria,
   agruparProventosPorAno,
   agruparProventosPorMes,
@@ -11,6 +12,7 @@ import {
   ativosParaTabela,
   filtrarProventos,
   posicoesAbertas,
+  posicoesEncerradas,
   serieEvolucao,
   totalProventos,
 } from '@/lib/dashboard'
@@ -63,6 +65,75 @@ describe('posicoesAbertas / ativosParaTabela (RF10)', () => {
       consolidado({ ticker: 'C', valorAtual: 30000 }),
     ]
     expect(ativosParaTabela(linhas).map((linha) => linha.ticker)).toEqual(['B', 'C', 'A'])
+  })
+})
+
+describe('posicoesEncerradas (ativos completamente vendidos)', () => {
+  it('mantém apenas posições zeradas com ticker preenchido', () => {
+    const linhas = [
+      consolidado({ ticker: 'PETR4' }),
+      consolidado({ ticker: 'ITSA4', quantidadeAtual: 0, valorAtual: 0 }),
+      consolidado({ ticker: '   ', quantidadeAtual: 0 }),
+    ]
+    expect(posicoesEncerradas(linhas).map((linha) => linha.ticker)).toEqual(['ITSA4'])
+  })
+})
+
+describe('agruparAtivosParaTabela (abas Em carteira / Vendidos)', () => {
+  it('separa posições abertas e ativos vendidos por categoria', () => {
+    const linhas = [
+      consolidado({ ticker: 'PETR4', categoria: CategoriaAtivo.Acao, valorAtual: 12000 }),
+      consolidado({
+        ticker: 'ITSA4',
+        categoria: CategoriaAtivo.Acao,
+        quantidadeAtual: 0,
+        valorAtual: 0,
+      }),
+      consolidado({ ticker: 'MXRF11', categoria: CategoriaAtivo.Fii, valorAtual: 6000 }),
+    ]
+
+    const grupos = agruparAtivosParaTabela(linhas)
+
+    expect(grupos.map((grupo) => grupo.categoria)).toEqual([CategoriaAtivo.Acao, CategoriaAtivo.Fii])
+    expect(grupos[0].abertos.map((ativo) => ativo.ticker)).toEqual(['PETR4'])
+    expect(grupos[0].encerrados.map((ativo) => ativo.ticker)).toEqual(['ITSA4'])
+    expect(grupos[1].abertos.map((ativo) => ativo.ticker)).toEqual(['MXRF11'])
+    expect(grupos[1].encerrados).toEqual([])
+    // O consolidador considera apenas as posições abertas.
+    expect(grupos[0].valorAtual).toBe(12000)
+  })
+
+  it('inclui categoria com apenas ativos vendidos e ordena os encerrados por ticker', () => {
+    const linhas = [
+      consolidado({ ticker: 'VALE3', categoria: CategoriaAtivo.Acao }),
+      consolidado({
+        ticker: 'BBDC4',
+        categoria: CategoriaAtivo.Acao,
+        quantidadeAtual: 0,
+        valorAtual: 0,
+      }),
+      consolidado({
+        ticker: 'ABEV3',
+        categoria: CategoriaAtivo.Acao,
+        quantidadeAtual: 0,
+        valorAtual: 0,
+      }),
+      consolidado({
+        ticker: 'HGLG11',
+        categoria: CategoriaAtivo.Fii,
+        quantidadeAtual: 0,
+        valorAtual: 0,
+      }),
+    ]
+
+    const grupos = agruparAtivosParaTabela(linhas)
+
+    expect(grupos.map((grupo) => grupo.categoria)).toEqual([CategoriaAtivo.Acao, CategoriaAtivo.Fii])
+    expect(grupos[0].encerrados.map((ativo) => ativo.ticker)).toEqual(['ABEV3', 'BBDC4'])
+    // FII só aparece por causa dos ativos vendidos (sem posições abertas).
+    expect(grupos[1].abertos).toEqual([])
+    expect(grupos[1].encerrados.map((ativo) => ativo.ticker)).toEqual(['HGLG11'])
+    expect(grupos[1].valorAtual).toBe(0)
   })
 })
 

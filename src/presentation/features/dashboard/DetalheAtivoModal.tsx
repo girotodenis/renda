@@ -214,8 +214,11 @@ export function DetalheAtivoResumo({
       : 'sem compras registradas'
 
   // A Rentabilidade Total só agrega quando há lucro realizado (vendas de ciclos
-  // encerrados); sem vendas ela coincide com a da posição e vira ruído.
+  // encerrados) ou quando a posição foi totalmente vendida — nesse caso a
+  // Rentabilidade da posição (que depende da posição atual) não se aplica.
   const possuiRealizado = detalhe.lucroRealizado !== 0 && detalhe.capitalAportado > 0
+  const mostrarTotal = possuiRealizado || detalhe.posicaoEncerrada
+  const mostrarPosicao = !detalhe.posicaoEncerrada
 
   return (
     <div className="space-y-4">
@@ -224,7 +227,7 @@ export function DetalheAtivoResumo({
         <Metrica rotulo="Maior compra" valor={formatarCentavosOuTraco(detalhe.maiorPrecoCompra)} />
         <Metrica rotulo="Preço médio" valor={formatarCentavos(detalhe.precoMedio)} />
         <Metrica rotulo="Preço atual" valor={formatarCentavos(detalhe.precoAtual)} />
-        <Metrica rotulo="Valor investido" valor={formatarCentavos(detalhe.totalInvestido)} />
+        <Metrica rotulo="Valor investido" valor={formatarCentavos(detalhe.valorInvestido)} />
         <Metrica rotulo="Valor atual" valor={formatarCentavos(detalhe.valorAtual)} />
       </div>
 
@@ -236,30 +239,35 @@ export function DetalheAtivoResumo({
         <p className="text-xs text-slate-500">{periodo}</p>
       </div>
 
-      <div className={cn('grid gap-3', possuiRealizado && 'sm:grid-cols-2')}>
-        <div className="rounded-lg border border-slate-200 px-4 py-3">
-          <p className="text-xs uppercase tracking-wide text-slate-500">Rentabilidade da posição</p>
-          <div className="flex flex-wrap items-baseline gap-x-2">
-            <span
-              className={cn(
-                'text-lg font-semibold tabular-nums',
-                classeValor(detalhe.rentabilidadePercent),
-              )}
-            >
-              {formatarPercentual(detalhe.rentabilidadePercent)}
-            </span>
-            <span
-              className={cn('text-sm font-medium tabular-nums', classeValor(detalhe.retornoPosicao))}
-            >
-              {formatarCentavos(detalhe.retornoPosicao)}
-            </span>
+      <div className={cn('grid gap-3', possuiRealizado && mostrarPosicao && 'sm:grid-cols-2')}>
+        {mostrarPosicao ? (
+          <div className="rounded-lg border border-slate-200 px-4 py-3">
+            <p className="text-xs uppercase tracking-wide text-slate-500">Rentabilidade da posição</p>
+            <div className="flex flex-wrap items-baseline gap-x-2">
+              <span
+                className={cn(
+                  'text-lg font-semibold tabular-nums',
+                  classeValor(detalhe.rentabilidadePercent),
+                )}
+              >
+                {formatarPercentual(detalhe.rentabilidadePercent)}
+              </span>
+              <span
+                className={cn(
+                  'text-sm font-medium tabular-nums',
+                  classeValor(detalhe.retornoPosicao),
+                )}
+              >
+                {formatarCentavos(detalhe.retornoPosicao)}
+              </span>
+            </div>
+            <p className="text-xs text-slate-500">
+              (valor atual − investido + proventos) ÷ investido
+            </p>
           </div>
-          <p className="text-xs text-slate-500">
-            (valor atual − investido + proventos) ÷ investido
-          </p>
-        </div>
+        ) : null}
 
-        {possuiRealizado ? (
+        {mostrarTotal ? (
           <div className="rounded-lg border border-slate-200 px-4 py-3">
             <p className="text-xs uppercase tracking-wide text-slate-500">Rentabilidade Total</p>
             <div className="flex flex-wrap items-baseline gap-x-2">
@@ -282,12 +290,14 @@ export function DetalheAtivoResumo({
               {formatarCentavos(detalhe.lucroFlutuante)} + proventos{' '}
               {formatarCentavos(detalhe.proventosNoPeriodo)}
             </p>
-            <p className="text-xs text-slate-500">÷ capital aportado (soma das compras)</p>
+            <p className="text-xs text-slate-500">
+              ÷ capital aportado ({formatarCentavos(detalhe.capitalAportado)})
+            </p>
           </div>
         ) : null}
       </div>
 
-      {possuiRealizado ? (
+      {mostrarTotal ? (
         <details className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
           <summary className="cursor-pointer font-medium text-slate-700">
             Como é calculada a Rentabilidade Total?
@@ -305,6 +315,12 @@ export function DetalheAtivoResumo({
               Capital aportado é a soma de todas as compras (quantidade × preço + taxas). Sem vendas,
               ele é igual ao valor investido e a Rentabilidade Total coincide com a da posição.
             </p>
+            {detalhe.posicaoEncerrada ? (
+              <p>
+                A posição deste ativo foi totalmente vendida, por isso não há mais Rentabilidade da
+                posição: o "Valor investido" exibido é o capital aportado nas compras.
+              </p>
+            ) : null}
           </div>
         </details>
       ) : null}

@@ -12,7 +12,6 @@ import { useDashboard } from '@/hooks/useDashboard'
 import {
   alocacaoPorAtivo,
   alocacaoPorCategoria,
-  ativosParaTabela,
   serieEvolucao,
 } from '@/lib/dashboard'
 import { calcularDetalheAtivo } from '@/lib/detalheAtivo'
@@ -72,7 +71,6 @@ function DashboardContent() {
   const consolidado = useMemo(() => data?.consolidado ?? [], [data])
   const porCategoria = useMemo(() => alocacaoPorCategoria(consolidado), [consolidado])
   const porAtivo = useMemo(() => alocacaoPorAtivo(consolidado), [consolidado])
-  const ativos = useMemo(() => ativosParaTabela(consolidado), [consolidado])
   const serie = useMemo(() => serieEvolucao(data?.historico ?? []), [data])
   const [ativoSelecionado, setAtivoSelecionado] = useState<string | null>(null)
   const detalheAtivo = useMemo(
@@ -176,7 +174,7 @@ function DashboardContent() {
         <>
           <ResumoPatrimonial resumo={data.resumo} />
 
-          {ativos.length === 0 && data.proventos.length === 0 ? (
+          {consolidado.length === 0 && data.proventos.length === 0 ? (
             <Alert variant="info" title="Carteira vazia">
               Lance suas operações em <strong>Operações</strong> para ver o resumo patrimonial, os
               gráficos e a tabela de ativos.
@@ -197,7 +195,7 @@ function DashboardContent() {
           </div>
 
           <TabelaAtivos
-            ativos={ativos}
+            consolidado={consolidado}
             cotacoes={data.cotacoes}
             onSelecionarAtivo={setAtivoSelecionado}
           />
