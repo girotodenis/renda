@@ -1,0 +1,473 @@
+# Plano de implementação — PWA + Offline-first + Sincronização com a planilha
+
+> **Objetivo final:** transformar a aplicação em um PWA instalável, que funcione
+> offline e, ao reconectar, sincronize as alterações com a planilha do Google.
+>
+> **Data de criação:** 2026-10-10
+> **Última atualização:** 2026-10-10
+> **Estado geral:** `em andamento` — Fase 0 concluída; próximas fases pendentes.
+
+---
+
+## Como usar este plano (protocolo de sessão)
+
+1. **Cada fase é executada em UMA única sessão/prompt.** Não iniciar duas fases
+   na mesma sessão.
+2. Ao **iniciar** uma fase:
+   - marcar a fase como `[~] em andamento` na seção **Estado da implementação**;
+   - reler os arquivos citados na fase (a estrutura pode ter mudado).
+3. Ao **terminar** uma fase:
+   - rodar os **Comandos de validação** da fase;
+   - marcar a fase como `[x] concluída` com a data;
+   - registrar desvios em **Notas/Desvios** da fase (decisões, arquivos extras,
+     mudanças de abordagem).
+4. **Não avançar** para a fase seguinte sem validar a atual.
+5. Este arquivo (`PLANO_PWA.md`) é a **fonte da verdade do estado**. Todo
+   progresso deve ser refletido aqui antes de encerrar a sessão.
+
+---
+
+## Estado da implementação
+
+| Fase | Descrição curta | Estado | Concluída em |
+| --- | --- | --- | --- |
+| Fase 0 | PWA instalável + shell offline (manifest/SW/ícones) | `[x]` concluída | 2026-10-10 |
+| Fase 1 | Repositórios offline (outbox + atualização otimista) | `[ ]` pendente | — |
+| Fase 2 | Sincronização automática (flush + Consolidado) | `[ ]` pendente | — |
+| Fase 3 | Auth resiliente offline | `[ ]` pendente | — |
+| Fase 4 | UX de sincronização (badge/contador/botão) | `[ ]` pendente | — |
+| Fase 5 | Melhorias opcionais (IndexedDB, Periodic Sync, tabs) | `[ ]` pendente | — |
+
+---
+
+## Baseline — o que **já existe** no código (não refazer)
+
+Validado em 2026-10-10. A base já implementa parte do offline de **leitura**:
+
+- **Leitura cache-first**: `src/infrastructure/repositories.ts` lê do cache
+  (`localStorage`) e só busca da API (`infrastructure/sheets/gateway.ts`) em
+  cache frio ou `forceRefresh`.
+- **Cache por aba**: `src/infrastructure/cache.ts` (chave
+  `minhaacoes.cache.v1.<spreadsheetId>.<sheetName>`).
+- **Leitura offline do dashboard**: `src/application/dashboard.ts`
+  (`lerDashboardDoCache`, opção `offline` em `carregarDashboard`) e
+  `src/presentation/hooks/useDashboard.ts` (renderiza do cache quando
+  `navigator.onLine === false`).
+- **Cotações resilientes**: Tesouro (`infrastructure/tesouro.ts`) e Brapi
+  (`infrastructure/brapi.ts`) são cache-first e nunca lançam offline.
+- **Detecção de conexão**: `src/presentation/hooks/useOnlineStatus.ts`.
+- **Auth com renovação silenciosa**: `src/presentation/app/providers/AuthProvider.tsx`
+  (GIS, token em `localStorage`, `silentRefresh`).
+
+**Gaps a resolver nas fases (o motivo deste plano):**
+
+1. Não é instalável (sem manifest, sem service worker, sem ícones).
+2. **Escritas exigem rede**: `append/replaceAll/update/remove` chamam a API do
+   Sheets direto — não há fila offline de mutações.
+3. **Auth desloga offline**: `silentRefresh` limpa a sessão quando a renovação
+   falha, mesmo se o motivo for falta de rede.
+4. Sem UX de sincronização (indicador offline/pendências).
+
+---
+
+## Validação plano × execução
+
+A validação compara o que a fase **promete** (Critérios de aceite) com o que
+foi **executado** (arquivos alterados + comandos passando).
+
+**Comandos globais** (rodar ao final de toda fase que altere código):
+
+```bash
+cd /app/renda
+npm run typecheck
+npm test -- --run
+npm run lint
+npm run build
+```
+
+**Checklist de conformidade** (deve continuar verdadeiro em todas as fases):
+
+- [ ] Regra de dependência mantida: `presentation → application → {domain, infrastructure}`.
+- [ ] Pastas antigas (`lib/ services/ types/ features/ components/ hooks/ app/`)
+      permanecem como shims — código novo vai nas camadas corretas.
+- [ ] Dinheiro em centavos inteiros; datas ISO `YYYY-MM-DD`; `CategoriaAtivo` canônico.
+- [ ] Nenhuma lógica de negócio em componentes React.
+- [ ] Novos testes em `*.test.ts` junto ao módulo (Vitest).
+
+**Procedimento de validação por fase:**
+
+1. Abrir a seção da fase, conferir os **Critérios de aceite**.
+2. Conferir a lista **Arquivos a criar/editar** vs. o que realmente foi alterado
+   (`git status` / `git diff --stat`).
+3. Rodar os comandos globais + comandos específicos da fase.
+4. Registrar o resultado em **Notas/Desvios** e atualizar o **Estado da implementação**.
+
+---
+
+# Fase 0 — PWA instalável + shell offline
+
+### Objetivo
+Tornar o app instalável e abrir a UI sem rede (app shell via service worker).
+**Não altera a camada de dados** — apenas empacotamento/instalação.
+
+### Contexto
+- `vite.config.ts` hoje tem só `react()` e alias `@`.
+- `index.html` não tem `theme-color` nem ícones de PWA.
+- Não existe pasta `public/`.
+- SW só deve agir em **build de produção** (`vite preview`), nunca no dev.
+
+### Tarefas
+1. Instalar `vite-plugin-pwa` como devDependency.
+2. Em `vite.config.ts`, adicionar `VitePWA({...})`:
+   - `registerType: 'autoUpdate'`
+   - `manifest`: `name` "Minhas Ações", `short_name` "Minhas Ações",
+     `display: 'standalone'`, `start_url: '/'`, `scope: '/'`,
+     `theme_color`, `background_color`, `icons` (192, 512 e maskable).
+   - `workbox`: `globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}']`,
+     `navigateFallback: '/index.html'` (SPA).
+   - **Excluir** do precache/rota: `accounts.google.com`, `apis.google.com`,
+     `sheets.googleapis.com`, `www.googleapis.com` (terceiros/autenticados).
+3. Criar ícones em `public/`: `icon-192.png`, `icon-512.png`,
+   `maskable-512.png` (gerar de um SVG de origem; fundo sólido no maskable).
+4. Em `index.html`: `theme-color` e `apple-touch-icon`.
+5. Em `src/main.tsx`: importar `virtual:pwa-register` e registrar o SW
+   (sem prompt obrigatório nesta fase; `autoUpdate` basta).
+
+### Arquivos a criar/editar
+- `package.json` (dependência)
+- `vite.config.ts` (plugin PWA)
+- `index.html` (meta tags)
+- `public/icon-192.png`, `public/icon-512.png`, `public/maskable-512.png` (novos)
+- `src/main.tsx` (registro do SW)
+- `src/vite-env.d.ts` (types de `virtual:pwa-register`, se necessário)
+
+### Critérios de aceite
+- `npm run build` gera `dist/sw.js` + `dist/manifest.webmanifest`.
+- `npm run preview` → abrir no navegador → Lighthouse (categoria PWA) marca
+  **Installable** e **manifest válido**.
+- Com o preview servido, desligar a rede e recarregar → o shell abre.
+- Dev (`npm run dev`) continua sem SW (sem cache agressivo durante desenvolvimento).
+
+### Comandos de validação
+```bash
+npm run typecheck && npm run lint && npm run build
+ls dist/sw.js dist/manifest.webmanifest
+npm run preview   # validar manualmente no navegador
+```
+
+### Estado
+- [x] concluída em 2026-10-10
+
+### Notas/Desvios
+
+**Arquivos realmente alterados** (`git status`):
+
+- `package.json` / `package-lock.json` — `vite-plugin-pwa@^2.0.0` em `devDependencies`
+  (v2.0.0 é compatível com Vite 5; `workbox-build`/`workbox-window` vêm como
+  dependências transitivas do plugin).
+- `vite.config.ts` — plugin `VitePWA` (`registerType: 'autoUpdate'`,
+  `injectRegister: false`, `manifest`, `workbox`).
+- `index.html` — `theme-color` + `apple-touch-icon`.
+- `src/main.tsx` — `registerSW({ immediate: true })` via `virtual:pwa-register`.
+- `src/vite-env.d.ts` — `/// <reference types="vite-plugin-pwa/client" />`.
+- `public/icon-192.png`, `public/icon-512.png`, `public/maskable-512.png` (novos).
+
+**Decisões tomadas:**
+
+- **Ícones:** gerados a partir de um glifo único (gráfico/seta ascendente branco)
+  com Pillow e supersampling 4× (antialiasing). `icon-192`/`icon-512`: quadrado
+  arredondado com gradiente `brand-500 → brand-700` (`#3b82f6 → #1d4ed8`);
+  `maskable-512`: fundo **sólido** `brand-600` (`#2563eb`) e glifo reduzido a 62%
+  para ficar dentro da *safe zone* (80%). O SVG de origem **não** foi versionado —
+  o escopo da fase lista apenas os PNGs em `public/`.
+- **Cores do tema:** `theme_color = #2563eb` (alinhado ao `brand-600` do
+  `tailwind.config.js`) no manifest e no `<meta name="theme-color">`;
+  `background_color = #ffffff` (fundo da splash screen).
+- **`injectRegister: false` + registro manual:** evita registro duplicado, já que
+  `src/main.tsx` importa `virtual:pwa-register`.
+- **Exclusão do Google (3 camadas):** (1) os domínios não entram no precache — o
+  precache só contém assets locais do build; (2) `navigateFallbackDenylist` impede
+  o `index.html` de capturar navegações para eles; (3) `runtimeCaching` com
+  `NetworkOnly` para `/^https:\/\/(?:accounts|apis|sheets|www)\.google(?:apis)?\.com\/.*/i`.
+- **Dev sem SW:** `devOptions.enabled: false` (padrão, explicitado). Em dev o
+  `virtual:pwa-register` vira no-op e o `<link rel="manifest">` não é injetado.
+
+**Validação executada (2026-10-10):**
+
+- `npm run typecheck` — ok. `npm run lint` — ok.
+- `npm test -- --run` — 157 testes / 13 arquivos, todos verdes.
+- `npm run build` — ok; gera `dist/sw.js`, `dist/workbox-98f7a950.js` e
+  `dist/manifest.webmanifest` (precache: 16 entradas, ~993 KiB, sem domínios do Google).
+- `npm run preview` (porta 4173): `/sw.js` → 200 `text/javascript`;
+  `/manifest.webmanifest` → 200 `application/manifest+json`; `/icon-512.png` →
+  200 `image/png`. No navegador: SW **ativo** (`scope` `/`, script `sw.js`),
+  manifest lido como JSON válido, `theme-color` e `apple-touch-icon` presentes.
+- **Offline:** com a rede desligada e recarregando `/`, o app shell abre
+  integralmente (header/nav/conteúdo/footer) servido pelo SW.
+- **Dev:** `virtual:pwa-register` é no-op (não referencia `navigator.serviceWorker`)
+  e o `index.html` de dev não recebe `<link rel="manifest">` — nenhum SW no dev.
+
+**Desvios do plano:** nenhum no escopo. O comando `ls dist/sw.js dist/manifest.webmanifest`
+foi complementado por requisição HTTP ao preview com conferência de MIME type. O
+Lighthouse (categoria PWA) não está disponível no ambiente e não foi executado;
+"Installable"/"manifest válido" foram conferidos diretamente no navegador (SW ativo
++ manifest JSON válido + ícones 192/512/maskable) e pelo shell abrindo offline.
+
+---
+
+# Fase 1 — Repositórios offline (outbox + atualização otimista)
+
+### Objetivo
+Toda **escrita** funciona sem rede: vai para uma fila (outbox) e reflete na UI
+imediatamente (cache otimista).
+
+### Contexto
+- Repositórios em `src/infrastructure/repositories.ts`
+  (`createRepository`, `createCrudRepository`, e os exports
+  `operacoesRepo`, `proventosRepo`, `consolidadoRepo`, `metasRepo`,
+  `historicoRepo`, `valuationRepo`).
+- O shim `src/services/repositories.ts` re-exporta de
+  `@/infrastructure/repositories` — **todos** os consumidores passam por lá.
+- Ports em `src/domain/repositories/ports.ts` (`Repository<T>`,
+  `CrudRepository<T>`, `RepositoryContext { accessToken, spreadsheetId }`).
+- `Consolidado` é **aba derivada** (recalculada por
+  `application/consolidado.ts` `writeConsolidado`) → **não entra no outbox**.
+
+### Tarefas
+1. Criar `src/infrastructure/outbox.ts`:
+   - persistência em `localStorage` (chave `minhaacoes.outbox.v1`);
+   - `Mutation = { id, createdAt, sheet: SheetName, kind: 'append' | 'update' | 'remove' | 'replaceAll', entity?, entities?, entityId? }`;
+   - API: `enqueue`, `list`, `remove`, `clear`, `count`.
+2. Criar `src/infrastructure/offlineRepositories.ts` — decorador dos repositórios:
+   - se **offline** (ou escrita falhar por erro de rede/429): aplica a mutação
+     no cache local de forma otimista + `enqueue`;
+   - se **online**: tenta escrita direta; em falha de rede, cai para o outbox;
+   - `Consolidado` nunca é enfileirado.
+   - A decisão online/offline consulta `navigator.onLine` (via módulo único a
+     ser centralizado na Fase 2, ou um helper em `outbox.ts` por ora).
+3. Ajustar `src/infrastructure/repositories.ts` para exportar os repositórios
+   **já envoltos** pelo decorador (assim `services/repositories.ts` e toda a
+   camada `application` passam a usar a versão offline-aware sem alterar assinaturas).
+4. Testes: `src/infrastructure/outbox.test.ts` (enqueue/list/remove/clear,
+   persistência e idempotência de `id`).
+
+### Arquivos a criar/editar
+- `src/infrastructure/outbox.ts` (novo)
+- `src/infrastructure/offlineRepositories.ts` (novo)
+- `src/infrastructure/outbox.test.ts` (novo)
+- `src/infrastructure/repositories.ts` (exportar versões envoltas)
+
+### Critérios de aceite
+- `outbox` persiste mutações e sobrevive a reload.
+- Com `navigator.onLine === false` (simulado em teste), `operacoesRepo.append`
+  atualiza o cache local e enfileira; sem chamada à API.
+- `consolidadoRepo` **não** gera entrada de outbox em nenhum caminho.
+- Comandos globais verdes.
+
+### Comandos de validação
+```bash
+npm run typecheck && npm test -- --run && npm run lint
+```
+
+### Estado
+- [ ] pendente
+
+### Notas/Desvios
+— (preencher ao executar)
+
+---
+
+# Fase 2 — Sincronização automática (flush + Consolidado)
+
+### Objetivo
+Quando houver rede, reaplicar as mutações pendentes na planilha em ordem FIFO e
+recalcular a `Consolidado`.
+
+### Contexto
+- Fase 1 entrega `outbox` com mutações persistidas.
+- `application/consolidado.ts` expõe `syncConsolidado(context)` e
+  `writeConsolidado(context, operacoes, precosAtuais)`.
+- `infrastructure/repositories.ts` expõe `prefetchAllSheets(context)` (1
+  `batchGet` para as 5 abas).
+- CRUD (`update/remove`) já relê a aba antes de reescrever (re-leitura segura).
+
+### Tarefas
+1. Criar `src/application/sync.ts`:
+   - `sincronizarPendentes(context): Promise<SyncResult>` — processa a fila FIFO;
+   - para `update/remove`, delegar ao repositório real (que relê a aba);
+   - sucesso → `remove(id)`; erro de rede/429 → interrompe e mantém o item;
+   - 401 → pede novo token (via `AuthContext.ensureAccessToken`) e re-tenta;
+   - 429 → backoff exponencial;
+   - idempotência por `mutation.id` (não duplicar `append` se o replay falhar
+     **após** a escrita ter sido aceita).
+2. Após o flush: chamar `syncConsolidado` **uma vez** e `prefetchAllSheets`
+   para refrescar o cache.
+3. Disparadores de sync:
+   - evento `window.online`;
+   - ao montar o `AppLayout` (uma vez);
+   - após cada ação de escrita (best-effort);
+   - retry periódico simples (ex.: 60s) enquanto houver pendências.
+4. `Snapshot` do histórico: se offline, enfileirar com a **data fixada** no dia
+   da ação (não a data do replay).
+5. Testes: `src/application/sync.test.ts` com repositório falso (fake) para
+   validar ordem FIFO, sucesso parcial e interrupção em erro de rede.
+
+### Arquivos a criar/editar
+- `src/application/sync.ts` (novo)
+- `src/application/sync.test.ts` (novo)
+- `src/presentation/app/App.tsx` ou `AppLayout` (registro do ouvinte de sync)
+- (se necessário) centralizar a decisão online/offline em um módulo único
+  `src/infrastructure/network.ts`
+
+### Critérios de aceite
+- Desligar rede → 2 operações offline → religar → as duas aparecem na planilha
+  na ordem e a fila zera.
+- Falha de rede no meio do flush não perde nem duplica mutações.
+- `Consolidado` é recalculado **uma vez** ao final do flush.
+- Comandos globais verdes.
+
+### Comandos de validação
+```bash
+npm run typecheck && npm test -- --run && npm run lint && npm run build
+npm run preview   # teste manual: offline → ações → online → conferir planilha
+```
+
+### Estado
+- [ ] pendente
+
+### Notas/Desvios
+— (preencher ao executar)
+
+---
+
+# Fase 3 — Auth resiliente offline
+
+### Objetivo
+Não deslogar o usuário por falta de rede; renovar o token ao reconectar.
+
+### Contexto
+- `src/presentation/app/providers/AuthProvider.tsx`:
+  - `silentRefresh` limpa token e seta `unauthenticated` quando a renovação falha;
+  - `ensureAccessToken` retorna `null` se o token está expirado e a renovação falha;
+  - `login/logout/selecionarPlanilha/criarPlanilha` dependem de token válido.
+- Erros de rede da API vêm como `SheetsApiError.status === 0` (gateway).
+
+### Tarefas
+1. Em `silentRefresh` (catch): se `!navigator.onLine` **ou** erro de rede
+   (`status === 0`), **manter a sessão** (mesmo com token expirado), marcar
+   estado "autenticado offline" e reagendar tentativa para o evento `online`
+   — em vez de limpar token e deslogar.
+2. Em `ensureAccessToken`: quando offline, retornar o token armazenado mesmo
+   expirado (escritas vão para o outbox; leitura é do cache — não há chamada à API).
+3. Escutar `window.online` para disparar `silentRefresh` **e** o flush da fila
+   (integração com a Fase 2).
+4. Garantir que `logout` explícito continua limpando tudo normalmente
+   (mesmo offline).
+
+### Arquivos a criar/editar
+- `src/presentation/app/providers/AuthProvider.tsx`
+- (se necessário) testes do fluxo de auth com fake de `requestAccessToken`
+
+### Critérios de aceite
+- Token expirado + sem rede → app continua utilizável (dashboard do cache).
+- Ao reconectar → renova token e sincroniza sem novo login.
+- Logout explícito continua funcionando offline.
+- Comandos globais verdes.
+
+### Comandos de validação
+```bash
+npm run typecheck && npm test -- --run && npm run lint
+npm run preview   # manual: expirar token, desligar rede, usar app, religar
+```
+
+### Estado
+- [ ] pendente
+
+### Notas/Desvios
+— (preencher ao executar)
+
+---
+
+# Fase 4 — UX de sincronização
+
+### Objetivo
+Mostrar ao usuário o estado online/offline e o que está pendente de sincronizar.
+
+### Contexto
+- `useOnlineStatus` já existe.
+- Fases 1–2 entregam `outbox.count()` e `sincronizarPendentes`.
+- Layout em `src/app/layout/AppLayout.tsx` (shim para
+  `src/presentation/app/layout/AppLayout.tsx`).
+
+### Tarefas
+1. Criar `src/presentation/hooks/useSyncStatus.ts` — combina `useOnlineStatus`
+   + `outbox.count()` + status do último sync (`idle | syncing | error`).
+2. Criar `src/presentation/components/SyncStatusBadge.tsx`:
+   - online sem pendências → ok;
+   - offline → badge "Offline";
+   - pendências → "N alterações pendentes" + botão "Sincronizar agora".
+3. Integrar o badge no `AppLayout` (cabeçalho).
+4. (Opcional) prompt de atualização quando o SW detecta nova versão
+   (complemento da Fase 0).
+
+### Arquivos a criar/editar
+- `src/presentation/hooks/useSyncStatus.ts` (novo)
+- `src/presentation/components/SyncStatusBadge.tsx` (novo)
+- `src/presentation/app/layout/AppLayout.tsx` (integrar badge)
+
+### Critérios de aceite
+- Os 3 estados (online ok / offline / pendências) são exibidos corretamente.
+- Botão "Sincronizar agora" força o flush e zera as pendências quando online.
+- Comandos globais verdes.
+
+### Comandos de validação
+```bash
+npm run typecheck && npm run lint && npm run build
+npm run preview   # manual: alternar rede e observar o badge
+```
+
+### Estado
+- [ ] pendente
+
+### Notas/Desvios
+— (preencher ao executar)
+
+---
+
+# Fase 5 — Melhorias opcionais
+
+### Objetivo
+Robustez e alcance (não bloqueia o MVP — só após as fases 0–4 validadas).
+
+### Tarefas candidatas
+1. Migrar cache + outbox de `localStorage` para **IndexedDB**
+   (cota de ~5 MB do localStorage; dados pequenos hoje, outbox cresce).
+2. **Periodic Background Sync API** (onde suportado; Safari não suporta —
+   manter fallback por evento `online`).
+3. Sincronização entre abas via evento `storage` (evitar duas abas editando).
+4. Tela de conflitos (se passar a haver edição simultânea direto na planilha).
+
+### Arquivos a criar/editar
+- Definir por tarefa escolhida (ex.: `src/infrastructure/db.ts` para IndexedDB).
+
+### Critérios de aceite
+- Definidos por tarefa; manter comandos globais verdes.
+
+### Estado
+- [ ] pendente
+
+### Notas/Desvios
+— (preencher ao executar)
+
+---
+
+## Riscos e decisões (consolidado)
+
+| Tema | Decisão / risco |
+| --- | --- |
+| Fórmulas `GOOGLEFINANCE` | Só atualizam com rede; offline mostra **último preço conhecido** (comportamento atual). |
+| Conflito com edição manual na planilha | `update/remove` relê a aba no replay e grava por ID → **last-write-wins** nas linhas tocadas; demais linhas preservadas. |
+| Token OAuth (~1h) | Escritas offline são enfileiradas e aplicadas depois com token renovado. |
+| SW × API autenticada | SW **não** cacheia respostas da API do Google (evita servir dados de outro token). |
+| Idempotência | Cada mutation tem `id` próprio; `append` idempotente por ID do registro + ID da mutation. |
+| `Consolidado` | Não enfileirado — derivado; recomputado **uma vez** ao fim do flush. |
