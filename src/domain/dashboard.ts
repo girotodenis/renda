@@ -103,8 +103,9 @@ export interface GrupoCategoriaTabela {
 /** Ordem canônica de exibição das categorias (Seção 2). */
 const ORDEM_CATEGORIAS: readonly CategoriaAtivo[] = [
   CategoriaAtivo.Acao,
-  CategoriaAtivo.Fii,
   CategoriaAtivo.Bdr,
+  CategoriaAtivo.Etf,
+  CategoriaAtivo.Fii,
   CategoriaAtivo.TesouroDireto,
   CategoriaAtivo.RendaFixa,
 ]

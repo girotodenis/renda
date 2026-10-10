@@ -1,16 +1,24 @@
 import { Loader2 } from 'lucide-react'
-import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react'
+import { useAuth } from '@/app/providers/authContext'
+import { Alert } from '@/components/Alert'
 import { Modal } from '@/components/Modal'
-import { categoriaLabel } from '@/lib/categoria'
+import { CATEGORIA_ATIVO_LABELS, categoriaLabel } from '@/lib/categoria'
 import { cn } from '@/lib/cn'
 import { formatarDataBR } from '@/lib/dates'
 import type { DetalheAtivo } from '@/lib/detalheAtivo'
 import { eventosDeOperacoes, isTipoEventoCorporativo } from '@/lib/eventosCorporativos'
+import { alterarCategoriaDoTicker } from '@/application/operacoes'
+import type { ResultadoTrocaCategoria } from '@/application/operacoes'
 import { classeValor, formatarCentavos, formatarPercentual } from '@/features/dashboard/formatters'
+import type { RepositoryContext } from '@/services/repositories'
+import { describeSheetsError } from '@/services/sheets'
+import { CategoriaAtivo } from '@/types/domain'
 import type { Operacao, Provento } from '@/types/domain'
 import { DetalheAtivoEventos } from './DetalheAtivoEventos'
 import { DetalheAtivoOperacoes } from './DetalheAtivoOperacoes'
 import { DetalheAtivoProventos } from './DetalheAtivoProventos'
+import { sincronizarConsolidadoESnapshot } from './escritasAtivo'
 
 /** Gráficos carregados sob demanda (Recharts fora do bundle inicial — RNF06). */
 const DetalheAtivoGraficos = lazy(() =>
@@ -38,6 +46,30 @@ function formatarCentavosOuTraco(centavos: number | null): string {
   return centavos === null ? '—' : formatarCentavos(centavos)
 }
 
+/** Descrição pluralizada de uma contagem (ex.: `3 operações`). */
+function descreverContagem(quantidade: number, singular: string, plural: string): string {
+  return `${quantidade} ${quantidade === 1 ? singular : plural}`
+}
+
+/** Mensagem de sucesso da troca de categoria, com o total por aba. */
+function mensagemTrocaCategoria(
+  resultado: ResultadoTrocaCategoria,
+  categoria: CategoriaAtivo,
+): string {
+  const partes: string[] = []
+  if (resultado.operacoes > 0) {
+    partes.push(descreverContagem(resultado.operacoes, 'operação', 'operações'))
+  }
+  if (resultado.proventos > 0) {
+    partes.push(descreverContagem(resultado.proventos, 'provento', 'proventos'))
+  }
+  if (resultado.metas > 0) {
+    partes.push(descreverContagem(resultado.metas, 'meta', 'metas'))
+  }
+  if (partes.length === 0) return 'Nenhum registro encontrado para atualizar a categoria.'
+  return `Categoria atualizada para ${categoriaLabel(categoria)}: ${partes.join(', ')}.`
+}
+
 /**
  * Modal de detalhe do ativo (RF10) com abas: **Resumo** (menor/maior compra,
  * preço médio, proventos do período, valor investido, as duas visões de
@@ -54,13 +86,70 @@ export function DetalheAtivoModal({
   onChanged,
   onClose,
 }: DetalheAtivoModalProps) {
+  const { workspace, ensureAccessToken } = useAuth()
   const [aba, setAba] = useState<AbaId>('resumo')
+  const [alterandoCategoria, setAlterandoCategoria] = useState(false)
+  const [erroCategoria, setErroCategoria] = useState<string | null>(null)
+  const [avisoCategoria, setAvisoCategoria] = useState<string | null>(null)
   const ticker = detalhe?.ticker ?? null
 
   // Reabre sempre na aba Resumo ao trocar de ativo.
   useEffect(() => {
     setAba('resumo')
+    setErroCategoria(null)
+    setAvisoCategoria(null)
   }, [ticker])
+
+  /**
+   * Troca a categoria do ticker: atualiza todas as operações do ativo na aba
+   * `Operacoes`, recalcula o consolidado e recarrega o dashboard.
+   */
+  const alterarCategoria = useCallback(
+    async (novaCategoria: CategoriaAtivo) => {
+      if (!detalhe || novaCategoria === detalhe.categoria) return
+
+      const confirmado = window.confirm(
+        `Trocar a categoria de ${detalhe.ticker} para ${categoriaLabel(novaCategoria)}? ` +
+          'Operações, proventos e metas deste ticker serão atualizados.',
+      )
+      if (!confirmado) return
+
+      setErroCategoria(null)
+      setAvisoCategoria(null)
+
+      if (!workspace) {
+        setErroCategoria('Configure uma planilha antes de alterar a categoria.')
+        return
+      }
+      const token = await ensureAccessToken()
+      if (!token) {
+        setErroCategoria('Sessão expirada. Faça login novamente.')
+        return
+      }
+
+      const context: RepositoryContext = {
+        accessToken: token,
+        spreadsheetId: workspace.spreadsheetId,
+      }
+
+      setAlterandoCategoria(true)
+      try {
+        const resultado = await alterarCategoriaDoTicker(
+          context,
+          detalhe.ticker,
+          novaCategoria,
+        )
+        await sincronizarConsolidadoESnapshot(context)
+        await onChanged()
+        setAvisoCategoria(mensagemTrocaCategoria(resultado, novaCategoria))
+      } catch (error) {
+        setErroCategoria(describeSheetsError(error))
+      } finally {
+        setAlterandoCategoria(false)
+      }
+    },
+    [detalhe, workspace, ensureAccessToken, onChanged],
+  )
 
   const contadores = useMemo(() => {
     if (!detalhe) return { operacoes: 0, proventos: 0, eventos: 0 }
@@ -78,11 +167,14 @@ export function DetalheAtivoModal({
   }, [detalhe, operacoes, proventos])
 
   const titulo = detalhe ? (
-    <span className="flex flex-wrap items-baseline gap-2">
+    <span className="flex flex-wrap items-center gap-2">
       <span className="font-mono">{detalhe.ticker}</span>
-      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
-        {categoriaLabel(detalhe.categoria)}
-      </span>
+      <SeletorCategoriaTicker
+        ticker={detalhe.ticker}
+        categoria={detalhe.categoria}
+        isSaving={alterandoCategoria}
+        onChange={alterarCategoria}
+      />
     </span>
   ) : null
 
@@ -91,6 +183,9 @@ export function DetalheAtivoModal({
       {detalhe ? (
         <div className="space-y-4">
           <BarraAbas aba={aba} onChange={setAba} contadores={contadores} />
+
+          {erroCategoria ? <Alert variant="error">{erroCategoria}</Alert> : null}
+          {avisoCategoria ? <Alert variant="success">{avisoCategoria}</Alert> : null}
 
           {aba === 'resumo' ? (
             <div
@@ -138,6 +233,41 @@ export function DetalheAtivoModal({
         </div>
       ) : null}
     </Modal>
+  )
+}
+
+/**
+ * Seletor da categoria do ticker exibido no cabeçalho do modal. Trocar o valor
+ * dispara a atualização da categoria de **todas** as operações do ativo (RF10).
+ */
+function SeletorCategoriaTicker({
+  ticker,
+  categoria,
+  isSaving,
+  onChange,
+}: {
+  ticker: string
+  categoria: CategoriaAtivo
+  isSaving: boolean
+  onChange: (categoria: CategoriaAtivo) => void
+}) {
+  return (
+    <label className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 focus-within:ring-2 focus-within:ring-brand-500/40">
+      <span className="sr-only">Categoria de {ticker}</span>
+      <select
+        value={categoria}
+        disabled={isSaving}
+        onChange={(event) => onChange(event.target.value as CategoriaAtivo)}
+        className="cursor-pointer rounded-full bg-transparent pr-0.5 text-xs font-medium text-slate-700 focus:outline-none disabled:cursor-wait disabled:opacity-60"
+      >
+        {(Object.values(CategoriaAtivo) as CategoriaAtivo[]).map((value) => (
+          <option key={value} value={value}>
+            {CATEGORIA_ATIVO_LABELS[value]}
+          </option>
+        ))}
+      </select>
+      {isSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : null}
+    </label>
   )
 }
 

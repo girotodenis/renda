@@ -12,6 +12,7 @@ export const CategoriaAtivo = {
   Acao: 'Acao',
   Fii: 'Fii',
   Bdr: 'Bdr',
+  Etf: 'Etf',
   TesouroDireto: 'TesouroDireto',
   RendaFixa: 'RendaFixa',
 } as const
