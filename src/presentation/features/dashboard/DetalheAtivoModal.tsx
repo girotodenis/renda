@@ -1,12 +1,16 @@
 import { Loader2 } from 'lucide-react'
-import { Suspense, lazy } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import { Modal } from '@/components/Modal'
 import { categoriaLabel } from '@/lib/categoria'
 import { cn } from '@/lib/cn'
 import { formatarDataBR } from '@/lib/dates'
 import type { DetalheAtivo } from '@/lib/detalheAtivo'
+import { eventosDeOperacoes, isTipoEventoCorporativo } from '@/lib/eventosCorporativos'
 import { classeValor, formatarCentavos, formatarPercentual } from '@/features/dashboard/formatters'
-import type { Provento } from '@/types/domain'
+import type { Operacao, Provento } from '@/types/domain'
+import { DetalheAtivoEventos } from './DetalheAtivoEventos'
+import { DetalheAtivoOperacoes } from './DetalheAtivoOperacoes'
+import { DetalheAtivoProventos } from './DetalheAtivoProventos'
 
 /** Gráficos carregados sob demanda (Recharts fora do bundle inicial — RNF06). */
 const DetalheAtivoGraficos = lazy(() =>
@@ -15,11 +19,18 @@ const DetalheAtivoGraficos = lazy(() =>
   })),
 )
 
+/** Abas do modal do ativo: resumo + listas editáveis por tipo de lançamento. */
+type AbaId = 'resumo' | 'operacoes' | 'proventos' | 'eventos'
+
 interface DetalheAtivoModalProps {
   /** Detalhe do ativo selecionado; `null` mantém o modal fechado. */
   detalhe: DetalheAtivo | null
-  /** Proventos do extrato (para a série mensal do rodapé). */
+  /** Operações do dashboard (base das abas Operações e Eventos). */
+  operacoes: readonly Operacao[]
+  /** Proventos do extrato (Resumo + aba Proventos). */
   proventos: readonly Provento[]
+  /** Recarrega os dados do dashboard após registrar/editar/excluir um lançamento. */
+  onChanged: () => Promise<void>
   onClose: () => void
 }
 
@@ -28,11 +39,44 @@ function formatarCentavosOuTraco(centavos: number | null): string {
 }
 
 /**
- * Modal de detalhe do ativo (RF10): menor/maior compra, preço médio, proventos
- * do período, valor investido e as duas visões de rentabilidade, com os
- * gráficos (decomposição do retorno e proventos por mês) no rodapé.
+ * Modal de detalhe do ativo (RF10) com abas: **Resumo** (menor/maior compra,
+ * preço médio, proventos do período, valor investido, as duas visões de
+ * rentabilidade e os gráficos), **Operações**, **Proventos** e **Eventos**.
+ *
+ * As três últimas abas listam os lançamentos do ticker e permitem cadastrar,
+ * editar e excluir sem sair do dashboard; após cada escrita os dados do
+ * dashboard são recarregados (`onChanged`).
  */
-export function DetalheAtivoModal({ detalhe, proventos, onClose }: DetalheAtivoModalProps) {
+export function DetalheAtivoModal({
+  detalhe,
+  operacoes,
+  proventos,
+  onChanged,
+  onClose,
+}: DetalheAtivoModalProps) {
+  const [aba, setAba] = useState<AbaId>('resumo')
+  const ticker = detalhe?.ticker ?? null
+
+  // Reabre sempre na aba Resumo ao trocar de ativo.
+  useEffect(() => {
+    setAba('resumo')
+  }, [ticker])
+
+  const contadores = useMemo(() => {
+    if (!detalhe) return { operacoes: 0, proventos: 0, eventos: 0 }
+    const alvo = detalhe.ticker.trim().toUpperCase()
+    const operacoesDoAtivo = operacoes.filter(
+      (operacao) => operacao.ticker.trim().toUpperCase() === alvo,
+    )
+    return {
+      operacoes: operacoesDoAtivo.filter((operacao) => !isTipoEventoCorporativo(operacao.tipo))
+        .length,
+      proventos: proventos.filter((provento) => provento.ticker.trim().toUpperCase() === alvo)
+        .length,
+      eventos: eventosDeOperacoes(operacoesDoAtivo).length,
+    }
+  }, [detalhe, operacoes, proventos])
+
   const titulo = detalhe ? (
     <span className="flex flex-wrap items-baseline gap-2">
       <span className="font-mono">{detalhe.ticker}</span>
@@ -43,13 +87,121 @@ export function DetalheAtivoModal({ detalhe, proventos, onClose }: DetalheAtivoM
   ) : null
 
   return (
-    <Modal open={detalhe !== null} onClose={onClose} titulo={titulo}>
-      {detalhe ? <DetalheAtivoConteudo detalhe={detalhe} proventos={proventos} /> : null}
+    <Modal open={detalhe !== null} onClose={onClose} titulo={titulo} className="max-w-5xl">
+      {detalhe ? (
+        <div className="space-y-4">
+          <BarraAbas aba={aba} onChange={setAba} contadores={contadores} />
+
+          {aba === 'resumo' ? (
+            <div
+              role="tabpanel"
+              id="painel-resumo"
+              aria-labelledby="aba-resumo"
+              className="space-y-4"
+            >
+              <DetalheAtivoResumo detalhe={detalhe} proventos={proventos} />
+            </div>
+          ) : null}
+
+          {aba === 'operacoes' ? (
+            <div role="tabpanel" id="painel-operacoes" aria-labelledby="aba-operacoes">
+              <DetalheAtivoOperacoes
+                ticker={detalhe.ticker}
+                categoria={detalhe.categoria}
+                operacoes={operacoes}
+                onChanged={onChanged}
+              />
+            </div>
+          ) : null}
+
+          {aba === 'proventos' ? (
+            <div role="tabpanel" id="painel-proventos" aria-labelledby="aba-proventos">
+              <DetalheAtivoProventos
+                ticker={detalhe.ticker}
+                categoria={detalhe.categoria}
+                proventos={proventos}
+                onChanged={onChanged}
+              />
+            </div>
+          ) : null}
+
+          {aba === 'eventos' ? (
+            <div role="tabpanel" id="painel-eventos" aria-labelledby="aba-eventos">
+              <DetalheAtivoEventos
+                ticker={detalhe.ticker}
+                categoria={detalhe.categoria}
+                operacoes={operacoes}
+                onChanged={onChanged}
+              />
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </Modal>
   )
 }
 
-function DetalheAtivoConteudo({
+interface BarraAbasProps {
+  aba: AbaId
+  onChange: (aba: AbaId) => void
+  contadores: { operacoes: number; proventos: number; eventos: number }
+}
+
+/** Barra de abas acessível (`role="tablist"`) com contagem por lista. */
+function BarraAbas({ aba, onChange, contadores }: BarraAbasProps) {
+  const abas: readonly { id: AbaId; rotulo: string; contagem?: number }[] = [
+    { id: 'resumo', rotulo: 'Resumo' },
+    { id: 'operacoes', rotulo: 'Operações', contagem: contadores.operacoes },
+    { id: 'proventos', rotulo: 'Proventos', contagem: contadores.proventos },
+    { id: 'eventos', rotulo: 'Eventos', contagem: contadores.eventos },
+  ]
+
+  return (
+    <div
+      role="tablist"
+      aria-label="Seções do ativo"
+      className="flex flex-wrap gap-1 rounded-lg bg-slate-100 p-1"
+    >
+      {abas.map((item) => {
+        const ativa = aba === item.id
+        return (
+          <button
+            key={item.id}
+            type="button"
+            role="tab"
+            id={`aba-${item.id}`}
+            aria-selected={ativa}
+            aria-controls={`painel-${item.id}`}
+            onClick={() => onChange(item.id)}
+            className={cn(
+              'inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600',
+              ativa ? 'bg-white text-brand-700 shadow-sm' : 'text-slate-600 hover:text-slate-900',
+            )}
+          >
+            {item.rotulo}
+            {item.contagem !== undefined ? (
+              <span
+                className={cn(
+                  'rounded-full px-1.5 text-xs tabular-nums',
+                  ativa ? 'bg-brand-50 text-brand-700' : 'bg-slate-200 text-slate-600',
+                )}
+              >
+                {item.contagem}
+              </span>
+            ) : null}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+/**
+ * Aba **Resumo** do modal: métricas do ativo, proventos do período, as duas
+ * visões de rentabilidade e os gráficos (decomposição do retorno e proventos
+ * por mês).
+ */
+export function DetalheAtivoResumo({
   detalhe,
   proventos,
 }: {

@@ -14,6 +14,12 @@ import type { OperacaoFormInput, OperacaoFormOutput } from '@/features/operacoes
 interface OperacaoFormProps {
   /** Operação em edição (`undefined` = novo lançamento). */
   initial?: Operacao
+  /** Ticker pré-preenchido em novos lançamentos (ex.: cadastro a partir do ativo). */
+  tickerPadrao?: string
+  /** Categoria pré-selecionada em novos lançamentos. */
+  categoriaPadrao?: CategoriaAtivo
+  /** Trava o campo Ticker (cadastro vinculado a um ativo específico). */
+  travarTicker?: boolean
   isSaving: boolean
   onSubmit: (values: OperacaoFormOutput) => Promise<void>
   onCancel: () => void
@@ -39,7 +45,24 @@ const INDEXADOR_OPTIONS = [
  * Os campos de Renda Fixa (`Indexador`, `% do Indexador`, `Vencimento`,
  * `Valor Bruto Atual`) aparecem apenas quando a categoria é `RendaFixa`.
  */
-export function OperacaoForm({ initial, isSaving, onSubmit, onCancel }: OperacaoFormProps) {
+export function OperacaoForm({
+  initial,
+  tickerPadrao,
+  categoriaPadrao,
+  travarTicker = false,
+  isSaving,
+  onSubmit,
+  onCancel,
+}: OperacaoFormProps) {
+  const padroes = operacaoFormDefaults(initial)
+  const valoresIniciais: OperacaoFormInput = initial
+    ? padroes
+    : {
+        ...padroes,
+        ticker: tickerPadrao ?? padroes.ticker,
+        categoria: categoriaPadrao ?? padroes.categoria,
+      }
+
   const {
     register,
     handleSubmit,
@@ -47,7 +70,7 @@ export function OperacaoForm({ initial, isSaving, onSubmit, onCancel }: Operacao
     formState: { errors },
   } = useForm<OperacaoFormInput, unknown, OperacaoFormOutput>({
     resolver: zodResolver(operacaoFormSchema),
-    defaultValues: operacaoFormDefaults(initial),
+    defaultValues: valoresIniciais,
   })
 
   const categoria = watch('categoria')
@@ -86,6 +109,7 @@ export function OperacaoForm({ initial, isSaving, onSubmit, onCancel }: Operacao
             type="text"
             placeholder="Ex.: PETR4"
             autoComplete="off"
+            disabled={travarTicker}
             className={inputClassName}
             {...register('ticker')}
           />

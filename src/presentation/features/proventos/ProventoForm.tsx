@@ -11,6 +11,12 @@ import type { ProventoFormInput, ProventoFormOutput } from '@/features/proventos
 interface ProventoFormProps {
   /** Provento em edição (`undefined` = novo lançamento). */
   initial?: Provento
+  /** Ticker pré-preenchido em novos lançamentos (ex.: cadastro a partir do ativo). */
+  tickerPadrao?: string
+  /** Categoria pré-selecionada em novos lançamentos. */
+  categoriaPadrao?: CategoriaAtivo
+  /** Trava o campo Ticker (cadastro vinculado a um ativo específico). */
+  travarTicker?: boolean
   isSaving: boolean
   onSubmit: (values: ProventoFormOutput) => Promise<void>
   onCancel: () => void
@@ -26,14 +32,31 @@ const PROVENTO_TIPO_LABELS: Record<ProventoTipo, string> = {
  * Formulário de provento (dividendo/JCP/rendimento) com `react-hook-form` +
  * `zod` (RF05).
  */
-export function ProventoForm({ initial, isSaving, onSubmit, onCancel }: ProventoFormProps) {
+export function ProventoForm({
+  initial,
+  tickerPadrao,
+  categoriaPadrao,
+  travarTicker = false,
+  isSaving,
+  onSubmit,
+  onCancel,
+}: ProventoFormProps) {
+  const padroes = proventoFormDefaults(initial)
+  const valoresIniciais: ProventoFormInput = initial
+    ? padroes
+    : {
+        ...padroes,
+        ticker: tickerPadrao ?? padroes.ticker,
+        categoria: categoriaPadrao ?? padroes.categoria,
+      }
+
   const {
     register,
     handleSubmit,
     formState: { errors },
   } = useForm<ProventoFormInput, unknown, ProventoFormOutput>({
     resolver: zodResolver(proventoFormSchema),
-    defaultValues: proventoFormDefaults(initial),
+    defaultValues: valoresIniciais,
   })
 
   return (
@@ -82,6 +105,7 @@ export function ProventoForm({ initial, isSaving, onSubmit, onCancel }: Provento
             type="text"
             placeholder="Ex.: PETR4"
             autoComplete="off"
+            disabled={travarTicker}
             className={inputClassName}
             {...register('ticker')}
           />

@@ -204,7 +204,9 @@ function DashboardContent() {
           <ExtratoProventos proventos={data.proventos} />
           <DetalheAtivoModal
             detalhe={detalheAtivo}
+            operacoes={data.operacoes}
             proventos={data.proventos}
+            onChanged={refresh}
             onClose={() => setAtivoSelecionado(null)}
           />
         </>

@@ -7,12 +7,21 @@ import {
   EVENTO_CORPORATIVO_LABELS,
   EVENTO_CORPORATIVO_VALOR_LABELS,
 } from '@/lib/eventosCorporativos'
+import type { EventoCorporativo } from '@/lib/eventosCorporativos'
 import { toISO } from '@/lib/dates'
 import { CategoriaAtivo, EVENTO_CORPORATIVO_TIPOS, OperacaoTipo } from '@/types/domain'
 import { eventoFormDefaults, eventoFormSchema } from '@/features/eventos/eventoSchema'
 import type { EventoFormInput, EventoFormOutput } from '@/features/eventos/eventoSchema'
 
 interface EventoCorporativoFormProps {
+  /** Evento em edição (`undefined` = novo lançamento). */
+  initial?: EventoCorporativo
+  /** Ticker pré-preenchido em novos lançamentos (ex.: cadastro a partir do ativo). */
+  tickerPadrao?: string
+  /** Categoria pré-selecionada em novos lançamentos. */
+  categoriaPadrao?: CategoriaAtivo
+  /** Trava o campo Ticker (cadastro vinculado a um ativo específico). */
+  travarTicker?: boolean
   isSaving: boolean
   onSubmit: (values: EventoFormOutput) => Promise<void>
   onCancel: () => void
@@ -29,7 +38,24 @@ const EVENTO_HINTS: Record<(typeof EVENTO_CORPORATIVO_TIPOS)[number], string> = 
  * Formulário de evento corporativo (RF20, Seção 5.6): split, grupamento e
  * bonificação. O evento ajusta quantidade e preço médio sem gerar lucro/prejuízo.
  */
-export function EventoCorporativoForm({ isSaving, onSubmit, onCancel }: EventoCorporativoFormProps) {
+export function EventoCorporativoForm({
+  initial,
+  tickerPadrao,
+  categoriaPadrao,
+  travarTicker = false,
+  isSaving,
+  onSubmit,
+  onCancel,
+}: EventoCorporativoFormProps) {
+  const padroes = eventoFormDefaults(toISO(new Date()), initial)
+  const valoresIniciais: EventoFormInput = initial
+    ? padroes
+    : {
+        ...padroes,
+        ticker: tickerPadrao ?? padroes.ticker,
+        categoria: categoriaPadrao ?? padroes.categoria,
+      }
+
   const {
     register,
     handleSubmit,
@@ -37,7 +63,7 @@ export function EventoCorporativoForm({ isSaving, onSubmit, onCancel }: EventoCo
     formState: { errors },
   } = useForm<EventoFormInput, unknown, EventoFormOutput>({
     resolver: zodResolver(eventoFormSchema),
-    defaultValues: eventoFormDefaults(toISO(new Date())),
+    defaultValues: valoresIniciais,
   })
 
   const tipo = watch('tipo')
@@ -55,6 +81,7 @@ export function EventoCorporativoForm({ isSaving, onSubmit, onCancel }: EventoCo
             type="text"
             placeholder="Ex.: PETR4"
             autoComplete="off"
+            disabled={travarTicker}
             className={inputClassName}
             {...register('ticker')}
           />
@@ -112,7 +139,7 @@ export function EventoCorporativoForm({ isSaving, onSubmit, onCancel }: EventoCo
           className="inline-flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isSaving ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
-          Registrar evento
+          {initial ? 'Salvar alterações' : 'Registrar evento'}
         </button>
       </div>
     </form>

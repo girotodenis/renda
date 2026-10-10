@@ -87,12 +87,21 @@ export function eventoToOperacao(evento: EventoCorporativo): Operacao {
 }
 
 /** Valores iniciais do formulário de evento. */
-export function eventoFormDefaults(today: string): EventoFormInput {
+export function eventoFormDefaults(today: string, evento?: EventoCorporativo): EventoFormInput {
+  if (!evento) {
+    return {
+      data: today,
+      categoria: CategoriaAtivo.Acao,
+      ticker: '',
+      tipo: OperacaoTipo.Split,
+      valor: '',
+    }
+  }
   return {
-    data: today,
-    categoria: CategoriaAtivo.Acao,
-    ticker: '',
-    tipo: OperacaoTipo.Split,
-    valor: '',
+    data: evento.data,
+    categoria: evento.categoria,
+    ticker: evento.ticker,
+    tipo: evento.tipo,
+    valor: String(evento.valor).replace('.', ','),
   }
 }
