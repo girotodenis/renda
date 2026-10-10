@@ -1,10 +1,11 @@
+import { Plus } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { categoriaLabel } from '@/lib/categoria'
 import { cn } from '@/lib/cn'
 import { STATUS_COTACAO_LABELS } from '@/lib/cotacoes'
 import type { CotacaoResolvida } from '@/lib/cotacoes'
-import type { Consolidado } from '@/types/domain'
+import type { CategoriaAtivo, Consolidado } from '@/types/domain'
 import { agruparAtivosParaTabela } from '@/lib/dashboard'
 import type { GrupoCategoriaTabela } from '@/lib/dashboard'
 import {
@@ -27,6 +28,12 @@ interface TabelaAtivosProps {
    * Quando ausente, o ticker é exibido como texto simples (sem interação).
    */
   onSelecionarAtivo?: (ticker: string) => void
+  /**
+   * Callback ao clicar no botão **+** ao lado do nome da categoria (abre o
+   * cadastro de operação com a categoria travada). Quando ausente, o botão não
+   * é exibido.
+   */
+  onNovaOperacao?: (categoria: CategoriaAtivo) => void
 }
 
 /**
@@ -35,7 +42,12 @@ interface TabelaAtivosProps {
  * duas abas — **Em carteira** (posições com quantidade > 0) e **Vendidos**
  * (ativos já zerados, ou seja, completamente vendidos).
  */
-export function TabelaAtivos({ consolidado, cotacoes, onSelecionarAtivo }: TabelaAtivosProps) {
+export function TabelaAtivos({
+  consolidado,
+  cotacoes,
+  onSelecionarAtivo,
+  onNovaOperacao,
+}: TabelaAtivosProps) {
   const grupos = useMemo(() => agruparAtivosParaTabela(consolidado), [consolidado])
 
   if (grupos.length === 0) {
@@ -59,6 +71,7 @@ export function TabelaAtivos({ consolidado, cotacoes, onSelecionarAtivo }: Tabel
           grupo={grupo}
           cotacoes={cotacoes}
           onSelecionarAtivo={onSelecionarAtivo}
+          onNovaOperacao={onNovaOperacao}
         />
       ))}
     </div>
@@ -71,10 +84,12 @@ function CategoriaAtivos({
   grupo,
   cotacoes,
   onSelecionarAtivo,
+  onNovaOperacao,
 }: {
   grupo: GrupoCategoriaTabela
   cotacoes?: ReadonlyMap<string, CotacaoResolvida>
   onSelecionarAtivo?: (ticker: string) => void
+  onNovaOperacao?: (categoria: CategoriaAtivo) => void
 }) {
   const [abaSelecionada, setAbaSelecionada] = useState<AbaCategoria>('posicoes')
   const temAbertos = grupo.abertos.length > 0
@@ -88,7 +103,20 @@ function CategoriaAtivos({
   return (
     <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       <header className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-        <h2 className="text-base font-semibold text-slate-900">{rotulo}</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-base font-semibold text-slate-900">{rotulo}</h2>
+          {onNovaOperacao ? (
+            <button
+              type="button"
+              onClick={() => onNovaOperacao(grupo.categoria)}
+              aria-label={`Nova operação em ${rotulo}`}
+              title={`Nova operação em ${rotulo}`}
+              className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-brand-200 bg-brand-50 text-brand-700 transition-colors hover:bg-brand-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+            >
+              <Plus className="h-4 w-4" aria-hidden />
+            </button>
+          ) : null}
+        </div>
         <span className="text-sm text-slate-500">
           {grupo.abertos.length} {grupo.abertos.length === 1 ? 'posição' : 'posições'}
         </span>

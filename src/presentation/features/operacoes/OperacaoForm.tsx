@@ -20,6 +20,8 @@ interface OperacaoFormProps {
   categoriaPadrao?: CategoriaAtivo
   /** Trava o campo Ticker (cadastro vinculado a um ativo específico). */
   travarTicker?: boolean
+  /** Trava o campo Categoria (cadastro vinculado a uma categoria específica). */
+  travarCategoria?: boolean
   isSaving: boolean
   onSubmit: (values: OperacaoFormOutput) => Promise<void>
   onCancel: () => void
@@ -50,6 +52,7 @@ export function OperacaoForm({
   tickerPadrao,
   categoriaPadrao,
   travarTicker = false,
+  travarCategoria = false,
   isSaving,
   onSubmit,
   onCancel,
@@ -93,8 +96,18 @@ export function OperacaoForm({
           </select>
         </FormField>
 
-        <FormField htmlFor="operacao-categoria" label="Categoria" error={errors.categoria?.message}>
-          <select id="operacao-categoria" className={inputClassName} {...register('categoria')}>
+        <FormField
+          htmlFor="operacao-categoria"
+          label="Categoria"
+          hint={travarCategoria ? 'Definida pela categoria da tabela.' : undefined}
+          error={errors.categoria?.message}
+        >
+          <select
+            id="operacao-categoria"
+            className={inputClassName}
+            disabled={travarCategoria}
+            {...register('categoria')}
+          >
             {Object.values(CategoriaAtivo).map((value) => (
               <option key={value} value={value}>
                 {CATEGORIA_ATIVO_LABELS[value]}

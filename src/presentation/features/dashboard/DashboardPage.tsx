@@ -5,11 +5,13 @@ import { Alert } from '@/components/Alert'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { WorkspaceSetup } from '@/features/auth/WorkspaceSetup'
 import { DetalheAtivoModal } from '@/features/dashboard/DetalheAtivoModal'
+import { NovaOperacaoModal } from '@/features/dashboard/NovaOperacaoModal'
 import { ResumoPatrimonial } from '@/features/dashboard/ResumoPatrimonial'
 import { TabelaAtivos } from '@/features/dashboard/TabelaAtivos'
 import { useDashboard } from '@/hooks/useDashboard'
 import { alocacaoPorAtivo, alocacaoPorCategoria, serieEvolucao } from '@/lib/dashboard'
 import { calcularDetalheAtivo } from '@/lib/detalheAtivo'
+import type { CategoriaAtivo } from '@/types/domain'
 
 /**
  * Gráficos carregados sob demanda (lazy) para não inflar o bundle inicial com
@@ -72,6 +74,7 @@ function DashboardContent() {
   const porAtivo = useMemo(() => alocacaoPorAtivo(consolidado), [consolidado])
   const serie = useMemo(() => serieEvolucao(data?.historico ?? []), [data])
   const [ativoSelecionado, setAtivoSelecionado] = useState<string | null>(null)
+  const [categoriaNovaOperacao, setCategoriaNovaOperacao] = useState<CategoriaAtivo | null>(null)
   const detalheAtivo = useMemo(
     () =>
       ativoSelecionado && data
@@ -189,6 +192,7 @@ function DashboardContent() {
             consolidado={consolidado}
             cotacoes={data.cotacoes}
             onSelecionarAtivo={setAtivoSelecionado}
+            onNovaOperacao={setCategoriaNovaOperacao}
           />
           <DetalheAtivoModal
             detalhe={detalheAtivo}
@@ -196,6 +200,11 @@ function DashboardContent() {
             proventos={data.proventos}
             onChanged={refresh}
             onClose={() => setAtivoSelecionado(null)}
+          />
+          <NovaOperacaoModal
+            categoria={categoriaNovaOperacao}
+            onClose={() => setCategoriaNovaOperacao(null)}
+            onSaved={refresh}
           />
         </>
       )}
