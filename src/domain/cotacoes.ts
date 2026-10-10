@@ -9,13 +9,13 @@ import type { CategoriaAtivo, Operacao } from '@/types/domain'
  * "cotação indisponível" sem travar nem quebrar o dashboard (RNF04).
  *
  * Ordem de preferência:
- * - Ação/FII/BDR: `GOOGLEFINANCE` (preço de mercado). Sem valor → indisponível.
+ * - Ação/FII/BDR/ETF: `GOOGLEFINANCE` (planilha) → Brapi (fallback) → preço médio.
  * - Tesouro Direto: API de dados abertos → marcação manual → indisponível.
  * - Renda Fixa: marcação a mercado manual → estimativa → indisponível.
  */
 
 /** Fonte do preço atual de um ativo. */
-export type FonteCotacao = 'googlefinance' | 'tesouro' | 'manual' | 'estimada'
+export type FonteCotacao = 'googlefinance' | 'brapi' | 'tesouro' | 'manual' | 'estimada'
 
 /** Estado da cotação exibido na UI. */
 export type StatusCotacao = 'disponivel' | 'manual' | 'estimada' | 'indisponivel'
@@ -28,6 +28,8 @@ export interface EntradaCotacao {
   precoMedio: number
   /** Preço de mercado em **centavos** (GOOGLEFINANCE ou API TD); `null` se ausente. */
   precoMercado: number | null
+  /** Preço de mercado em **centavos** (Brapi); `null` se ausente (fallback do GOOGLEFINANCE). */
+  precoBrapi?: number | null
   /** Marcação a mercado manual em **centavos** (`Valor Bruto Atual`); `null` se ausente. */
   precoManual: number | null
   /** ISO do momento da última atualização conhecida. */
@@ -52,6 +54,26 @@ function precoValido(preco: number | null | undefined): preco is number {
   return typeof preco === 'number' && Number.isFinite(preco) && preco > 0
 }
 
+/**
+ * Abaixo disso (em centavos), a cotação do `GOOGLEFINANCE` é tratada como erro:
+ * quando o ticker não é encontrado, o GOOGLEFINANCE devolve valores ~R$ 0,11.
+ */
+export const PRECO_MINIMO_GOOGLEFINANCE = 20
+
+/**
+ * `true` para preço de mercado válido conforme a categoria: Ação/FII/BDR/ETF
+ * rejeitam cotações do `GOOGLEFINANCE` abaixo de `PRECO_MINIMO_GOOGLEFINANCE`
+ * (acionando o fallback Brapi).
+ */
+export function precoMercadoValido(
+  preco: number | null | undefined,
+  categoria: CategoriaAtivo,
+): preco is number {
+  if (!precoValido(preco)) return false
+  if (usaGoogFinance(categoria) && preco < PRECO_MINIMO_GOOGLEFINANCE) return false
+  return true
+}
+
 /** Status exibível (pt-BR) para exibição/tooltip. */
 export const STATUS_COTACAO_LABELS: Record<StatusCotacao, string> = {
   disponivel: 'Disponível',
@@ -62,16 +84,27 @@ export const STATUS_COTACAO_LABELS: Record<StatusCotacao, string> = {
 
 /** Resolve a cotação de um ativo conforme a categoria e os preços disponíveis. */
 export function resolverCotacao(entrada: EntradaCotacao): CotacaoResolvida {
-  const { ticker, categoria, precoMedio, precoManual, atualizadoEm = null } = entrada
+  const { ticker, categoria, precoMedio, precoManual, precoBrapi = null, atualizadoEm = null } = entrada
   const mercado = entrada.precoMercado
 
   if (usaGoogFinance(categoria)) {
-    if (precoValido(mercado)) {
+    if (precoMercadoValido(mercado, categoria)) {
       return {
         ticker,
         categoria,
         precoAtual: mercado,
         fonte: 'googlefinance',
+        status: 'disponivel',
+        usandoFallback: false,
+        atualizadoEm,
+      }
+    }
+    if (precoValido(precoBrapi)) {
+      return {
+        ticker,
+        categoria,
+        precoAtual: precoBrapi,
+        fonte: 'brapi',
         status: 'disponivel',
         usandoFallback: false,
         atualizadoEm,
@@ -173,12 +206,14 @@ export function precosDeCotacoes(
  * é a fonte usada sempre que a integração não retornar cotação — e nunca é
  * apagado por falhas de integração.
  */
-export function precosManuaisDeOperacoes(
+/** Extrai o `Valor Bruto Atual` mais recente por ticker, filtrando pelas categorias aceitas. */
+function precosBrutosMaisRecentes(
   operacoes: readonly Operacao[],
+  aceitar: (operacao: Operacao) => boolean,
 ): Map<string, number> {
   const porTicker = new Map<string, { data: string; valor: number }>()
   for (const operacao of operacoes) {
-    if (!permiteMarcacaoManual(operacao.categoria)) continue
+    if (!aceitar(operacao)) continue
     const valor = operacao.valorBrutoAtual
     if (!precoValido(valor)) continue
     const ticker = operacao.ticker.trim()
@@ -191,6 +226,27 @@ export function precosManuaisDeOperacoes(
   const precos = new Map<string, number>()
   for (const [ticker, info] of porTicker) precos.set(ticker, info.valor)
   return precos
+}
+
+export function precosManuaisDeOperacoes(
+  operacoes: readonly Operacao[],
+): Map<string, number> {
+  return precosBrutosMaisRecentes(operacoes, (operacao) =>
+    permiteMarcacaoManual(operacao.categoria),
+  )
+}
+
+/**
+ * Extrai o preço **persistido** por ticker B3 (Ação/FII/BDR/ETF), gravado em
+ * `Valor Bruto Atual` da operação mais recente via Brapi. Usado para gravar o
+ * fallback na planilha quando o `GOOGLEFINANCE` não trouxe preço (RNF04).
+ */
+export function precosPersistidosDeOperacoes(
+  operacoes: readonly Operacao[],
+): Map<string, number> {
+  return precosBrutosMaisRecentes(operacoes, (operacao) =>
+    usaGoogFinance(operacao.categoria),
+  )
 }
 
 /** `true` quando pelo menos uma cotação está indisponível. */

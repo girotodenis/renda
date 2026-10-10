@@ -1,7 +1,7 @@
 import { aplicarPrecosAtuais, calcularPosicoes } from '@/lib/consolidado'
 import type { PrecosAtuais } from '@/lib/consolidado'
 import { isTesouroDireto } from '@/lib/categoria'
-import { precosManuaisDeOperacoes } from '@/lib/cotacoes'
+import { precosManuaisDeOperacoes, precosPersistidosDeOperacoes } from '@/lib/cotacoes'
 import { buildConsolidadoRows, formulaSeparatorForLocale } from '@/lib/sheetFormulas'
 import { SHEET_HEADERS } from '@/lib/sheetsSchema'
 import { consolidadoRepo, operacoesRepo } from '@/services/repositories'
@@ -93,6 +93,9 @@ export async function syncConsolidado(
  */
 async function precosDaCarteira(operacoes: readonly Operacao[]): Promise<Map<string, number>> {
   const precos = new Map<string, number>(precosManuaisDeOperacoes(operacoes))
+
+  // B3 (Ação/FII/BDR/ETF): preço persistido via Brapi (fallback do GOOGLEFINANCE).
+  for (const [ticker, preco] of precosPersistidosDeOperacoes(operacoes)) precos.set(ticker, preco)
 
   const tickersTesouro = calcularPosicoes(operacoes)
     .filter((posicao) => isTesouroDireto(posicao.categoria) && posicao.quantidadeAtual > 0)

@@ -57,8 +57,9 @@ const CONSOLIDADO_COLUMN_COUNT = SHEET_HEADERS.Consolidado.length
  * `Lucro/Prejuízo (%)`, `% da Carteira`.
  *
  * Colunas C e D são valores calculados no app; E é `GOOGLEFINANCE` (Ação/FII/
- * BDR) ou valor manual; F–J são fórmulas que referenciam C/D/E e o total da
- * coluna G — preservando o comportamento reativo da planilha.
+ * BDR) — ou valor estático quando há cotação persistida (Tesouro/Renda Fixa/
+ * fallback Brapi); F–J são fórmulas que referenciam C/D/E e o total da coluna
+ * G — preservando o comportamento reativo da planilha.
  */
 export function buildConsolidadoRows(input: ConsolidadoSheetInput): CellValue[][] {
   const { posicoes, precosAtuais, separator } = input
@@ -67,9 +68,13 @@ export function buildConsolidadoRows(input: ConsolidadoSheetInput): CellValue[][
   return posicoes.map((posicao, index) => {
     const row = index + 2
     const precoAtual = precosAtuais.get(posicao.ticker) ?? posicao.precoMedio
-    const precoAtualCell = usaGoogFinance(posicao.categoria)
-      ? buildGoogFinanceFormula(`$A${row}`, separator)
-      : fromCentavos(precoAtual)
+    // Ação/FII/BDR/ETF usa GOOGLEFINANCE; quando há preço persistido (fallback
+    // Brapi), grava o valor estático em vez da fórmula — o preço persiste na
+    // planilha mesmo quando o GOOGLEFINANCE falha.
+    const precoAtualCell =
+      usaGoogFinance(posicao.categoria) && !precosAtuais.has(posicao.ticker)
+        ? buildGoogFinanceFormula(`$A${row}`, separator)
+        : fromCentavos(precoAtual)
 
     const totalInvestido = `=$C${row}*$D${row}`
     const valorAtual = `=$C${row}*$E${row}`
