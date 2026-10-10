@@ -10,6 +10,7 @@ import type { DetalheAtivo } from '@/lib/detalheAtivo'
 import { eventosDeOperacoes, isTipoEventoCorporativo } from '@/lib/eventosCorporativos'
 import { alterarCategoriaDoTicker } from '@/application/operacoes'
 import type { ResultadoTrocaCategoria } from '@/application/operacoes'
+import { oportunidadeDeCompra } from '@/domain/valuation'
 import { classeValor, formatarCentavos, formatarPercentual } from '@/features/dashboard/formatters'
 import type { RepositoryContext } from '@/services/repositories'
 import { describeSheetsError } from '@/services/sheets'
@@ -170,8 +171,27 @@ export function DetalheAtivoModal({
     }
   }, [detalhe, operacoes, proventos])
 
+  /** Alerta de oportunidade de compra (cotação ≤ teto − margem) no cabeçalho. */
+  const oportunidade = useMemo(
+    () =>
+      detalhe !== null && valuation !== null
+        ? oportunidadeDeCompra(detalhe.precoAtual, valuation.precoTeto, valuation.margemSeguranca)
+        : false,
+    [detalhe, valuation],
+  )
+
   const titulo = detalhe ? (
     <span className="flex flex-wrap items-center gap-2">
+      {oportunidade ? (
+        <span
+          role="img"
+          aria-label="Oportunidade de compra"
+          title="Oportunidade de compra — cotação atingiu o alvo"
+          className="text-base leading-none"
+        >
+          🎯
+        </span>
+      ) : null}
       <span className="font-mono">{detalhe.ticker}</span>
       <SeletorCategoriaTicker
         ticker={detalhe.ticker}
