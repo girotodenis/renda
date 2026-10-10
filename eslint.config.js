@@ -23,4 +23,13 @@ export default tseslint.config(
       '@typescript-eslint/no-explicit-any': 'error',
     },
   },
+  {
+    // Caminhos legados que agora são apenas re-exports (shims) apontando para as
+    // camadas `src/presentation/**`. O `export *` não é verificável pela regra
+    // de fast-refresh, mas aqui ele é intencional.
+    files: ['src/features/**/*.tsx', 'src/components/**/*.tsx', 'src/app/**/*.tsx'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
 )
