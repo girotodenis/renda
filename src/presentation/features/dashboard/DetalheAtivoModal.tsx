@@ -1,4 +1,4 @@
-import { Loader2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '@/app/providers/authContext'
 import { Alert } from '@/components/Alert'
@@ -44,6 +44,14 @@ interface DetalheAtivoModalProps {
   /** Recarrega os dados do dashboard após registrar/editar/excluir um lançamento. */
   onChanged: () => Promise<void>
   onClose: () => void
+  /** Abre o ticker anterior na ordem da tabela de ativos (navegação circular). */
+  onAnterior?: () => void
+  /** Abre o próximo ticker na ordem da tabela de ativos (navegação circular). */
+  onProximo?: () => void
+  /** Posição atual na navegação (1-based) — usada nos rótulos acessíveis. */
+  posicaoNavegacao?: number
+  /** Total de tickers navegáveis — usado nos rótulos acessíveis. */
+  totalNavegacao?: number
 }
 
 function formatarCentavosOuTraco(centavos: number | null): string {
@@ -90,6 +98,10 @@ export function DetalheAtivoModal({
   valuation,
   onChanged,
   onClose,
+  onAnterior,
+  onProximo,
+  posicaoNavegacao,
+  totalNavegacao,
 }: DetalheAtivoModalProps) {
   const { workspace, ensureAccessToken } = useAuth()
   const [aba, setAba] = useState<AbaId>('resumo')
@@ -203,7 +215,22 @@ export function DetalheAtivoModal({
   ) : null
 
   return (
-    <Modal open={detalhe !== null} onClose={onClose} titulo={titulo} className="max-w-5xl">
+    <Modal
+      open={detalhe !== null}
+      onClose={onClose}
+      titulo={titulo}
+      className="max-w-5xl"
+      acoes={
+        onAnterior && onProximo ? (
+          <NavegacaoTickers
+            onAnterior={onAnterior}
+            onProximo={onProximo}
+            posicao={posicaoNavegacao}
+            total={totalNavegacao}
+          />
+        ) : null
+      }
+    >
       {detalhe ? (
         <div className="space-y-4">
           <BarraAbas aba={aba} onChange={setAba} contadores={contadores} />
@@ -269,6 +296,49 @@ export function DetalheAtivoModal({
         </div>
       ) : null}
     </Modal>
+  )
+}
+
+/**
+ * Botões de navegação entre os tickers da carteira, exibidos no lado direito do
+ * cabeçalho do modal (mesma ordem da tabela de ativos).
+ */
+function NavegacaoTickers({
+  onAnterior,
+  onProximo,
+  posicao,
+  total,
+}: {
+  onAnterior: () => void
+  onProximo: () => void
+  posicao?: number
+  total?: number
+}) {
+  const contador = posicao && total ? ` (${posicao} de ${total})` : ''
+  const botaoClass =
+    'rounded-md p-1 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600'
+
+  return (
+    <div className="flex items-center gap-0.5" role="group" aria-label="Navegação entre ativos">
+      <button
+        type="button"
+        onClick={onAnterior}
+        aria-label={`Ativo anterior${contador}`}
+        title="Ativo anterior"
+        className={botaoClass}
+      >
+        <ChevronLeft className="h-5 w-5" aria-hidden />
+      </button>
+      <button
+        type="button"
+        onClick={onProximo}
+        aria-label={`Próximo ativo${contador}`}
+        title="Próximo ativo"
+        className={botaoClass}
+      >
+        <ChevronRight className="h-5 w-5" aria-hidden />
+      </button>
+    </div>
   )
 }
 

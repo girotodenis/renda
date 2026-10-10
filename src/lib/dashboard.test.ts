@@ -14,6 +14,7 @@ import {
   posicoesAbertas,
   posicoesEncerradas,
   serieEvolucao,
+  tickersParaNavegacao,
   totalProventos,
 } from '@/lib/dashboard'
 import { CategoriaAtivo, ProventoTipo } from '@/types/domain'
@@ -134,6 +135,29 @@ describe('agruparAtivosParaTabela (abas Em carteira / Vendidos)', () => {
     expect(grupos[1].abertos).toEqual([])
     expect(grupos[1].encerrados.map((ativo) => ativo.ticker)).toEqual(['HGLG11'])
     expect(grupos[1].valorAtual).toBe(0)
+  })
+})
+
+describe('tickersParaNavegacao (anterior/próximo no detalhe do ativo)', () => {
+  it('segue a ordem da tabela: categoria canônica, abertos (valor desc) e vendidos (ticker asc)', () => {
+    const linhas = [
+      consolidado({ ticker: 'MXRF11', categoria: CategoriaAtivo.Fii, valorAtual: 5000 }),
+      consolidado({ ticker: 'ITSA4', categoria: CategoriaAtivo.Acao, valorAtual: 9000 }),
+      consolidado({ ticker: 'PETR4', categoria: CategoriaAtivo.Acao, valorAtual: 12000 }),
+      consolidado({
+        ticker: 'ABEV3',
+        categoria: CategoriaAtivo.Acao,
+        quantidadeAtual: 0,
+        valorAtual: 0,
+      }),
+    ]
+
+    expect(tickersParaNavegacao(linhas)).toEqual(['PETR4', 'ITSA4', 'ABEV3', 'MXRF11'])
+  })
+
+  it('ignora tickers vazios e devolve lista vazia sem posições', () => {
+    expect(tickersParaNavegacao([])).toEqual([])
+    expect(tickersParaNavegacao([consolidado({ ticker: '   ' })])).toEqual([])
   })
 })
 

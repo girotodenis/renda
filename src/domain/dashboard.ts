@@ -155,6 +155,21 @@ export function agruparAtivosParaTabela(
 }
 
 /**
+ * Lista ordenada dos tickers exibidos na tabela de ativos (RF10) — mesma ordem
+ * das abas: por categoria canônica, com as posições abertas (valor atual
+ * decrescente) antes dos ativos vendidos (ticker crescente). Base da navegação
+ * anterior/próximo no detalhe do ativo.
+ */
+export function tickersParaNavegacao(consolidado: readonly Consolidado[]): string[] {
+  const tickers: string[] = []
+  for (const grupo of agruparAtivosParaTabela(consolidado)) {
+    for (const linha of grupo.abertos) tickers.push(linha.ticker)
+    for (const linha of grupo.encerrados) tickers.push(linha.ticker)
+  }
+  return tickers
+}
+
+/**
  * Agrupa as posições abertas por categoria (ordem canônica), calculando o
  * consolidador de cada grupo: investido, valor atual, lucro (R$ e %) e
  * participação na carteira. Categorias sem posições abertas são omitidas.

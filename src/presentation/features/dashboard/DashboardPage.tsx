@@ -1,5 +1,5 @@
 import { ExternalLink, Files, LayoutDashboard, Loader2, RefreshCw, Save } from 'lucide-react'
-import { lazy, Suspense, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useMemo, useState } from 'react'
 import { useAuth } from '@/app/providers/authContext'
 import { Alert } from '@/components/Alert'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
@@ -12,7 +12,7 @@ import { TabelaAtivos } from '@/features/dashboard/TabelaAtivos'
 import { ValorManualModal } from '@/features/dashboard/ValorManualModal'
 import type { AlvoValorManual } from '@/features/dashboard/ValorManualModal'
 import { useDashboard } from '@/hooks/useDashboard'
-import { alocacaoPorAtivo, alocacaoPorCategoria, serieEvolucao } from '@/lib/dashboard'
+import { alocacaoPorAtivo, alocacaoPorCategoria, serieEvolucao, tickersParaNavegacao } from '@/lib/dashboard'
 import { precosManuaisDeOperacoes } from '@/lib/cotacoes'
 import { calcularDetalheAtivo } from '@/lib/detalheAtivo'
 import { tickersComOportunidade } from '@/domain/valuation'
@@ -88,6 +88,22 @@ function DashboardContent() {
         ? calcularDetalheAtivo(ativoSelecionado, data.operacoes, data.proventos, data.consolidado)
         : null,
     [ativoSelecionado, data],
+  )
+  // Tickers na ordem da tabela de ativos (base da navegação anterior/próximo).
+  const tickersNavegacao = useMemo(() => tickersParaNavegacao(consolidado), [consolidado])
+  const indiceAtivo = useMemo(
+    () => (ativoSelecionado ? tickersNavegacao.indexOf(ativoSelecionado) : -1),
+    [ativoSelecionado, tickersNavegacao],
+  )
+  /** Abre o ticker anterior/próximo com navegação circular (envolve nas pontas). */
+  const navegarAtivo = useCallback(
+    (offset: number) => {
+      if (tickersNavegacao.length === 0) return
+      const base = indiceAtivo >= 0 ? indiceAtivo : 0
+      const destino = (base + offset + tickersNavegacao.length) % tickersNavegacao.length
+      setAtivoSelecionado(tickersNavegacao[destino])
+    },
+    [indiceAtivo, tickersNavegacao],
   )
   const oportunidades = useMemo(
     () => tickersComOportunidade(data?.valuation ?? [], consolidado),
@@ -235,6 +251,10 @@ function DashboardContent() {
             valuation={valuationAtivo}
             onChanged={refresh}
             onClose={() => setAtivoSelecionado(null)}
+            onAnterior={tickersNavegacao.length > 1 ? () => navegarAtivo(-1) : undefined}
+            onProximo={tickersNavegacao.length > 1 ? () => navegarAtivo(1) : undefined}
+            posicaoNavegacao={indiceAtivo >= 0 ? indiceAtivo + 1 : undefined}
+            totalNavegacao={tickersNavegacao.length}
           />
           <NovaOperacaoModal
             categoria={categoriaNovaOperacao}
