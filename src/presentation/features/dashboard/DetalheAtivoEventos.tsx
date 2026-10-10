@@ -2,6 +2,8 @@ import { Loader2, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
 import { useAuth } from '@/app/providers/authContext'
 import { Alert } from '@/components/Alert'
+import { Pagination } from '@/components/Pagination'
+import { PAGE_SIZE, usePagination } from '@/hooks/usePagination'
 import { EventoCorporativoForm } from '@/features/eventos/EventoCorporativoForm'
 import { eventoToOperacao, toEventoPayload } from '@/features/eventos/eventoSchema'
 import type { EventoFormOutput } from '@/features/eventos/eventoSchema'
@@ -65,6 +67,8 @@ export function DetalheAtivoEventos({
         .sort(byMostRecent),
     [operacoes, ticker],
   )
+
+  const { page, pageItems, setPage } = usePagination(doTicker, PAGE_SIZE, ticker)
 
   const resolveContext = useCallback(async (): Promise<RepositoryContext | null> => {
     if (!workspace) {
@@ -193,7 +197,7 @@ export function DetalheAtivoEventos({
                 </tr>
               </thead>
               <tbody>
-                {doTicker.map((evento) => (
+                {pageItems.map((evento) => (
                   <tr key={evento.id} className="border-t border-slate-100">
                     <td className="px-3 py-2 tabular-nums text-slate-700">
                       {formatarDataBR(evento.data)}
@@ -237,6 +241,14 @@ export function DetalheAtivoEventos({
             </table>
           </div>
         )}
+        {doTicker.length > 0 ? (
+          <Pagination
+            page={page}
+            pageSize={PAGE_SIZE}
+            total={doTicker.length}
+            onPageChange={setPage}
+          />
+        ) : null}
       </div>
     </div>
   )

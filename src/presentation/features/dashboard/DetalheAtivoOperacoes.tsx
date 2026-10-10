@@ -2,6 +2,8 @@ import { Loader2, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
 import { useAuth } from '@/app/providers/authContext'
 import { Alert } from '@/components/Alert'
+import { Pagination } from '@/components/Pagination'
+import { PAGE_SIZE, usePagination } from '@/hooks/usePagination'
 import { OperacaoForm } from '@/features/operacoes/OperacaoForm'
 import { toOperacaoPayload } from '@/features/operacoes/operacaoSchema'
 import type { OperacaoFormOutput } from '@/features/operacoes/operacaoSchema'
@@ -61,6 +63,8 @@ export function DetalheAtivoOperacoes({
         .sort(byMostRecent),
     [operacoes, ticker],
   )
+
+  const { page, pageItems, setPage } = usePagination(doTicker, PAGE_SIZE, ticker)
 
   const resolveContext = useCallback(async (): Promise<RepositoryContext | null> => {
     if (!workspace) {
@@ -193,7 +197,7 @@ export function DetalheAtivoOperacoes({
                 </tr>
               </thead>
               <tbody>
-                {doTicker.map((operacao) => (
+                {pageItems.map((operacao) => (
                   <tr key={operacao.id} className="border-t border-slate-100">
                     <td className="px-3 py-2 tabular-nums text-slate-700">
                       {formatarDataBR(operacao.data)}
@@ -255,6 +259,14 @@ export function DetalheAtivoOperacoes({
             </table>
           </div>
         )}
+        {doTicker.length > 0 ? (
+          <Pagination
+            page={page}
+            pageSize={PAGE_SIZE}
+            total={doTicker.length}
+            onPageChange={setPage}
+          />
+        ) : null}
       </div>
     </div>
   )

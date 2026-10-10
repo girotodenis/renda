@@ -2,6 +2,8 @@ import { Loader2, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
 import { useAuth } from '@/app/providers/authContext'
 import { Alert } from '@/components/Alert'
+import { Pagination } from '@/components/Pagination'
+import { PAGE_SIZE, usePagination } from '@/hooks/usePagination'
 import { ProventoForm } from '@/features/proventos/ProventoForm'
 import { toProventoPayload } from '@/features/proventos/proventoSchema'
 import type { ProventoFormOutput } from '@/features/proventos/proventoSchema'
@@ -51,6 +53,8 @@ export function DetalheAtivoProventos({
     () => proventos.filter((provento) => provento.ticker.trim().toUpperCase() === ticker).sort(byMostRecent),
     [proventos, ticker],
   )
+
+  const { page, pageItems, setPage } = usePagination(doTicker, PAGE_SIZE, ticker)
 
   const resolveContext = useCallback(async (): Promise<RepositoryContext | null> => {
     if (!workspace) {
@@ -182,7 +186,7 @@ export function DetalheAtivoProventos({
                 </tr>
               </thead>
               <tbody>
-                {doTicker.map((provento) => (
+                {pageItems.map((provento) => (
                   <tr key={provento.id} className="border-t border-slate-100">
                     <td className="px-3 py-2 tabular-nums text-slate-700">
                       {provento.dataCom ? formatarDataBR(provento.dataCom) : '—'}
@@ -227,6 +231,14 @@ export function DetalheAtivoProventos({
             </table>
           </div>
         )}
+        {doTicker.length > 0 ? (
+          <Pagination
+            page={page}
+            pageSize={PAGE_SIZE}
+            total={doTicker.length}
+            onPageChange={setPage}
+          />
+        ) : null}
       </div>
     </div>
   )
