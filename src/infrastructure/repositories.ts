@@ -7,6 +7,7 @@ import {
   metasCodec,
   operacoesCodec,
   proventosCodec,
+  valuationCodec,
 } from '@/lib/sheetCodecs'
 import type { SheetCodec } from '@/lib/sheetCodecs'
 import { SHEET_HEADERS } from '@/lib/sheetsSchema'
@@ -20,7 +21,7 @@ import {
   getValues,
   updateValues,
 } from '@/services/sheets'
-import type { Consolidado, MetaRebalanceamento, Operacao, Provento, Snapshot } from '@/types/domain'
+import type { Consolidado, MetaRebalanceamento, Operacao, Provento, Snapshot, Valuation } from '@/types/domain'
 
 /**
  * Repositórios por aba (Seção 2) — abstraem a planilha como um banco de dados.
@@ -191,6 +192,7 @@ export const consolidadoRepo = createRepository<Consolidado>({
 })
 export const metasRepo = createRepository<MetaRebalanceamento>({ codec: metasCodec })
 export const historicoRepo = createRepository<Snapshot>({ codec: historicoCodec })
+export const valuationRepo = createRepository<Valuation>({ codec: valuationCodec })
 
 interface SheetReader {
   sheetName: SheetName

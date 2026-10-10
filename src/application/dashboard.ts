@@ -14,12 +14,13 @@ import {
   operacoesRepo,
   prefetchAllSheets,
   proventosRepo,
+  valuationRepo,
 } from '@/services/repositories'
 import type { RepositoryContext } from '@/services/repositories'
 import { registrarSnapshot } from '@/services/historico'
 import { buscarCotacoesTesouro, lerCotacaoCache } from '@/services/tesouro'
 import { buscarCotacoesBrapi, lerCotacaoCache as lerCotacaoCacheBrapi } from '@/services/brapi'
-import type { Consolidado, Operacao, Provento, Snapshot } from '@/types/domain'
+import type { Consolidado, Operacao, Provento, Snapshot, Valuation } from '@/types/domain'
 
 /**
  * Orquestração de dados do dashboard (RF07–RF11, RF19, RNF02/RNF04/RNF06/RNF08).
@@ -43,6 +44,8 @@ export interface DashboardData {
   operacoes: Operacao[]
   proventos: Provento[]
   historico: Snapshot[]
+  /** Análises de valuation por ticker (aba `Valuation` — alerta de oportunidade). */
+  valuation: Valuation[]
   /** Cotações resolvidas por ticker (fonte + status — RF19/RNF04). */
   cotacoes: Map<string, CotacaoResolvida>
   /** ISO do momento em que os dados foram montados (cache ou API). */
@@ -125,6 +128,7 @@ interface MontarConsulta {
   linhasConsolidado: readonly Consolidado[]
   proventos: readonly Provento[]
   historico: readonly Snapshot[]
+  valuation: readonly Valuation[]
   /** Preços de mercado do Tesouro Direto (centavos), quando disponíveis. */
   cotacoesTesouro: ReadonlyMap<string, number>
   /** Preços de mercado B3 via Brapi (centavos), fallback do `GOOGLEFINANCE`. */
@@ -132,12 +136,13 @@ interface MontarConsulta {
 }
 
 function montarDashboard(consulta: MontarConsulta): DashboardData {
-  const { operacoes, linhasConsolidado, proventos, historico, cotacoesTesouro, cotacoesBrapi } = consulta
+  const { operacoes, linhasConsolidado, proventos, historico, valuation, cotacoesTesouro, cotacoesBrapi } = consulta
 
   const base: Omit<DashboardData, 'consolidado' | 'resumo' | 'cotacoes'> = {
     operacoes: [...operacoes],
     proventos: [...proventos],
     historico: [...historico],
+    valuation: [...valuation],
     carregadoEm: new Date().toISOString(),
   }
 
@@ -195,6 +200,7 @@ export async function carregarDashboard(
   const linhasConsolidado = consolidadoRepo.readCache(spreadsheetId) ?? []
   const proventos = proventosRepo.readCache(spreadsheetId) ?? []
   const historico = historicoRepo.readCache(spreadsheetId) ?? []
+  const valuation = await carregarValuations(context, options.offline === true)
   const cotacoesTesouro = await resolverCotacoesTesouro(operacoes, options.offline === true)
   const cotacoesBrapi = await resolverCotacoesBrapi(
     operacoes,
@@ -207,9 +213,27 @@ export async function carregarDashboard(
     linhasConsolidado,
     proventos,
     historico,
+    valuation,
     cotacoesTesouro,
     cotacoesBrapi,
   })
+}
+
+/**
+ * Lê as análises de valuation (aba `Valuation`) de forma **cache-first** e
+ * tolerante: como a aba é mais recente que as demais, planilhas antigas podem
+ * ainda não tê-la — nesse caso a leitura falha silenciosamente e retorna `[]`.
+ */
+async function carregarValuations(
+  context: RepositoryContext,
+  offline: boolean,
+): Promise<Valuation[]> {
+  if (offline) return valuationRepo.readCache(context.spreadsheetId) ?? []
+  try {
+    return await valuationRepo.list(context)
+  } catch {
+    return valuationRepo.readCache(context.spreadsheetId) ?? []
+  }
 }
 
 /**
@@ -309,6 +333,7 @@ export function lerDashboardDoCache(spreadsheetId: string): DashboardData | null
     linhasConsolidado: linhasConsolidado ?? [],
     proventos: proventosRepo.readCache(spreadsheetId) ?? [],
     historico: historicoRepo.readCache(spreadsheetId) ?? [],
+    valuation: valuationRepo.readCache(spreadsheetId) ?? [],
     cotacoesTesouro,
     cotacoesBrapi,
   })

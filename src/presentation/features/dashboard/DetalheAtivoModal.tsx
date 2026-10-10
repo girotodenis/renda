@@ -14,10 +14,11 @@ import { classeValor, formatarCentavos, formatarPercentual } from '@/features/da
 import type { RepositoryContext } from '@/services/repositories'
 import { describeSheetsError } from '@/services/sheets'
 import { CategoriaAtivo } from '@/types/domain'
-import type { Operacao, Provento } from '@/types/domain'
+import type { Operacao, Provento, Valuation } from '@/types/domain'
 import { DetalheAtivoEventos } from './DetalheAtivoEventos'
 import { DetalheAtivoOperacoes } from './DetalheAtivoOperacoes'
 import { DetalheAtivoProventos } from './DetalheAtivoProventos'
+import { DetalheAtivoValuation } from './DetalheAtivoValuation'
 import { sincronizarConsolidadoESnapshot } from './escritasAtivo'
 
 /** Gráficos carregados sob demanda (Recharts fora do bundle inicial — RNF06). */
@@ -28,7 +29,7 @@ const DetalheAtivoGraficos = lazy(() =>
 )
 
 /** Abas do modal do ativo: resumo + listas editáveis por tipo de lançamento. */
-type AbaId = 'resumo' | 'operacoes' | 'proventos' | 'eventos'
+type AbaId = 'resumo' | 'operacoes' | 'proventos' | 'eventos' | 'valuation'
 
 interface DetalheAtivoModalProps {
   /** Detalhe do ativo selecionado; `null` mantém o modal fechado. */
@@ -37,6 +38,8 @@ interface DetalheAtivoModalProps {
   operacoes: readonly Operacao[]
   /** Proventos do extrato (Resumo + aba Proventos). */
   proventos: readonly Provento[]
+  /** Análise de valuation do ticker (`null` quando ainda não cadastrada). */
+  valuation: Valuation | null
   /** Recarrega os dados do dashboard após registrar/editar/excluir um lançamento. */
   onChanged: () => Promise<void>
   onClose: () => void
@@ -83,6 +86,7 @@ export function DetalheAtivoModal({
   detalhe,
   operacoes,
   proventos,
+  valuation,
   onChanged,
   onClose,
 }: DetalheAtivoModalProps) {
@@ -230,6 +234,18 @@ export function DetalheAtivoModal({
               />
             </div>
           ) : null}
+
+          {aba === 'valuation' ? (
+            <div role="tabpanel" id="painel-valuation" aria-labelledby="aba-valuation">
+              <DetalheAtivoValuation
+                ticker={detalhe.ticker}
+                categoria={detalhe.categoria}
+                valuation={valuation}
+                precoAtual={detalhe.precoAtual}
+                onChanged={onChanged}
+              />
+            </div>
+          ) : null}
         </div>
       ) : null}
     </Modal>
@@ -284,6 +300,7 @@ function BarraAbas({ aba, onChange, contadores }: BarraAbasProps) {
     { id: 'operacoes', rotulo: 'Operações', contagem: contadores.operacoes },
     { id: 'proventos', rotulo: 'Proventos', contagem: contadores.proventos },
     { id: 'eventos', rotulo: 'Eventos', contagem: contadores.eventos },
+    { id: 'valuation', rotulo: 'Informações de Valuation' },
   ]
 
   return (

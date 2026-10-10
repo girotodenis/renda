@@ -383,6 +383,45 @@ async function formatHeaderRows(
   })
 }
 
+/**
+ * Garante que todas as abas obrigatórias existam na planilha, criando as
+ * ausentes com seus cabeçalhos (idempotente). Também é usada para criar a aba
+ * `Valuation` em planilhas mais antigas antes da primeira escrita de análise.
+ * Retorna a quantidade de abas criadas.
+ */
+export async function ensureRequiredSheets(
+  accessToken: string,
+  spreadsheetId: string,
+): Promise<number> {
+  const fields = 'sheets.properties(sheetId,title)'
+  const meta = await sheetsRequest<SheetsApiSpreadsheet>(
+    accessToken,
+    `/${encodeURIComponent(spreadsheetId)}?fields=${encodeURIComponent(fields)}`,
+  )
+
+  const ids = collectSheetIds(meta)
+  const missing = SHEET_NAMES.filter((name) => !ids.has(name))
+  if (missing.length === 0) return 0
+
+  const added = await addSheets(accessToken, spreadsheetId, missing)
+  const addedEntries: { name: SheetName; sheetId: number }[] = []
+  for (const name of missing) {
+    const sheetId = added.get(name)
+    if (sheetId !== undefined) addedEntries.push({ name, sheetId })
+  }
+
+  if (addedEntries.length > 0) {
+    await writeHeaderRows(accessToken, spreadsheetId, addedEntries)
+    await formatHeaderRows(
+      accessToken,
+      spreadsheetId,
+      addedEntries.map((entry) => entry.sheetId),
+    )
+  }
+
+  return addedEntries.length
+}
+
 /* --------------------------------------------------------------------------
  * API `spreadsheets.values` — leitura/escrita de dados (RF04/RF06, RNF02).
  * ------------------------------------------------------------------------ */

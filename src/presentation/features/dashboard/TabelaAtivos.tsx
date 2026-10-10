@@ -24,6 +24,11 @@ interface TabelaAtivosProps {
   /** Cotações resolvidas por ticker (fonte + status — RF19/RNF04). */
   cotacoes?: ReadonlyMap<string, CotacaoResolvida>
   /**
+   * Tickers com oportunidade de compra (alerta de valuation). Quando um ticker
+   * pertence ao conjunto, um ícone 🎯 é exibido à esquerda do seu nome.
+   */
+  oportunidades?: ReadonlySet<string>
+  /**
    * Callback ao clicar no ticker de um ativo (abre o detalhe — RF10).
    * Quando ausente, o ticker é exibido como texto simples (sem interação).
    */
@@ -51,6 +56,7 @@ interface TabelaAtivosProps {
 export function TabelaAtivos({
   consolidado,
   cotacoes,
+  oportunidades,
   onSelecionarAtivo,
   onNovaOperacao,
   onEditarValorManual,
@@ -77,6 +83,7 @@ export function TabelaAtivos({
           key={grupo.categoria}
           grupo={grupo}
           cotacoes={cotacoes}
+          oportunidades={oportunidades}
           onSelecionarAtivo={onSelecionarAtivo}
           onNovaOperacao={onNovaOperacao}
           onEditarValorManual={onEditarValorManual}
@@ -91,12 +98,14 @@ type AbaCategoria = 'posicoes' | 'vendidos'
 function CategoriaAtivos({
   grupo,
   cotacoes,
+  oportunidades,
   onSelecionarAtivo,
   onNovaOperacao,
   onEditarValorManual,
 }: {
   grupo: GrupoCategoriaTabela
   cotacoes?: ReadonlyMap<string, CotacaoResolvida>
+  oportunidades?: ReadonlySet<string>
   onSelecionarAtivo?: (ticker: string) => void
   onNovaOperacao?: (categoria: CategoriaAtivo) => void
   onEditarValorManual?: (ticker: string, categoria: CategoriaAtivo) => void
@@ -170,6 +179,7 @@ function CategoriaAtivos({
                 categoria={grupo.categoria}
                 ativos={grupo.abertos}
                 cotacoes={cotacoes}
+                oportunidades={oportunidades}
                 onSelecionarAtivo={onSelecionarAtivo}
                 onEditarValorManual={onEditarValorManual}
               />
@@ -265,12 +275,14 @@ function TabelaPosicoes({
   categoria,
   ativos,
   cotacoes,
+  oportunidades,
   onSelecionarAtivo,
   onEditarValorManual,
 }: {
   categoria: CategoriaAtivo
   ativos: Consolidado[]
   cotacoes?: ReadonlyMap<string, CotacaoResolvida>
+  oportunidades?: ReadonlySet<string>
   onSelecionarAtivo?: (ticker: string) => void
   onEditarValorManual?: (ticker: string, categoria: CategoriaAtivo) => void
 }) {
@@ -302,6 +314,16 @@ function TabelaPosicoes({
               <tr key={ativo.ticker} className="border-t border-slate-100">
                 <td className="px-4 py-2">
                   <div className="flex items-center gap-1.5">
+                    {oportunidades?.has(ativo.ticker.trim().toUpperCase()) ? (
+                      <span
+                        role="img"
+                        aria-label="Oportunidade de compra"
+                        title="Oportunidade de compra — cotação atingiu o alvo"
+                        className="text-base leading-none"
+                      >
+                        🎯
+                      </span>
+                    ) : null}
                     <TickerBotao ticker={ativo.ticker} onSelecionarAtivo={onSelecionarAtivo} />
                     {onEditarValorManual && podeMarcarValor ? (
                       <button

@@ -15,6 +15,7 @@ import { useDashboard } from '@/hooks/useDashboard'
 import { alocacaoPorAtivo, alocacaoPorCategoria, serieEvolucao } from '@/lib/dashboard'
 import { precosManuaisDeOperacoes } from '@/lib/cotacoes'
 import { calcularDetalheAtivo } from '@/lib/detalheAtivo'
+import { tickersComOportunidade } from '@/domain/valuation'
 import type { CategoriaAtivo } from '@/types/domain'
 
 /**
@@ -88,6 +89,15 @@ function DashboardContent() {
         : null,
     [ativoSelecionado, data],
   )
+  const oportunidades = useMemo(
+    () => tickersComOportunidade(data?.valuation ?? [], consolidado),
+    [data, consolidado],
+  )
+  const valuationAtivo = useMemo(() => {
+    if (!ativoSelecionado || !data) return null
+    const alvo = ativoSelecionado.trim().toUpperCase()
+    return data.valuation.find((item) => item.ticker.trim().toUpperCase() === alvo) ?? null
+  }, [ativoSelecionado, data])
   const valorManualAtual = useMemo(() => {
     if (!valorManualAlvo) return null
     return precosManuaisDeOperacoes(data?.operacoes ?? []).get(valorManualAlvo.ticker) ?? null
@@ -213,6 +223,7 @@ function DashboardContent() {
           <TabelaAtivos
             consolidado={consolidado}
             cotacoes={data.cotacoes}
+            oportunidades={oportunidades}
             onSelecionarAtivo={setAtivoSelecionado}
             onNovaOperacao={setCategoriaNovaOperacao}
             onEditarValorManual={(ticker, categoria) => setValorManualAlvo({ ticker, categoria })}
@@ -221,6 +232,7 @@ function DashboardContent() {
             detalhe={detalheAtivo}
             operacoes={data.operacoes}
             proventos={data.proventos}
+            valuation={valuationAtivo}
             onChanged={refresh}
             onClose={() => setAtivoSelecionado(null)}
           />

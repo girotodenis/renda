@@ -20,6 +20,7 @@ import type {
   Provento,
   ProventoTipo,
   Snapshot,
+  Valuation,
 } from '@/types/domain'
 import { CategoriaAtivo, IndexadorRendaFixa as Indexador, OperacaoTipo as TipoOperacao, ProventoTipo as TipoProvento } from '@/types/domain'
 
@@ -195,5 +196,23 @@ export const historicoCodec: SheetCodec<Snapshot> = {
     patrimonioTotal: cellToCentavos(at(row, 1)),
     totalInvestido: cellToCentavos(at(row, 2)),
     lucroAcumulado: cellToCentavos(at(row, 3)),
+  }),
+}
+
+export const valuationCodec: SheetCodec<Valuation> = {
+  sheetName: 'Valuation',
+  toRow: (valuation) => [
+    valuation.ticker,
+    valuation.categoria,
+    optionalCentavosToCell(valuation.precoTeto),
+    valuation.margemSeguranca ?? '',
+    valuation.anotacoes,
+  ],
+  fromRow: (row) => ({
+    ticker: cellToText(at(row, 0)),
+    categoria: parseCategoriaAtivo(at(row, 1)) ?? CategoriaAtivo.Acao,
+    precoTeto: cellToOptionalCentavos(at(row, 2)),
+    margemSeguranca: cellToOptionalNumber(at(row, 3)),
+    anotacoes: cellToText(at(row, 4)),
   }),
 }

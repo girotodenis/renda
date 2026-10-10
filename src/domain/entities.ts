@@ -159,6 +159,23 @@ export interface MetaRebalanceamento {
   precoTeto: number | null
 }
 
+/**
+ * Análise de valuation de um ticker — aba `Valuation` (alerta de oportunidade
+ * de compra). Registra o preço teto, a margem de segurança e as anotações da
+ * tese de investimento; o alerta dispara quando a cotação atual fica igual ou
+ * abaixo do limite de compra (`teto − teto × margem ÷ 100`).
+ */
+export interface Valuation {
+  ticker: string
+  categoria: CategoriaAtivo
+  /** Preço teto (valor justo) em **centavos** — `null` quando não informado. */
+  precoTeto: number | null
+  /** Margem de segurança em % (ex.: `20` para 20%) — `null` quando não informada. */
+  margemSeguranca: number | null
+  /** Anotações livres da tese de investimento. */
+  anotacoes: string
+}
+
 /** Snapshot de patrimônio — aba `Historico` (RF18). */
 export interface Snapshot {
   /** ISO `YYYY-MM-DD`. */
