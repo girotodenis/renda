@@ -37,6 +37,7 @@ import type {
   Repository,
   RepositoryContext,
 } from '@/domain/repositories/ports'
+import { withOfflineOutbox } from '@/infrastructure/offlineRepositories'
 
 export type {
   CrudRepository,
@@ -178,21 +179,32 @@ export function createCrudRepository<T>(
   }
 }
 
-export const operacoesRepo = createCrudRepository<Operacao>({
-  codec: operacoesCodec,
-  idOf: (operacao) => operacao.id,
-})
-export const proventosRepo = createCrudRepository<Provento>({
-  codec: proventosCodec,
-  idOf: (provento) => provento.id,
-})
-export const consolidadoRepo = createRepository<Consolidado>({
-  codec: consolidadoCodec,
-  writableColumnCount: 2,
-})
-export const metasRepo = createRepository<MetaRebalanceamento>({ codec: metasCodec })
-export const historicoRepo = createRepository<Snapshot>({ codec: historicoCodec })
-export const valuationRepo = createRepository<Valuation>({ codec: valuationCodec })
+// IDs estáveis das entidades com CRUD (usados pelo `update`/`remove` offline).
+const operacaoId = (operacao: Operacao): string => operacao.id
+const proventoId = (provento: Provento): string => provento.id
+
+// Repositórios da camada de dados já **envoltos pelo decorador offline** (Fase 1):
+// escritas sem rede (ou com falha de rede/quota) vão para o outbox e refletem no
+// cache local imediatamente. O `Consolidado` é aba derivada — passa direto
+// (sem outbox), pois é recalculado pela sincronização da Fase 2.
+export const operacoesRepo = withOfflineOutbox(
+  createCrudRepository<Operacao>({ codec: operacoesCodec, idOf: operacaoId }),
+  { idOf: operacaoId },
+)
+export const proventosRepo = withOfflineOutbox(
+  createCrudRepository<Provento>({ codec: proventosCodec, idOf: proventoId }),
+  { idOf: proventoId },
+)
+export const consolidadoRepo = withOfflineOutbox(
+  createRepository<Consolidado>({
+    codec: consolidadoCodec,
+    writableColumnCount: 2,
+  }),
+  { outboxEnabled: false },
+)
+export const metasRepo = withOfflineOutbox(createRepository<MetaRebalanceamento>({ codec: metasCodec }))
+export const historicoRepo = withOfflineOutbox(createRepository<Snapshot>({ codec: historicoCodec }))
+export const valuationRepo = withOfflineOutbox(createRepository<Valuation>({ codec: valuationCodec }))
 
 interface SheetReader {
   sheetName: SheetName

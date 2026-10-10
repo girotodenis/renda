@@ -4,8 +4,8 @@
 > offline e, ao reconectar, sincronize as alterações com a planilha do Google.
 >
 > **Data de criação:** 2026-10-10
-> **Última atualização:** 2026-10-10
-> **Estado geral:** `em andamento` — Fase 0 concluída; próximas fases pendentes.
+> **Última atualização:** 2026-10-10 (Fase 1 concluída)
+> **Estado geral:** `em andamento` — Fases 0 e 1 concluídas; próximas fases pendentes.
 
 ---
 
@@ -32,7 +32,7 @@
 | Fase | Descrição curta | Estado | Concluída em |
 | --- | --- | --- | --- |
 | Fase 0 | PWA instalável + shell offline (manifest/SW/ícones) | `[x]` concluída | 2026-10-10 |
-| Fase 1 | Repositórios offline (outbox + atualização otimista) | `[ ]` pendente | — |
+| Fase 1 | Repositórios offline (outbox + atualização otimista) | `[x]` concluída | 2026-10-10 |
 | Fase 2 | Sincronização automática (flush + Consolidado) | `[ ]` pendente | — |
 | Fase 3 | Auth resiliente offline | `[ ]` pendente | — |
 | Fase 4 | UX de sincronização (badge/contador/botão) | `[ ]` pendente | — |
@@ -270,10 +270,77 @@ npm run typecheck && npm test -- --run && npm run lint
 ```
 
 ### Estado
-- [ ] pendente
+- [x] concluída em 2026-10-10
 
 ### Notas/Desvios
-— (preencher ao executar)
+
+**Arquivos realmente alterados:**
+
+- `src/infrastructure/outbox.ts` (novo) — fila persistida em `localStorage`
+  (`minhaacoes.outbox.v1`) com `Mutation`/`MutationDraft` e a API
+  `enqueue/list/remove/clear/count`; expõe também o helper `isOnline()`.
+- `src/infrastructure/offlineRepositories.ts` (novo) — decorador genérico
+  `withOfflineOutbox(repo, options?)`.
+- `src/infrastructure/outbox.test.ts` (novo).
+- `src/infrastructure/offlineRepositories.test.ts` (novo — arquivo extra, ver
+  desvios).
+- `src/infrastructure/repositories.ts` — passa a exportar `operacoesRepo`,
+  `proventosRepo`, `consolidadoRepo`, `metasRepo`, `historicoRepo` e
+  `valuationRepo` já **envoltos** pelo decorador; `createRepository`,
+  `createCrudRepository` e `prefetchAllSheets` permanecem inalterados (sem
+  mudança de assinaturas). Nenhum consumidor precisou mudar (o shim
+  `services/repositories.ts` continua re-exportando tudo).
+- `PLANO_PWA.md` — estado e notas.
+
+**Decisões tomadas:**
+
+- **Estrutura da `Mutation`:** `{ id, createdAt, sheet, kind, entity?,
+  entities?, entityId? }`, com `kind: 'append' | 'update' | 'remove' |
+  'replaceAll'`. `enqueue` recebe um `MutationDraft = Omit<Mutation, 'id' |
+  'createdAt'>` e gera `id` via `newId()` (uuid/timestamp) e `createdAt`
+  (`new Date().toISOString()`), garantindo unicidade e ordem FIFO. A persistência
+  reutiliza os helpers de `src/infrastructure/storage.ts`
+  (`readStorageJson`/`writeStorageJson`/`removeStorageKey`).
+- **Decisão offline:** helper `isOnline()` em `outbox.ts` (`navigator.onLine !==
+  false`; ambientes sem `navigator` são tratados como online). Cada escrita do
+  decorador segue: `outboxEnabled === false` → direto; senão, se online → tenta a
+  escrita real e, em falha **recuperável** (`isOfflineWriteError`: objeto com
+  `status === 0` ou `429` — casa com `SheetsApiError`), cai para o outbox; se
+  offline → aplica otimista + enfileira sem tocar na API. Erros não recuperáveis
+  (ex.: 401/403/500) são propagados, sem enfileirar.
+- **Atualização otimista do cache:** usa `readSheetCache`/`writeSheetCache`
+  (aba por `spreadsheetId`): `append` → acrescenta; `update` → substitui por id;
+  `remove` → filtra por id; `replaceAll` → grava a lista inteira.
+- **Identificação por ID:** o decorador aceita `idOf` (padrão `entity.id`), o
+  que é necessário para `update`/`remove` otimistas. Em `repositories.ts` os
+  extratores `operacaoId`/`proventoId` são passados tanto para
+  `createCrudRepository` quanto para o decorador.
+- **`Consolidado` nunca enfileira:** a aba derivada é envolta com
+  `{ outboxEnabled: false }`, então toda escrita delega direto ao repositório
+  real (sem otimista e sem outbox).
+- **Sem ciclo de importação:** o decorador é genérico e **não** importa
+  `repositories.ts`; é `repositories.ts` que importa o decorador. Overloads
+  preservam `CrudRepository<T>` para `operacoesRepo`/`proventosRepo`.
+
+**Desvios do plano:**
+
+- Foi criado **um arquivo de teste a mais** (`offlineRepositories.test.ts`),
+  além do `outbox.test.ts` previsto. Motivo: o critério de aceite exige provar
+  que (a) com `navigator.onLine === false` uma escrita via `operacoesRepo.append`
+  atualiza o cache e enfileira **sem chamar a API** e (b) `consolidadoRepo` não
+  gera outbox. Esses casos ficam melhor isolados do teste unitário do outbox.
+- Nenhum outro desvio de escopo.
+
+**Validação executada (2026-10-10):**
+
+- `npm run typecheck` — ok.
+- `npm test -- --run` — **174 testes / 15 arquivos**, todos verdes (17 novos: 6
+  em `outbox.test.ts`, 11 em `offlineRepositories.test.ts`).
+- `npm run lint` — ok.
+- `npm run build` — ok (sem regressões; o aviso de chunk > 500 kB é pré-existente).
+- Testes-chave verdes: `operacoesRepo.append` offline → cache atualizado +
+  `outbox.count() === 1`, com `fetch` **não** chamado; `consolidadoRepo.append`
+  offline → `outbox.count() === 0`.
 
 ---
 
