@@ -277,6 +277,11 @@ export function calcularDetalheAtivo(
  * onde `patrimônioFinal = valor investido + lucro realizado + variação + proventos`
  * (equivale a `valor atual + proventos`).
  *
+ * O `valor investido` da série é o **capital líquido aportado**
+ * (`valor atual − lucro realizado − lucro flutuante`), não o custo da posição
+ * atual — assim a série termina exatamente em `valor atual + proventos` mesmo
+ * quando há lucro realizado.
+ *
  * Cada ponto traz `base` (deslocamento invisível) e `valor` (altura da barra)
  * para o efeito cascata no gráfico.
  */
@@ -290,7 +295,12 @@ export function serieDecomposicaoRetorno(detalhe: DetalheAtivo): PontoDecomposic
     pontos.push({ rotulo, valor, base, acumulado })
   }
 
-  adicionar('Valor investido', detalhe.totalInvestido)
+  // Capital líquido aportado: garante que a série termine em `valor atual + proventos`.
+  const valorInvestido = round2(
+    detalhe.valorAtual - detalhe.lucroRealizado - detalhe.lucroFlutuante,
+  )
+
+  adicionar('Valor investido', valorInvestido)
   adicionar('Lucro realizado', detalhe.lucroRealizado)
   adicionar('Variação', detalhe.lucroFlutuante)
   adicionar('Proventos', detalhe.proventosNoPeriodo)

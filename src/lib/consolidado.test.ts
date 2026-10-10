@@ -48,19 +48,19 @@ describe('calcularPosicoes (fórmulas 1–3)', () => {
     })
   })
 
-  it('consolida compras e vendas mistas do mesmo ticker', () => {
+  it('consolida compras e vendas mistas sem alterar o preço médio na venda', () => {
     const posicoes = calcularPosicoes([
       operacao({ ticker: 'PETR4', quantidade: 100, precoUnitario: 1000, tipo: OperacaoTipo.Compra }),
       operacao({ ticker: 'PETR4', quantidade: 50, precoUnitario: 1200, tipo: OperacaoTipo.Venda }),
     ])
 
     expect(posicoes[0].quantidadeAtual).toBe(50)
-    // (100×1000 − 50×1200) / 50 = 40000 / 50 = 800
-    expect(posicoes[0].precoMedio).toBe(800)
-    expect(posicoes[0].totalInvestido).toBe(40000)
+    // A venda não altera o preço médio: custo restante = 50 × 1000 = 50000.
+    expect(posicoes[0].precoMedio).toBe(1000)
+    expect(posicoes[0].totalInvestido).toBe(50000)
   })
 
-  it('inclui as taxas no custo (numerador do preço médio)', () => {
+  it('inclui as taxas de compra no custo e não deixa a venda alterar o preço médio', () => {
     const posicoes = calcularPosicoes([
       operacao({
         ticker: 'PETR4',
@@ -78,10 +78,11 @@ describe('calcularPosicoes (fórmulas 1–3)', () => {
       }),
     ])
 
-    // (100000 + 1500 − 60000) / 50 = 41500 / 50 = 830
+    // Compra: (100×1000 + 1000) = 101000 → preço médio 1010.
+    // Venda de 50 @ 1200: custo restante = 50 × 1010 = 50500.
     expect(posicoes[0].quantidadeAtual).toBe(50)
-    expect(posicoes[0].precoMedio).toBe(830)
-    expect(posicoes[0].totalInvestido).toBe(41500)
+    expect(posicoes[0].precoMedio).toBe(1010)
+    expect(posicoes[0].totalInvestido).toBe(50500)
   })
 
   it('zera preço médio e total investido quando a posição está zerada', () => {

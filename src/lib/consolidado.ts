@@ -8,7 +8,9 @@ import { OperacaoTipo } from '@/types/domain'
  *
  * Para cada ativo `i` (consolidado por ticker):
  * 1. `Qtd_i = Σ Compras − Σ Vendas`
- * 2. `Preço Médio_i = (Σ(Compras×Preço) + Σ Taxas − Σ(Vendas×PreçoVenda)) / Qtd_i`
+ * 2. `Preço Médio_i` = **custo médio incremental**: a venda **não** altera o
+ *    preço médio — apenas reduz o custo da posição na proporção vendida
+ *    (`Preço Médio = custoTotal / Qtd`). Taxas de compra somam ao custo.
  * 3. `Total Investido_i = Qtd_i × Preço Médio_i`
  * 4. `Valor Atual_i = Qtd_i × Preço Atual_i`
  * 5. `Lucro_i = Valor Atual_i − Total Investido_i`; `Lucro_i% = Lucro_i / Total Investido_i × 100`
@@ -50,101 +52,76 @@ export interface ResumoCarteira {
 /** Mapa de cotações atuais: `ticker → preço atual em centavos`. */
 export type PrecosAtuais = ReadonlyMap<string, number>
 
-interface AcumuladorAtivo {
-  ticker: string
-  categoria: CategoriaAtivo
-  ultimaData: string
-  comprasQuantidade: number
-  vendasQuantidade: number
-  /** Σ (Quantidade × Preço Unitário) das compras, em centavos. */
-  comprasValor: number
-  /** Σ (Quantidade × Preço Unitário) das vendas, em centavos. */
-  vendasValor: number
-  /** Σ Taxas (compras + vendas), em centavos. */
-  taxas: number
-  /**
-   * Fator composto dos eventos corporativos (RF20, Seção 5.6). Multiplica a
-   * quantidade sem alterar o total investido (`1` = nenhum evento).
-   */
-  fatorEventos: number
-}
-
-function emptyAccumulator(operacao: Operacao): AcumuladorAtivo {
-  return {
-    ticker: operacao.ticker.trim(),
-    categoria: operacao.categoria,
-    ultimaData: operacao.data,
-    comprasQuantidade: 0,
-    vendasQuantidade: 0,
-    comprasValor: 0,
-    vendasValor: 0,
-    taxas: 0,
-    fatorEventos: 1,
-  }
-}
 
 /**
  * Consolida as operações por ticker e calcula quantidade atual, preço médio e
- * total investido (fórmulas 1–3 da Seção 5.1). As taxas entram no custo
- * (somam no numerador do preço médio).
+ * total investido (fórmulas 1–3 da Seção 5.1) pelo **custo médio incremental**:
+ * cada compra soma custo (preço + taxas) e quantidade; cada venda reduz o custo
+ * na proporção vendida **sem** alterar o preço médio.
  *
- * Eventos corporativos (RF20, Seção 5.6) são acumulados como um **fator** de
- * quantidade e aplicados ao final — preservando o total investido — de modo
- * que `Qtd × N` e `Preço Médio / N` valham para split, grupamento e
- * bonificação, sem gerar lucro/prejuízo.
+ * Eventos corporativos (RF20, Seção 5.6) multiplicam a quantidade na ordem
+ * cronológica — preservando o total investido — de modo que `Qtd × N` e
+ * `Preço Médio / N` valham para split, grupamento e bonificação, sem gerar
+ * lucro/prejuízo.
  *
  * Operações com ticker vazio são ignoradas. O resultado é ordenado por ticker
  * (determinístico).
  */
 export function calcularPosicoes(operacoes: readonly Operacao[]): PosicaoConsolidada[] {
-  const acumuladores = new Map<string, AcumuladorAtivo>()
+  const porTicker = new Map<string, Operacao[]>()
 
   for (const operacao of operacoes) {
     const ticker = operacao.ticker.trim()
     if (ticker.length === 0) continue
-
-    let acumulador = acumuladores.get(ticker)
-    if (!acumulador) {
-      acumulador = emptyAccumulator({ ...operacao, ticker })
-      acumuladores.set(ticker, acumulador)
-    }
-
-    // A categoria exibida é a da operação mais recente (por data ISO).
-    if (operacao.data >= acumulador.ultimaData) {
-      acumulador.categoria = operacao.categoria
-      acumulador.ultimaData = operacao.data
-    }
-
-    // Evento corporativo: acumula o fator de quantidade (não altera o custo).
-    if (isTipoEventoCorporativo(operacao.tipo)) {
-      acumulador.fatorEventos *= fatorQuantidade(operacao.tipo, operacao.quantidade)
-      continue
-    }
-
-    const quantidade = operacao.quantidade
-    const valor = quantidade * operacao.precoUnitario
-    if (operacao.tipo === OperacaoTipo.Venda) {
-      acumulador.vendasQuantidade += quantidade
-      acumulador.vendasValor += valor
-    } else {
-      acumulador.comprasQuantidade += quantidade
-      acumulador.comprasValor += valor
-    }
-    acumulador.taxas += operacao.taxas
+    const lista = porTicker.get(ticker)
+    if (lista) lista.push(operacao)
+    else porTicker.set(ticker, [operacao])
   }
 
   const posicoes: PosicaoConsolidada[] = []
-  for (const acumulador of acumuladores.values()) {
-    const quantidadeBase = acumulador.comprasQuantidade - acumulador.vendasQuantidade
-    const quantidadeAtual = round2(quantidadeBase * acumulador.fatorEventos)
-    const custoTotal =
-      acumulador.comprasValor + acumulador.taxas - acumulador.vendasValor
 
-    // Posição zerada: preço médio e total investido são 0 (nunca divide por zero).
-    if (quantidadeAtual === 0) {
+  for (const [ticker, doTicker] of porTicker) {
+    // O custo médio é incremental: exige ordem cronológica. A ordenação é
+    // estável, preservando a ordem de entrada para operações na mesma data.
+    const ordenadas = [...doTicker].sort((a, b) => a.data.localeCompare(b.data))
+
+    let categoria = ordenadas[0].categoria
+    let ultimaData = ordenadas[0].data
+    let quantidade = 0
+    let custoTotal = 0
+
+    for (const operacao of ordenadas) {
+      // A categoria exibida é a da operação mais recente (por data ISO).
+      if (operacao.data >= ultimaData) {
+        categoria = operacao.categoria
+        ultimaData = operacao.data
+      }
+
+      // Evento corporativo: ajusta a quantidade sem alterar o custo.
+      if (isTipoEventoCorporativo(operacao.tipo)) {
+        quantidade = round2(quantidade * fatorQuantidade(operacao.tipo, operacao.quantidade))
+        continue
+      }
+
+      if (operacao.tipo === OperacaoTipo.Venda) {
+        // Venda não altera o preço médio: reduz o custo na proporção vendida.
+        const custoMedio = quantidade === 0 ? 0 : custoTotal / quantidade
+        custoTotal -= operacao.quantidade * custoMedio
+        quantidade = round2(quantidade - operacao.quantidade)
+      } else {
+        // Compra: soma o custo (preço × quantidade + taxas) e a quantidade.
+        custoTotal += operacao.quantidade * operacao.precoUnitario + operacao.taxas
+        quantidade = round2(quantidade + operacao.quantidade)
+      }
+    }
+
+    custoTotal = round2(Math.max(custoTotal, 0))
+
+    // Posição zerada (ou vendida a descoberto): sem preço médio/total investido.
+    if (quantidade <= 0) {
       posicoes.push({
-        ticker: acumulador.ticker,
-        categoria: acumulador.categoria,
+        ticker,
+        categoria,
         quantidadeAtual: 0,
         precoMedio: 0,
         totalInvestido: 0,
@@ -152,13 +129,13 @@ export function calcularPosicoes(operacoes: readonly Operacao[]): PosicaoConsoli
       continue
     }
 
-    const precoMedio = round2(custoTotal / quantidadeAtual)
+    const precoMedio = round2(custoTotal / quantidade)
     posicoes.push({
-      ticker: acumulador.ticker,
-      categoria: acumulador.categoria,
-      quantidadeAtual,
+      ticker,
+      categoria,
+      quantidadeAtual: quantidade,
       precoMedio,
-      totalInvestido: round2(quantidadeAtual * precoMedio),
+      totalInvestido: round2(quantidade * precoMedio),
     })
   }
 
