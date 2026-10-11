@@ -8,6 +8,8 @@ interface ImportMetaEnv {
   readonly VITE_GOOGLE_PICKER_API_KEY?: string
   /** Número do projeto Google Cloud (appId do Picker). Opcional. */
   readonly VITE_GOOGLE_PROJECT_NUMBER?: string
+  /** Measurement ID do Google Analytics 4 (ex.: G-XXXXXXX). Opcional. */
+  readonly VITE_GA_MEASUREMENT_ID?: string
 }
 
 interface ImportMeta {

@@ -48,6 +48,7 @@ Acompanhe sua carteira de investimentos direto do navegador, usando **sua planil
    - `VITE_GOOGLE_PICKER_API_KEY` — opcional (selecionar uma planilha existente)
    - `VITE_GOOGLE_PROJECT_NUMBER` — opcional (usado como `appId` do Picker)
    - `VITE_BRAPI_TOKEN` — opcional (fallback de cotação B3 quando o `GOOGLEFINANCE` falha)
+   - `VITE_GA_MEASUREMENT_ID` — opcional (Measurement ID do GA4; habilita telemetria do Google Analytics)
 
 3. Rode o servidor de desenvolvimento:
    ```bash
