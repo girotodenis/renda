@@ -1,7 +1,7 @@
-import { parseCsv } from '@/lib/csv'
-import { parseDecimalBR, toCentavos } from '@/lib/money'
-import { CategoriaAtivo, OperacaoTipo, ProventoTipo } from '@/types/domain'
-import type { Operacao, Provento } from '@/types/domain'
+import { parseCsv } from '@/domain/csv'
+import { parseDecimalBR, toCentavos } from '@/domain/money'
+import { CategoriaAtivo, OperacaoTipo, ProventoTipo } from '@/domain/entities'
+import type { Operacao, Provento } from '@/domain/entities'
 
 /**
  * Análise/classificação dos extratos CSV exportados pela B3 (Área do

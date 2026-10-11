@@ -1,18 +1,18 @@
 import { AlertTriangle, Loader2, Save } from 'lucide-react'
 import { useState } from 'react'
-import { FormField, inputClassName } from '@/components/FormField'
-import { CATEGORIA_ATIVO_LABELS } from '@/lib/categoria'
-import { cn } from '@/lib/cn'
+import { FormField, inputClassName } from '@/presentation/components/FormField'
+import { CATEGORIA_ATIVO_LABELS } from '@/domain/categoria'
+import { cn } from '@/presentation/cn'
 import {
   CATEGORIAS_META,
   configDeDraft,
   draftDeConfig,
   somaMetasClasse,
-} from '@/lib/rebalanceamento/draft'
-import type { MetasDraft } from '@/lib/rebalanceamento/draft'
-import type { ConfiguracaoMetas, MetasPorTicker } from '@/lib/rebalanceamento'
-import { formatarPercentual } from '@/features/dashboard/formatters'
-import type { CategoriaAtivo } from '@/types/domain'
+} from '@/domain/rebalanceamento/draft'
+import type { MetasDraft } from '@/domain/rebalanceamento/draft'
+import type { ConfiguracaoMetas, MetasPorTicker } from '@/domain/rebalanceamento'
+import { formatarPercentual } from '@/presentation/features/dashboard/formatters'
+import type { CategoriaAtivo } from '@/domain/entities'
 
 interface MetasFormProps {
   /** Configuração atual (semente do rascunho editável). */

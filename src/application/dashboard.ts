@@ -1,13 +1,13 @@
-import { isTesouroDireto, usaGoogFinance } from '@/lib/categoria'
-import { aplicarPrecosAtuais, calcularPosicoes, calcularResumo } from '@/lib/consolidado'
-import type { PosicaoConsolidada, ResumoCarteira } from '@/lib/consolidado'
+import { usaGoogFinance } from '@/domain/categoria'
+import { aplicarPrecosAtuais, calcularPosicoes, calcularResumo } from '@/domain/consolidado'
+import type { PosicaoConsolidada, ResumoCarteira } from '@/domain/consolidado'
 import {
   precosDeCotacoes,
   precosManuaisDeOperacoes,
   precoMercadoValido,
   resolverCotacoes,
-} from '@/lib/cotacoes'
-import type { CotacaoResolvida, EntradaCotacao } from '@/lib/cotacoes'
+} from '@/domain/cotacoes'
+import type { CotacaoResolvida, EntradaCotacao } from '@/domain/cotacoes'
 import {
   consolidadoRepo,
   historicoRepo,
@@ -15,12 +15,12 @@ import {
   prefetchAllSheets,
   proventosRepo,
   valuationRepo,
-} from '@/services/repositories'
-import type { RepositoryContext } from '@/services/repositories'
-import { registrarSnapshot } from '@/services/historico'
-import { buscarCotacoesTesouro, lerCotacaoCache } from '@/services/tesouro'
-import { buscarCotacoesBrapi, lerCotacaoCache as lerCotacaoCacheBrapi } from '@/services/brapi'
-import type { Consolidado, Operacao, Provento, Snapshot, Valuation } from '@/types/domain'
+} from '@/infrastructure/repositories'
+import type { RepositoryContext } from '@/infrastructure/repositories'
+import { registrarSnapshot } from '@/application/historico'
+import { buscarCotacoesBrapi, lerCotacaoCache as lerCotacaoCacheBrapi } from '@/infrastructure/brapi'
+import { carregarConfiguracoes } from '@/application/configuracoes'
+import type { Consolidado, Operacao, Provento, Snapshot, Valuation } from '@/domain/entities'
 
 /**
  * Orquestração de dados do dashboard (RF07–RF11, RF19, RNF02/RNF04/RNF06/RNF08).
@@ -30,8 +30,7 @@ import type { Consolidado, Operacao, Provento, Snapshot, Valuation } from '@/typ
  * explícito. O consolidado é recalculado no app (`lib/consolidado`) com as
  * cotações resolvidas por categoria:
  * - Ação/FII/BDR: valor computado do `GOOGLEFINANCE` lido da aba `Consolidado`.
- * - Tesouro Direto: API de dados abertos (cache-first) → marcação manual.
- * - Renda Fixa: `Valor Bruto Atual` (marcação a mercado editável).
+ * - Tesouro Direto / Renda Fixa: `Valor Bruto Atual` (marcação manual editável).
  *
  * Quando não há cotação, o preço médio é usado como fallback — sem travar a UI
  * (RNF04) — e o status fica `indisponivel` para a interface sinalizar.
@@ -116,27 +115,18 @@ function montarEntradas(
   }))
 }
 
-/** Tickers de Tesouro Direto com posição aberta. */
-function tickersTesouro(posicoes: readonly PosicaoConsolidada[]): string[] {
-  return posicoes
-    .filter((posicao) => isTesouroDireto(posicao.categoria) && posicao.quantidadeAtual > 0)
-    .map((posicao) => posicao.ticker)
-}
-
 interface MontarConsulta {
   operacoes: readonly Operacao[]
   linhasConsolidado: readonly Consolidado[]
   proventos: readonly Provento[]
   historico: readonly Snapshot[]
   valuation: readonly Valuation[]
-  /** Preços de mercado do Tesouro Direto (centavos), quando disponíveis. */
-  cotacoesTesouro: ReadonlyMap<string, number>
   /** Preços de mercado B3 via Brapi (centavos), fallback do `GOOGLEFINANCE`. */
   cotacoesBrapi: ReadonlyMap<string, number>
 }
 
 function montarDashboard(consulta: MontarConsulta): DashboardData {
-  const { operacoes, linhasConsolidado, proventos, historico, valuation, cotacoesTesouro, cotacoesBrapi } = consulta
+  const { operacoes, linhasConsolidado, proventos, historico, valuation, cotacoesBrapi } = consulta
 
   const base: Omit<DashboardData, 'consolidado' | 'resumo' | 'cotacoes'> = {
     operacoes: [...operacoes],
@@ -159,22 +149,7 @@ function montarDashboard(consulta: MontarConsulta): DashboardData {
 
   const posicoes = calcularPosicoes(operacoes)
   const precoMercado = precosDoConsolidado(linhasConsolidado)
-  for (const [ticker, preco] of cotacoesTesouro) precoMercado.set(ticker, preco)
   const precoManual = precosManuaisDeOperacoes(operacoes)
-
-  // Tesouro Direto: a coluna `Preço Atual` da planilha é um **eco** do último
-  // valor gravado (não é uma cotação viva). Quando a API não trouxer preço,
-  // descartamos esse eco para que a **marcação manual** do usuário prevaleça
-  // (RF19/RNF04) — a cotação da API continua tendo prioridade quando existe.
-  for (const posicao of posicoes) {
-    if (
-      isTesouroDireto(posicao.categoria) &&
-      precoManual.has(posicao.ticker) &&
-      !cotacoesTesouro.has(posicao.ticker)
-    ) {
-      precoMercado.delete(posicao.ticker)
-    }
-  }
 
   const cotacoes = resolverCotacoes(
     montarEntradas(posicoes, precoMercado, precoManual, cotacoesBrapi),
@@ -201,11 +176,12 @@ export async function carregarDashboard(
   const proventos = proventosRepo.readCache(spreadsheetId) ?? []
   const historico = historicoRepo.readCache(spreadsheetId) ?? []
   const valuation = await carregarValuations(context, options.offline === true)
-  const cotacoesTesouro = await resolverCotacoesTesouro(operacoes, options.offline === true)
+  const config = await carregarConfiguracoes(context, options.offline === true)
   const cotacoesBrapi = await resolverCotacoesBrapi(
     operacoes,
     linhasConsolidado,
     options.offline === true,
+    config.brapiToken,
   )
 
   return montarDashboard({
@@ -214,7 +190,6 @@ export async function carregarDashboard(
     proventos,
     historico,
     valuation,
-    cotacoesTesouro,
     cotacoesBrapi,
   })
 }
@@ -234,31 +209,6 @@ async function carregarValuations(
   } catch {
     return valuationRepo.readCache(context.spreadsheetId) ?? []
   }
-}
-
-/**
- * Obtém as cotações do Tesouro (centavos) das posições abertas. No modo offline
- * usa apenas o cache local (RNF08); caso contrário, cache-first com fallback.
- */
-async function resolverCotacoesTesouro(
-  operacoes: readonly Operacao[],
-  offline: boolean,
-): Promise<Map<string, number>> {
-  const tickers = tickersTesouro(calcularPosicoes(operacoes))
-  const cotacoes = new Map<string, number>()
-  if (tickers.length === 0) return cotacoes
-
-  if (offline) {
-    for (const ticker of tickers) {
-      const cache = lerCotacaoCache(ticker)
-      if (cache) cotacoes.set(ticker, cache.preco)
-    }
-    return cotacoes
-  }
-
-  const resolvidas = await buscarCotacoesTesouro(tickers)
-  for (const [ticker, cotacao] of resolvidas) cotacoes.set(ticker, cotacao.preco)
-  return cotacoes
 }
 
 /** Posições B3 (Ação/FII/BDR/ETF) abertas sem preço no `GOOGLEFINANCE` da planilha. */
@@ -299,6 +249,7 @@ async function resolverCotacoesBrapi(
   operacoes: readonly Operacao[],
   linhasConsolidado: readonly Consolidado[],
   offline: boolean,
+  token: string,
 ): Promise<Map<string, number>> {
   const tickers = tickersBrapi(calcularPosicoes(operacoes), precosDoConsolidado(linhasConsolidado))
   if (tickers.length === 0) return new Map()
@@ -306,7 +257,7 @@ async function resolverCotacoesBrapi(
   if (offline) return cotacoesBrapiDoCache(operacoes, linhasConsolidado)
 
   const cotacoes = new Map<string, number>()
-  const resolvidas = await buscarCotacoesBrapi(tickers)
+  const resolvidas = await buscarCotacoesBrapi(tickers, { token })
   for (const [ticker, preco] of resolvidas) cotacoes.set(ticker, preco)
   return cotacoes
 }
@@ -320,12 +271,6 @@ export function lerDashboardDoCache(spreadsheetId: string): DashboardData | null
   const linhasConsolidado = consolidadoRepo.readCache(spreadsheetId)
   if (operacoes === null && linhasConsolidado === null) return null
 
-  const cotacoesTesouro = new Map<string, number>()
-  for (const ticker of tickersTesouro(calcularPosicoes(operacoes ?? []))) {
-    const cache = lerCotacaoCache(ticker)
-    if (cache) cotacoesTesouro.set(ticker, cache.preco)
-  }
-
   const cotacoesBrapi = cotacoesBrapiDoCache(operacoes ?? [], linhasConsolidado ?? [])
 
   return montarDashboard({
@@ -334,7 +279,6 @@ export function lerDashboardDoCache(spreadsheetId: string): DashboardData | null
     proventos: proventosRepo.readCache(spreadsheetId) ?? [],
     historico: historicoRepo.readCache(spreadsheetId) ?? [],
     valuation: valuationRepo.readCache(spreadsheetId) ?? [],
-    cotacoesTesouro,
     cotacoesBrapi,
   })
 }

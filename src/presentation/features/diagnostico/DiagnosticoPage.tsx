@@ -1,12 +1,12 @@
 import { CheckCircle2, Database, Loader2, RefreshCw, Stethoscope, Trash2, XCircle } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useAuth } from '@/app/providers/authContext'
-import { Alert } from '@/components/Alert'
-import { clearAllSheetCache } from '@/services/cache'
-import { runDataLayerDiagnostics } from '@/services/diagnostics'
-import type { DiagnosticReport } from '@/services/diagnostics'
-import { describeSheetsError } from '@/services/sheets'
+import { useAuth } from '@/presentation/app/providers/authContext'
+import { Alert } from '@/presentation/components/Alert'
+import { clearAllSheetCache } from '@/infrastructure/cache'
+import { runDataLayerDiagnostics } from '@/application/diagnostics'
+import type { DiagnosticReport } from '@/application/diagnostics'
+import { describeSheetsError } from '@/infrastructure/sheets/gateway'
 
 /**
  * Tela de teste/diagnóstico da camada de dados (Etapa 2).

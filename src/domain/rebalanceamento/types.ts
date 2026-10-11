@@ -1,4 +1,4 @@
-import type { CategoriaAtivo, Consolidado } from '@/types/domain'
+import type { CategoriaAtivo, Consolidado } from '@/domain/entities'
 
 /**
  * Tipos do módulo **puro** de rebalanceamento (Seções 5.2–5.7).

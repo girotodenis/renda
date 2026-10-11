@@ -1,22 +1,23 @@
 import { ExternalLink, Files, LayoutDashboard, Loader2, RefreshCw, Save } from 'lucide-react'
 import { lazy, Suspense, useCallback, useMemo, useState } from 'react'
-import { useAuth } from '@/app/providers/authContext'
-import { Alert } from '@/components/Alert'
-import { ErrorBoundary } from '@/components/ErrorBoundary'
-import { TrocarPlanilhaModal } from '@/features/auth/TrocarPlanilhaModal'
-import { WorkspaceSetup } from '@/features/auth/WorkspaceSetup'
-import { DetalheAtivoModal } from '@/features/dashboard/DetalheAtivoModal'
-import { NovaOperacaoModal } from '@/features/dashboard/NovaOperacaoModal'
-import { ResumoPatrimonial } from '@/features/dashboard/ResumoPatrimonial'
-import { TabelaAtivos } from '@/features/dashboard/TabelaAtivos'
-import { ValorManualModal } from '@/features/dashboard/ValorManualModal'
-import type { AlvoValorManual } from '@/features/dashboard/ValorManualModal'
-import { useDashboard } from '@/hooks/useDashboard'
-import { alocacaoPorAtivo, alocacaoPorCategoria, serieEvolucao, tickersParaNavegacao } from '@/lib/dashboard'
-import { precosManuaisDeOperacoes } from '@/lib/cotacoes'
-import { calcularDetalheAtivo } from '@/lib/detalheAtivo'
+import { useAuth } from '@/presentation/app/providers/authContext'
+import { Alert } from '@/presentation/components/Alert'
+import { ErrorBoundary } from '@/presentation/components/ErrorBoundary'
+import { TrocarPlanilhaModal } from '@/presentation/features/auth/TrocarPlanilhaModal'
+import { WorkspaceSetup } from '@/presentation/features/auth/WorkspaceSetup'
+import { DetalheAtivoModal } from '@/presentation/features/dashboard/DetalheAtivoModal'
+import { NovaOperacaoModal } from '@/presentation/features/dashboard/NovaOperacaoModal'
+import { ResumoPatrimonial } from '@/presentation/features/dashboard/ResumoPatrimonial'
+import { TabelaAtivos } from '@/presentation/features/dashboard/TabelaAtivos'
+import { ValorManualModal } from '@/presentation/features/dashboard/ValorManualModal'
+import type { AlvoValorManual } from '@/presentation/features/dashboard/ValorManualModal'
+import { useDashboard } from '@/presentation/hooks/useDashboard'
+import { alocacaoPorAtivo, alocacaoPorCategoria, serieEvolucao, tickersParaNavegacao } from '@/domain/dashboard'
+import { precosManuaisDeOperacoes } from '@/domain/cotacoes'
+import { toISO } from '@/domain/dates'
+import { calcularDetalheAtivo } from '@/domain/detalheAtivo'
 import { tickersComOportunidade } from '@/domain/valuation'
-import type { CategoriaAtivo } from '@/types/domain'
+import type { CategoriaAtivo } from '@/domain/entities'
 
 /**
  * Gráficos carregados sob demanda (lazy) para não inflar o bundle inicial com
@@ -24,12 +25,12 @@ import type { CategoriaAtivo } from '@/types/domain'
  * (RNF06).
  */
 const AlocacaoChart = lazy(() =>
-  import('@/features/dashboard/AlocacaoChart').then((modulo) => ({
+  import('@/presentation/features/dashboard/AlocacaoChart').then((modulo) => ({
     default: modulo.AlocacaoChart,
   })),
 )
 const EvolucaoChart = lazy(() =>
-  import('@/features/dashboard/EvolucaoChart').then((modulo) => ({
+  import('@/presentation/features/dashboard/EvolucaoChart').then((modulo) => ({
     default: modulo.EvolucaoChart,
   })),
 )
@@ -85,7 +86,13 @@ function DashboardContent() {
   const detalheAtivo = useMemo(
     () =>
       ativoSelecionado && data
-        ? calcularDetalheAtivo(ativoSelecionado, data.operacoes, data.proventos, data.consolidado)
+        ? calcularDetalheAtivo(
+            ativoSelecionado,
+            data.operacoes,
+            data.proventos,
+            data.consolidado,
+            toISO(new Date()),
+          )
         : null,
     [ativoSelecionado, data],
   )

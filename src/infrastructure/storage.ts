@@ -1,4 +1,4 @@
-import type { SpreadsheetWorkspace } from '@/types/auth'
+import type { SpreadsheetWorkspace } from '@/domain/workspace'
 
 /**
  * Persistência no navegador (RNF05): token OAuth, planilha selecionada e

@@ -1,4 +1,4 @@
-import type { CategoriaAtivo, MetaRebalanceamento, Operacao, Provento } from '@/types/domain'
+import type { CategoriaAtivo, MetaRebalanceamento, Operacao, Provento } from '@/domain/entities'
 
 /**
  * Troca de categoria de um ticker — módulo **puro** e testável.

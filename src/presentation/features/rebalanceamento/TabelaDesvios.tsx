@@ -1,8 +1,8 @@
 import { AlertTriangle, ArrowDownRight, ArrowUpRight, Minus } from 'lucide-react'
-import { categoriaLabel } from '@/lib/categoria'
-import { cn } from '@/lib/cn'
-import type { DesvioAtivo } from '@/lib/rebalanceamento'
-import { classeValor, formatarCentavos, formatarPercentual } from '@/features/dashboard/formatters'
+import { categoriaLabel } from '@/domain/categoria'
+import { cn } from '@/presentation/cn'
+import type { DesvioAtivo } from '@/domain/rebalanceamento'
+import { classeValor, formatarCentavos, formatarPercentual } from '@/presentation/features/dashboard/formatters'
 
 interface TabelaDesviosProps {
   desvios: DesvioAtivo[]

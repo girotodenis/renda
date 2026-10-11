@@ -1,4 +1,4 @@
-import { round2 } from '@/lib/money'
+import { round2 } from '@/domain/money'
 import type { AporteOpcoes, Carteira, ItemAporte, MetasPorTicker, PrecoTeto, AporteResult } from './types'
 
 /**

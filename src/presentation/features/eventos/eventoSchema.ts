@@ -1,10 +1,10 @@
 import { z } from 'zod'
-import { newId } from '@/lib/ids'
-import { parseDecimalBR } from '@/lib/money'
-import { eventoParaOperacao } from '@/lib/eventosCorporativos'
-import type { EventoCorporativo } from '@/lib/eventosCorporativos'
-import { CategoriaAtivo, EVENTO_CORPORATIVO_TIPOS, OperacaoTipo } from '@/types/domain'
-import type { Operacao } from '@/types/domain'
+import { newId } from '@/domain/ids'
+import { parseDecimalBR } from '@/domain/money'
+import { eventoParaOperacao } from '@/domain/eventosCorporativos'
+import type { EventoCorporativo } from '@/domain/eventosCorporativos'
+import { CategoriaAtivo, EVENTO_CORPORATIVO_TIPOS, OperacaoTipo } from '@/domain/entities'
+import type { Operacao } from '@/domain/entities'
 
 /**
  * Schema `zod` do formulário de evento corporativo (RF20, Seção 5.6).

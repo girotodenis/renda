@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useAuth } from '@/app/providers/authContext'
-import { carregarDashboard, lerDashboardDoCache } from '@/services/dashboard'
-import type { DashboardData } from '@/services/dashboard'
+import { useAuth } from '@/presentation/app/providers/authContext'
+import { carregarDashboard, lerDashboardDoCache } from '@/application/dashboard'
+import type { DashboardData } from '@/application/dashboard'
 import { persistirESincronizarCotacoesBrapi } from '@/application/brapi'
-import { jaTemSnapshotDeHoje, registrarSnapshot, upsertHistorico } from '@/services/historico'
-import type { RepositoryContext } from '@/services/repositories'
-import { describeSheetsError } from '@/services/sheets'
-import { useOnlineStatus } from '@/hooks/useOnlineStatus'
+import { jaTemSnapshotDeHoje, registrarSnapshot, upsertHistorico } from '@/application/historico'
+import type { RepositoryContext } from '@/infrastructure/repositories'
+import { describeSheetsError } from '@/infrastructure/sheets/gateway'
+import { useOnlineStatus } from '@/presentation/hooks/useOnlineStatus'
 
 /** Extrai os preços (centavos) dos tickers cuja cotação veio da Brapi (fallback). */
 function cotacoesBrapiDoDashboard(data: DashboardData): Map<string, number> {

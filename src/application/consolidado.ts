@@ -1,14 +1,12 @@
-import { aplicarPrecosAtuais, calcularPosicoes } from '@/lib/consolidado'
-import type { PrecosAtuais } from '@/lib/consolidado'
-import { isTesouroDireto } from '@/lib/categoria'
-import { precosManuaisDeOperacoes, precosPersistidosDeOperacoes } from '@/lib/cotacoes'
-import { buildConsolidadoRows, formulaSeparatorForLocale } from '@/lib/sheetFormulas'
-import { SHEET_HEADERS } from '@/lib/sheetsSchema'
-import { consolidadoRepo, operacoesRepo } from '@/services/repositories'
-import type { RepositoryContext } from '@/services/repositories'
-import { clearValues, columnLetter, getSpreadsheetLocale, updateValues } from '@/services/sheets'
-import { buscarCotacoesTesouro } from '@/services/tesouro'
-import type { Consolidado, Operacao } from '@/types/domain'
+import { aplicarPrecosAtuais, calcularPosicoes } from '@/domain/consolidado'
+import type { PrecosAtuais } from '@/domain/consolidado'
+import { precosManuaisDeOperacoes, precosPersistidosDeOperacoes } from '@/domain/cotacoes'
+import { buildConsolidadoRows, formulaSeparatorForLocale } from '@/infrastructure/sheets/sheetFormulas'
+import { SHEET_HEADERS } from '@/domain/sheetsSchema'
+import { consolidadoRepo, operacoesRepo } from '@/infrastructure/repositories'
+import type { RepositoryContext } from '@/infrastructure/repositories'
+import { clearValues, columnLetter, getSpreadsheetLocale, updateValues } from '@/infrastructure/sheets/gateway'
+import type { Consolidado, Operacao } from '@/domain/entities'
 
 /**
  * Materialização da aba `Consolidado` (Seção 5.1) via repositório.
@@ -28,7 +26,7 @@ const CONSOLIDADO_SHEET = 'Consolidado' as const
 export interface SyncConsolidadoOptions {
   /** Ignora o cache e relê as operações da API (refresh explícito). */
   forceRefreshOperacoes?: boolean
-  /** Cotações atuais em centavos (ex.: Tesouro Direto / preço manual). */
+  /** Cotações atuais em centavos (ex.: preço manual da carteira). */
   precosAtuais?: PrecosAtuais
 }
 
@@ -86,25 +84,18 @@ export async function syncConsolidado(
 }
 
 /**
- * Cotações para as classes sem `GOOGLEFINANCE` (RF19): Renda Fixa usa a
- * marcação a mercado manual (`Valor Bruto Atual`) e o Tesouro Direto usa a API
- * de dados abertos (cache-first). Falhas são ignoradas — o `writeConsolidado`
- * cai no preço médio como fallback (RNF04).
+ * Preços para as classes sem `GOOGLEFINANCE` (RF19): Renda Fixa e Tesouro Direto
+ * usam a marcação manual (`Valor Bruto Atual`) e os ativos B3 podem ter preço
+ * persistido via Brapi (fallback do `GOOGLEFINANCE`). Sem preço, o
+ * `writeConsolidado` cai no preço médio como fallback (RNF04).
  */
-async function precosDaCarteira(operacoes: readonly Operacao[]): Promise<Map<string, number>> {
+async function precosDaCarteira(
+  operacoes: readonly Operacao[],
+): Promise<Map<string, number>> {
   const precos = new Map<string, number>(precosManuaisDeOperacoes(operacoes))
 
   // B3 (Ação/FII/BDR/ETF): preço persistido via Brapi (fallback do GOOGLEFINANCE).
   for (const [ticker, preco] of precosPersistidosDeOperacoes(operacoes)) precos.set(ticker, preco)
-
-  const tickersTesouro = calcularPosicoes(operacoes)
-    .filter((posicao) => isTesouroDireto(posicao.categoria) && posicao.quantidadeAtual > 0)
-    .map((posicao) => posicao.ticker)
-
-  if (tickersTesouro.length > 0) {
-    const cotacoes = await buscarCotacoesTesouro(tickersTesouro)
-    for (const [ticker, cotacao] of cotacoes) precos.set(ticker, cotacao.preco)
-  }
 
   return precos
 }

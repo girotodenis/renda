@@ -1,21 +1,21 @@
 import { Loader2, RefreshCw, Scale } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useAuth } from '@/app/providers/authContext'
-import { Alert } from '@/components/Alert'
-import { WorkspaceSetup } from '@/features/auth/WorkspaceSetup'
-import { CalculadoraAporte } from '@/features/rebalanceamento/CalculadoraAporte'
-import { MetasForm } from '@/features/rebalanceamento/MetasForm'
-import { TabelaDesvios } from '@/features/rebalanceamento/TabelaDesvios'
-import { useRebalanceamento } from '@/hooks/useRebalanceamento'
+import { useAuth } from '@/presentation/app/providers/authContext'
+import { Alert } from '@/presentation/components/Alert'
+import { WorkspaceSetup } from '@/presentation/features/auth/WorkspaceSetup'
+import { CalculadoraAporte } from '@/presentation/features/rebalanceamento/CalculadoraAporte'
+import { MetasForm } from '@/presentation/features/rebalanceamento/MetasForm'
+import { TabelaDesvios } from '@/presentation/features/rebalanceamento/TabelaDesvios'
+import { useRebalanceamento } from '@/presentation/hooks/useRebalanceamento'
 import {
   calcularDesvios,
   completarConfigComCarteira,
   montarMetaInputs,
   normalizarMetas,
   precoTetoDeConfig,
-} from '@/lib/rebalanceamento'
-import type { ConfiguracaoMetas } from '@/lib/rebalanceamento'
+} from '@/domain/rebalanceamento'
+import type { ConfiguracaoMetas } from '@/domain/rebalanceamento'
 
 const CONFIG_VAZIA: ConfiguracaoMetas = { metasClasse: {}, itens: [] }
 

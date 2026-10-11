@@ -1,7 +1,7 @@
 import { KeyRound, Loader2, LogIn, ShieldCheck } from 'lucide-react'
-import { useAuth } from '@/app/providers/authContext'
-import { Alert } from '@/components/Alert'
-import { WorkspaceSetup } from '@/features/auth/WorkspaceSetup'
+import { useAuth } from '@/presentation/app/providers/authContext'
+import { Alert } from '@/presentation/components/Alert'
+import { WorkspaceSetup } from '@/presentation/features/auth/WorkspaceSetup'
 
 /**
  * Login OAuth 2.0 com o Google (RF01) e ponto de partida da configuração da

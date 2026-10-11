@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
-import { useAuth } from '@/app/providers/authContext'
-import { Modal } from '@/components/Modal'
+import { useAuth } from '@/presentation/app/providers/authContext'
+import { Modal } from '@/presentation/components/Modal'
 import { WorkspaceSetup } from './WorkspaceSetup'
 
 interface TrocarPlanilhaModalProps {

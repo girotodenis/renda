@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useAuth } from '@/app/providers/authContext'
+import { useAuth } from '@/presentation/app/providers/authContext'
 import { sincronizarPendentes } from '@/application/sync'
 import type { SyncResult } from '@/application/sync'
 import { useOnlineStatus } from './useOnlineStatus'

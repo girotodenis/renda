@@ -1,12 +1,12 @@
-import { round2 } from '@/lib/money'
-import type { ConfiguracaoMetas, ItemMetaConfig, MetasPorTicker } from '@/lib/rebalanceamento'
-import { CLASSE_MARKER, isLinhaDeClasse } from '@/lib/rebalanceamento'
-import { carregarDashboard } from '@/services/dashboard'
-import type { CarregarDashboardOptions } from '@/services/dashboard'
-import { metasRepo } from '@/services/repositories'
-import type { RepositoryContext } from '@/services/repositories'
-import type { Consolidado, MetaRebalanceamento } from '@/types/domain'
-import { CategoriaAtivo } from '@/types/domain'
+import { round2 } from '@/domain/money'
+import type { ConfiguracaoMetas, ItemMetaConfig, MetasPorTicker } from '@/domain/rebalanceamento'
+import { CLASSE_MARKER, isLinhaDeClasse } from '@/domain/rebalanceamento'
+import { carregarDashboard } from '@/application/dashboard'
+import type { CarregarDashboardOptions } from '@/application/dashboard'
+import { metasRepo } from '@/infrastructure/repositories'
+import type { RepositoryContext } from '@/infrastructure/repositories'
+import type { Consolidado, MetaRebalanceamento } from '@/domain/entities'
+import { CategoriaAtivo } from '@/domain/entities'
 
 /**
  * Acesso à configuração de rebalanceamento (aba `Metas_Rebalanceamento`).

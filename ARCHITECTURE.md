@@ -11,7 +11,7 @@ funcionais da especificação (RF01–RF23, RNF02–RNF08).
 src/
 ├── domain/            # Núcleo: entidades, objetos de valor, serviços de domínio e ports
 ├── application/       # Casos de uso (orquestração), sem UI nem detalhes de infra
-├── infrastructure/    # Adaptadores: Google Sheets/Drive/Identity, storage, cache, Tesouro
+├── infrastructure/    # Adaptadores: Google Sheets/Drive/Identity, storage, cache
 └── presentation/      # UI React: app, features, components, hooks
 ```
 
@@ -85,7 +85,6 @@ domínio:
 
 - `sheets/gateway.ts` — Google Sheets API v4 (RF01–RF06).
 - `drive.ts`, `googleIdentity.ts`, `googleConfig.ts` — Google Picker e OAuth.
-- `tesouro.ts` — cotações do Tesouro Direto (cache + fallback, RF19).
 - `brapi.ts` — fallback de cotação B3 (cache-first, nunca lança).
 - `storage.ts` — `localStorage` para token/workspace/consent (RNF05).
 - `db.ts` + `kvStore.ts` — IndexedDB (stores `sheets`/`outbox`) com espelho em

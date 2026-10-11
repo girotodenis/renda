@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { CategoriaAtivo } from '@/types/domain'
-import type { Consolidado, Valuation } from '@/types/domain'
+import { CategoriaAtivo } from '@/domain/entities'
+import type { Consolidado, Valuation } from '@/domain/entities'
 import {
   limiteDeCompra,
   oportunidadeDeCompra,

@@ -1,15 +1,15 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Loader2 } from 'lucide-react'
 import { useForm } from 'react-hook-form'
-import { FormField, inputClassName } from '@/components/FormField'
-import { CATEGORIA_ATIVO_LABELS, isRendaFixa } from '@/lib/categoria'
-import type { Operacao } from '@/types/domain'
-import { CategoriaAtivo, IndexadorRendaFixa, OPERACAO_MOVIMENTO_TIPOS, OperacaoTipo } from '@/types/domain'
+import { FormField, inputClassName } from '@/presentation/components/FormField'
+import { CATEGORIA_ATIVO_LABELS, isRendaFixa } from '@/domain/categoria'
+import type { Operacao } from '@/domain/entities'
+import { CategoriaAtivo, IndexadorRendaFixa, OPERACAO_MOVIMENTO_TIPOS, OperacaoTipo } from '@/domain/entities'
 import {
   operacaoFormDefaults,
   operacaoFormSchema,
-} from '@/features/operacoes/operacaoSchema'
-import type { OperacaoFormInput, OperacaoFormOutput } from '@/features/operacoes/operacaoSchema'
+} from '@/presentation/features/operacoes/operacaoSchema'
+import type { OperacaoFormInput, OperacaoFormOutput } from '@/presentation/features/operacoes/operacaoSchema'
 
 interface OperacaoFormProps {
   /** Operação em edição (`undefined` = novo lançamento). */

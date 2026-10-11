@@ -1,8 +1,8 @@
-import { ArrowLeftRight, Coins, FileUp, Layers, LayoutDashboard, LogIn, LogOut, Scale, Stethoscope, Wallet, WifiOff } from 'lucide-react'
+import { ArrowLeftRight, Coins, FileUp, Layers, LayoutDashboard, LogIn, LogOut, Scale, Settings, Stethoscope, Wallet, WifiOff } from 'lucide-react'
 import { NavLink, Outlet } from 'react-router-dom'
-import { useAuth } from '@/app/providers/authContext'
-import { cn } from '@/lib/cn'
-import { useOnlineStatus } from '@/hooks/useOnlineStatus'
+import { useAuth } from '@/presentation/app/providers/authContext'
+import { cn } from '@/presentation/cn'
+import { useOnlineStatus } from '@/presentation/hooks/useOnlineStatus'
 import { SyncStatusBadge } from '@/presentation/components/SyncStatusBadge'
 import { useSyncStatus } from '@/presentation/hooks/useSyncStatus'
 
@@ -24,6 +24,7 @@ export function AppLayout() {
         { to: '/importar-b3', label: 'Importar B3', icon: FileUp, end: false },
         { to: '/rebalanceamento', label: 'Rebalanceamento', icon: Scale, end: false },
         { to: '/diagnostico', label: 'Diagnóstico', icon: Stethoscope, end: false },
+        { to: '/configuracoes', label: 'Configurações', icon: Settings, end: false },
       ] as const)
     : ([
         { to: '/', label: 'Início', icon: Wallet, end: true },

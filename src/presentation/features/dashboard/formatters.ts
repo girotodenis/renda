@@ -1,5 +1,5 @@
-import { cn } from '@/lib/cn'
-import { formatarBRL, fromCentavos } from '@/lib/money'
+import { cn } from '@/presentation/cn'
+import { formatarBRL, fromCentavos } from '@/domain/money'
 
 /** Formatadores de exibição do dashboard (pt-BR / BRL). */
 

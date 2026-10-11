@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useAuth } from '@/app/providers/authContext'
-import { montarMetaInputs, normalizarMetas } from '@/lib/rebalanceamento'
-import type { ConfiguracaoMetas } from '@/lib/rebalanceamento'
+import { useAuth } from '@/presentation/app/providers/authContext'
+import { montarMetaInputs, normalizarMetas } from '@/domain/rebalanceamento'
+import type { ConfiguracaoMetas } from '@/domain/rebalanceamento'
 import {
   carregarRebalanceamento,
   salvarConfigRebalanceamento,
-} from '@/services/rebalanceamento'
-import type { RebalanceamentoData } from '@/services/rebalanceamento'
-import type { RepositoryContext } from '@/services/repositories'
-import { describeSheetsError } from '@/services/sheets'
+} from '@/application/rebalanceamento'
+import type { RebalanceamentoData } from '@/application/rebalanceamento'
+import type { RepositoryContext } from '@/infrastructure/repositories'
+import { describeSheetsError } from '@/infrastructure/sheets/gateway'
 
 /** Estado e ações expostas pelo hook de rebalanceamento. */
 export interface UseRebalanceamentoResult {

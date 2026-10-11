@@ -1,7 +1,7 @@
 import { X } from 'lucide-react'
 import { useEffect, useId, useRef } from 'react'
 import type { ReactNode } from 'react'
-import { cn } from '@/lib/cn'
+import { cn } from '@/presentation/cn'
 
 interface ModalProps {
   /** Controla a visibilidade (`false` não renderiza nada). */

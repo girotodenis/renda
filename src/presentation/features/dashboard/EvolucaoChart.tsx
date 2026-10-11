@@ -8,8 +8,8 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import type { EvolucaoPonto } from '@/lib/dashboard'
-import { formatarCentavos, formatarCentavosCompacto } from '@/features/dashboard/formatters'
+import type { EvolucaoPonto } from '@/domain/dashboard'
+import { formatarCentavos, formatarCentavosCompacto } from '@/presentation/features/dashboard/formatters'
 
 interface EvolucaoChartProps {
   serie: EvolucaoPonto[]

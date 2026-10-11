@@ -1,5 +1,5 @@
-import { loadScript } from '@/lib/loadScript'
-import { googleConfig, MISSING_PICKER_KEY_MESSAGE } from '@/services/googleConfig'
+import { loadScript } from '@/infrastructure/loadScript'
+import { googleConfig, MISSING_PICKER_KEY_MESSAGE } from '@/infrastructure/googleConfig'
 
 /**
  * Google Drive — seleção de planilha existente via Google Picker (RF02).

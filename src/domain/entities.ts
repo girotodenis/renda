@@ -187,3 +187,17 @@ export interface Snapshot {
   /** Lucro acumulado em **centavos**. */
   lucroAcumulado: number
 }
+
+/**
+ * Parâmetro de configuração persistido na aba `Configuracoes` (chave/valor).
+ *
+ * Guarda ajustes do usuário **na própria planilha** (em vez de variáveis de
+ * ambiente), como o token da Brapi. As chaves canônicas vivem em
+ * `domain/configuracoes.ts` (`CONFIG_CHAVES`).
+ */
+export interface Configuracao {
+  /** Identificador estável do parâmetro (ver `CONFIG_CHAVES`). */
+  chave: string
+  /** Valor textual do parâmetro (`''` = não configurado). */
+  valor: string
+}

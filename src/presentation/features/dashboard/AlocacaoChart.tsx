@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
-import { cn } from '@/lib/cn'
-import type { AlocacaoItem } from '@/lib/dashboard'
-import { formatarCentavos, formatarPercentual } from '@/features/dashboard/formatters'
+import { cn } from '@/presentation/cn'
+import type { AlocacaoItem } from '@/domain/dashboard'
+import { formatarCentavos, formatarPercentual } from '@/presentation/features/dashboard/formatters'
 
 /** Paleta usada nos gráficos (consistente entre as séries). */
 const CORES = [

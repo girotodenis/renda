@@ -1,4 +1,4 @@
-import type { SheetName } from '@/lib/sheetsSchema'
+import type { SheetName } from '@/domain/sheetsSchema'
 
 /** Mapa do `sheetId` (ID interno da aba no Google Sheets) por nome de aba. */
 export type SheetIdMap = Record<SheetName, number>

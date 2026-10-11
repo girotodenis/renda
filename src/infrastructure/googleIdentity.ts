@@ -1,5 +1,5 @@
-import { loadScript } from '@/lib/loadScript'
-import type { StoredToken } from '@/lib/storage'
+import { loadScript } from '@/infrastructure/loadScript'
+import type { StoredToken } from '@/infrastructure/storage'
 
 /**
  * Google Identity Services (GIS) — OAuth 2.0 (RF01, RNF05).

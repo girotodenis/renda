@@ -1,6 +1,6 @@
 import { AlertTriangle, CheckCircle2, Info } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { cn } from '@/lib/cn'
+import { cn } from '@/presentation/cn'
 
 export type AlertVariant = 'error' | 'info' | 'success'
 

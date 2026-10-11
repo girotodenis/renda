@@ -3,9 +3,9 @@ import {
   atualizarCategoriaDeOperacoes,
   atualizarCategoriaDeProventos,
 } from '@/domain/trocaCategoria'
-import { metasRepo, operacoesRepo, proventosRepo } from '@/services/repositories'
-import type { RepositoryContext } from '@/services/repositories'
-import type { CategoriaAtivo, Operacao } from '@/types/domain'
+import { metasRepo, operacoesRepo, proventosRepo } from '@/infrastructure/repositories'
+import type { RepositoryContext } from '@/infrastructure/repositories'
+import type { CategoriaAtivo, Operacao } from '@/domain/entities'
 
 /**
  * Casos de uso de escrita sobre as abas que guardam categoria por ticker

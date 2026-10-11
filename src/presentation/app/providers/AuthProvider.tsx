@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { AuthContext } from '@/app/providers/authContext'
-import type { AuthContextValue } from '@/app/providers/authContext'
-import { isOnline } from '@/infrastructure/outbox'
-import { consentStorage, tokenStorage, workspaceStorage } from '@/lib/storage'
-import type { StoredToken } from '@/lib/storage'
-import { GooglePickerError, pickSpreadsheet } from '@/services/drive'
+import { AuthContext } from '@/presentation/app/providers/authContext'
+import type { AuthContextValue } from '@/presentation/app/providers/authContext'
+import { isOnline } from '@/application/online'
+import { consentStorage, tokenStorage, workspaceStorage } from '@/infrastructure/storage'
+import type { StoredToken } from '@/infrastructure/storage'
+import { GooglePickerError, pickSpreadsheet } from '@/infrastructure/drive'
 import {
   GOOGLE_SCOPES,
   googleConfig,
@@ -13,7 +13,7 @@ import {
   isSpreadsheetPickerConfigured,
   MISSING_CLIENT_ID_MESSAGE,
   MISSING_PICKER_KEY_MESSAGE,
-} from '@/services/googleConfig'
+} from '@/infrastructure/googleConfig'
 import {
   GoogleAuthError,
   isTokenValid,
@@ -22,13 +22,13 @@ import {
   revokeAccessToken,
   TOKEN_REFRESH_MARGIN_MS,
   toStoredToken,
-} from '@/services/googleIdentity'
+} from '@/infrastructure/googleIdentity'
 import {
   createDefaultSpreadsheet,
   loadSpreadsheetWorkspace,
   SheetsApiError,
-} from '@/services/sheets'
-import type { AuthStatus, SpreadsheetWorkspace } from '@/types/auth'
+} from '@/infrastructure/sheets/gateway'
+import type { AuthStatus, SpreadsheetWorkspace } from '@/domain/workspace'
 
 interface AuthProviderProps {
   children: ReactNode

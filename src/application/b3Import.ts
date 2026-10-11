@@ -1,7 +1,7 @@
-import type { B3ParseResult } from '@/lib/b3Import'
-import { operacoesRepo, proventosRepo } from '@/services/repositories'
-import type { RepositoryContext } from '@/services/repositories'
-import type { Operacao, Provento } from '@/types/domain'
+import type { B3ParseResult } from '@/domain/b3Import'
+import { operacoesRepo, proventosRepo } from '@/infrastructure/repositories'
+import type { RepositoryContext } from '@/infrastructure/repositories'
+import type { Operacao, Provento } from '@/domain/entities'
 
 /**
  * Grava os dados analisados dos extratos B3 nas abas `Proventos` e `Operacoes`

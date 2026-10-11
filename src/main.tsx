@@ -1,8 +1,9 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { registerSW } from 'virtual:pwa-register'
-import { App } from '@/app/App'
+import { App } from '@/presentation/app/App'
 import { ensureHydrated } from '@/infrastructure/kvStore'
+import { initAnalytics } from '@/infrastructure/analytics'
 import '@/index.css'
 
 // Service worker apenas em build de produção (em dev o `virtual:pwa-register`
@@ -18,6 +19,8 @@ registerSW({ immediate: true })
  * falha, seguimos com o espelho vazio (o app funciona com cache frio).
  */
 async function bootstrap(): Promise<void> {
+  initAnalytics()
+
   try {
     await ensureHydrated()
   } catch {

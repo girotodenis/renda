@@ -1,8 +1,8 @@
 import { z } from 'zod'
-import { isRendaFixa, permiteMarcacaoManual } from '@/lib/categoria'
-import { formatMoneyInput, parseBRL, parseDecimalBR, toCentavos } from '@/lib/money'
-import { CategoriaAtivo, IndexadorRendaFixa, OPERACAO_MOVIMENTO_TIPOS, OperacaoTipo } from '@/types/domain'
-import type { Operacao } from '@/types/domain'
+import { isRendaFixa, permiteMarcacaoManual } from '@/domain/categoria'
+import { formatMoneyInput, parseBRL, parseDecimalBR, toCentavos } from '@/domain/money'
+import { CategoriaAtivo, IndexadorRendaFixa, OPERACAO_MOVIMENTO_TIPOS, OperacaoTipo } from '@/domain/entities'
+import type { Operacao } from '@/domain/entities'
 
 /**
  * Schema `zod` do formulário de operação (compra/venda) — RF04.

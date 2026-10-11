@@ -1,30 +1,30 @@
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react'
-import { useAuth } from '@/app/providers/authContext'
-import { Alert } from '@/components/Alert'
-import { Modal } from '@/components/Modal'
-import { CATEGORIA_ATIVO_LABELS, categoriaLabel } from '@/lib/categoria'
-import { cn } from '@/lib/cn'
-import { formatarDataBR } from '@/lib/dates'
-import type { DetalheAtivo } from '@/lib/detalheAtivo'
-import { eventosDeOperacoes, isTipoEventoCorporativo } from '@/lib/eventosCorporativos'
+import { useAuth } from '@/presentation/app/providers/authContext'
+import { Alert } from '@/presentation/components/Alert'
+import { Modal } from '@/presentation/components/Modal'
+import { CATEGORIA_ATIVO_LABELS, categoriaLabel } from '@/domain/categoria'
+import { cn } from '@/presentation/cn'
+import { formatarDataBR } from '@/domain/dates'
+import type { DetalheAtivo } from '@/domain/detalheAtivo'
+import { eventosDeOperacoes, isTipoEventoCorporativo } from '@/domain/eventosCorporativos'
 import { alterarCategoriaDoTicker } from '@/application/operacoes'
 import type { ResultadoTrocaCategoria } from '@/application/operacoes'
 import { oportunidadeDeCompra } from '@/domain/valuation'
-import { classeValor, formatarCentavos, formatarPercentual } from '@/features/dashboard/formatters'
-import type { RepositoryContext } from '@/services/repositories'
-import { describeSheetsError } from '@/services/sheets'
-import { CategoriaAtivo } from '@/types/domain'
-import type { Operacao, Provento, Valuation } from '@/types/domain'
+import { classeValor, formatarCentavos, formatarPercentual } from '@/presentation/features/dashboard/formatters'
+import type { RepositoryContext } from '@/infrastructure/repositories'
+import { describeSheetsError } from '@/infrastructure/sheets/gateway'
+import { CategoriaAtivo } from '@/domain/entities'
+import type { Operacao, Provento, Valuation } from '@/domain/entities'
 import { DetalheAtivoEventos } from './DetalheAtivoEventos'
 import { DetalheAtivoOperacoes } from './DetalheAtivoOperacoes'
 import { DetalheAtivoProventos } from './DetalheAtivoProventos'
 import { DetalheAtivoValuation } from './DetalheAtivoValuation'
-import { sincronizarConsolidadoESnapshot } from './escritasAtivo'
+import { sincronizarConsolidadoESnapshot } from '@/application/escritasAtivo'
 
 /** Gráficos carregados sob demanda (Recharts fora do bundle inicial — RNF06). */
 const DetalheAtivoGraficos = lazy(() =>
-  import('@/features/dashboard/DetalheAtivoGraficos').then((modulo) => ({
+  import('@/presentation/features/dashboard/DetalheAtivoGraficos').then((modulo) => ({
     default: modulo.DetalheAtivoGraficos,
   })),
 )

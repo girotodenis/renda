@@ -1,6 +1,6 @@
-import { round2 } from '@/lib/money'
-import { EVENTO_CORPORATIVO_TIPOS, OperacaoTipo } from '@/types/domain'
-import type { CategoriaAtivo, EventoCorporativoTipo, Operacao } from '@/types/domain'
+import { round2 } from '@/domain/money'
+import { EVENTO_CORPORATIVO_TIPOS, OperacaoTipo } from '@/domain/entities'
+import type { CategoriaAtivo, EventoCorporativoTipo, Operacao } from '@/domain/entities'
 
 /**
  * Eventos corporativos (RF20, Seção 5.6) — módulo **puro** e testável.

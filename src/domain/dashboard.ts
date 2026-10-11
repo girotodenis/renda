@@ -1,8 +1,8 @@
-import { categoriaLabel } from '@/lib/categoria'
-import { formatarDataBR, formatarMesAnoBR } from '@/lib/dates'
-import { round2 } from '@/lib/money'
-import { CategoriaAtivo } from '@/types/domain'
-import type { Consolidado, Provento, Snapshot } from '@/types/domain'
+import { categoriaLabel } from '@/domain/categoria'
+import { formatarDataBR, formatarMesAnoBR } from '@/domain/dates'
+import { round2 } from '@/domain/money'
+import { CategoriaAtivo } from '@/domain/entities'
+import type { Consolidado, Provento, Snapshot } from '@/domain/entities'
 
 /**
  * Agregações do dashboard (RF07–RF11) — módulo **puro** e testável.
