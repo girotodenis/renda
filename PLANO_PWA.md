@@ -4,8 +4,8 @@
 > offline e, ao reconectar, sincronize as alterações com a planilha do Google.
 >
 > **Data de criação:** 2026-10-10
-> **Última atualização:** 2026-10-10 (Fase 2 concluída)
-> **Estado geral:** `em andamento` — Fases 0, 1 e 2 concluídas; próximas fases pendentes.
+> **Última atualização:** 2026-10-11 (Fase 3 concluída)
+> **Estado geral:** `em andamento` — Fases 0, 1, 2 e 3 concluídas; próximas fases pendentes.
 
 ---
 
@@ -34,7 +34,7 @@
 | Fase 0 | PWA instalável + shell offline (manifest/SW/ícones) | `[x]` concluída | 2026-10-10 |
 | Fase 1 | Repositórios offline (outbox + atualização otimista) | `[x]` concluída | 2026-10-10 |
 | Fase 2 | Sincronização automática (flush + Consolidado) | `[x]` concluída | 2026-10-10 |
-| Fase 3 | Auth resiliente offline | `[ ]` pendente | — |
+| Fase 3 | Auth resiliente offline | `[x]` concluída | 2026-10-11 |
 | Fase 4 | UX de sincronização (badge/contador/botão) | `[ ]` pendente | — |
 | Fase 5 | Melhorias opcionais (IndexedDB, Periodic Sync, tabs) | `[ ]` pendente | — |
 
@@ -531,10 +531,85 @@ npm run preview   # manual: expirar token, desligar rede, usar app, religar
 ```
 
 ### Estado
-- [ ] pendente
+- [x] concluída em 2026-10-11
 
 ### Notas/Desvios
-— (preencher ao executar)
+
+**Arquivos realmente alterados** (`git status`):
+
+- `src/presentation/app/providers/AuthProvider.tsx` — `silentRefresh`
+  (ramo de catch), `ensureAccessToken`, novo listener de `window.online` e
+  comentário no `logout`. Nenhuma assinatura pública do `AuthContext` mudou.
+- `PLANO_PWA.md` — estado e notas.
+
+**Decisões tomadas:**
+
+- **Como distinguir “falta de rede” de “falha real” em `silentRefresh`:** a
+  chamada que falha ali é `requestAccessToken` (Google Identity Services), que
+  lança `GoogleAuthError` (ou erro de `loadScript`) — **não** `SheetsApiError`,
+  logo **não há `status`** para inspecionar. A detecção de offline usa
+  `isOnline()` do outbox (`navigator.onLine !== false`; ambientes sem `navigator`
+  → online), conforme o PONTO CRÍTICO do prompt. `isOnline()` foi preferido a
+  `navigator.onLine` puro por centralizar a regra “navigator ausente = online”.
+- **Ramo de “manter sessão” unificado:** a condição ficou
+  `stored && (!isOnline() || isTokenValid(stored, 0))`. A parte
+  `isTokenValid(stored, 0)` preserva o comportamento transitório pré-existente
+  (token ainda válido, porém dentro da margem de renovação); a parte
+  `!isOnline()` cobre o token **expirado** offline. Em ambos os casos a sessão é
+  mantida, `tokenRef`/`accessToken` recebem o token armazenado e
+  `scheduleRefreshIn(TOKEN_REFRESH_RETRY_MS)` (60 s) reagenda a tentativa.
+  Falha real (consentimento revogado, popup fechado, erro do GIS) continua
+  limpando token/estado e indo para `'unauthenticated'`.
+- **`status = 'authenticated'` no ramo de sessão mantida:** antes o ramo
+  transitório não tocava em `status`; passou a setar `'authenticated'` (exigido
+  pela tarefa). Isso também evita que o app fique preso em `'loading'` quando o
+  bootstrap (consent + token inválido) mantém a sessão.
+- **`ensureAccessToken` offline:** se o token armazenado ainda é válido, usa-o
+  (como antes); se está expirado **e** offline, devolve o token armazenado mesmo
+  expirado **sem** chamar `silentRefresh` (não há API a autorizar: escrita →
+  outbox, leitura → cache). Sem token armazenado, devolve `null` (não inventa
+  sessão). Online, o fluxo permanece intacto.
+- **Listener de `window.online` no provider:** dispara `silentRefresh` apenas
+  quando há token persistido (`tokenStorage.load()`), evitando transições
+  espúrias para `'unauthenticated'` em usuários sem login. O flush da fila
+  continua a cargo da `useSync` (reage ao mesmo evento e chama
+  `ensureAccessToken`) — **nenhuma** lógica de sync foi alterada.
+- **`logout` offline:** nenhuma mudança de comportamento foi necessária. A
+  revogação (`revokeAccessToken`) já está em `try/catch` e a limpeza local
+  (`token`/`workspace`/`consent` + estado) sempre executa, mesmo sem rede; só o
+  comentário foi explicitado. Nenhuma chamada de rede é pré-condição do logout.
+- **Sem novo teste automatizado:** o projeto **não** possui teste de auth e o
+  ambiente de testes é `node` (`vitest.config.ts`: `environment: 'node'`,
+  `include: ['src/**/*.test.ts']`), sem `@testing-library/react` — testar o
+  provider exigiria novas dependências e mudança de config, fora do escopo.
+  Seguindo a instrução da fase, o fluxo foi validado sem teste automatizado
+  (ver abaixo).
+
+**Validação executada (2026-10-11):**
+
+- `npm run typecheck` — ok.
+- `npm test -- --run` — **180 testes / 16 arquivos**, todos verdes (nenhum teste
+  novo; nenhum regrediu).
+- `npm run lint` — ok.
+- `npm run build` — ok; `dist/sw.js` + `dist/workbox-*.js` + 16 entradas de
+  precache (~998 KiB).
+- `npm run preview` (porta 4173) + smoke test no navegador: o app shell carrega;
+  com a rede desligada e recarregando, o shell abre integralmente e o provider
+  inicializa **sem erros de console**; ao religar a rede, recarrega sem erros.
+- **Validação manual do fluxo offline × auth (roteiro reproduzível):** este
+  ambiente não possui `VITE_GOOGLE_CLIENT_ID` (só `.env.example`), então não é
+  possível executar um login Google real aqui. O roteiro manual é: entrar com a
+  conta Google, selecionar/criar a planilha, deixar o token expirar, **desligar
+  a rede** e abrir o app → o dashboard carrega do cache e segue utilizável (não
+  desloga); **religar a rede** → o evento `online` renova o token e a `useSync`
+  esvazia o outbox **sem novo login**. O `logout` offline limpa
+  token/workspace/consent e volta ao login.
+
+**Desvios do plano:**
+
+- Nada de estrutural. O listener de `window.online` foi adicionado dentro do
+  próprio `AuthProvider` (sem criar arquivo novo). Não foi criado teste de auth
+  (justificado acima). Nenhuma fase além da Fase 3 foi tocada.
 
 ---
 
