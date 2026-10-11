@@ -47,7 +47,6 @@ Acompanhe sua carteira de investimentos direto do navegador, usando **sua planil
    - `VITE_GOOGLE_CLIENT_ID` — **obrigatório** (OAuth 2.0)
    - `VITE_GOOGLE_PICKER_API_KEY` — opcional (selecionar uma planilha existente)
    - `VITE_GOOGLE_PROJECT_NUMBER` — opcional (usado como `appId` do Picker)
-   - `VITE_TESOURO_API_URL` — opcional (endpoint alternativo de cotações do Tesouro)
    - `VITE_BRAPI_TOKEN` — opcional (fallback de cotação B3 quando o `GOOGLEFINANCE` falha)
 
 3. Rode o servidor de desenvolvimento:

@@ -5,7 +5,7 @@ import { clearStorageKeys, readStorageJson, writeStorageJson } from '@/lib/stora
  * Cotação de **B3 (Ação/FII/BDR/ETF)** via Brapi.dev, usada como **fallback**
  * quando o `GOOGLEFINANCE` da planilha não retorna preço (RNF04).
  *
- * Estratégia (espelha o adaptador do Tesouro Direto):
+ * Estratégia:
  * - Cache local com TTL (cotações mudam intradia, então TTL curto).
  * - Uma requisição por ticker (o plano gratuito da Brapi limita a 1 ativo por chamada).
  * - **Qualquer falha** (rede, CORS, token ausente, formato inesperado) resulta

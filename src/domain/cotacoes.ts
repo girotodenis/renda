@@ -1,4 +1,4 @@
-import { isRendaFixa, isTesouroDireto, permiteMarcacaoManual, usaGoogFinance } from '@/lib/categoria'
+import { permiteMarcacaoManual, usaGoogFinance } from '@/lib/categoria'
 import type { CategoriaAtivo, Operacao } from '@/types/domain'
 
 /**
@@ -10,12 +10,11 @@ import type { CategoriaAtivo, Operacao } from '@/types/domain'
  *
  * Ordem de preferência:
  * - Ação/FII/BDR/ETF: `GOOGLEFINANCE` (planilha) → Brapi (fallback) → preço médio.
- * - Tesouro Direto: API de dados abertos → marcação manual → indisponível.
- * - Renda Fixa: marcação a mercado manual → estimativa → indisponível.
+ * - Tesouro Direto e Renda Fixa: marcação manual → estimativa → indisponível.
  */
 
 /** Fonte do preço atual de um ativo. */
-export type FonteCotacao = 'googlefinance' | 'brapi' | 'tesouro' | 'manual' | 'estimada'
+export type FonteCotacao = 'googlefinance' | 'brapi' | 'manual' | 'estimada'
 
 /** Estado da cotação exibido na UI. */
 export type StatusCotacao = 'disponivel' | 'manual' | 'estimada' | 'indisponivel'
@@ -26,7 +25,7 @@ export interface EntradaCotacao {
   categoria: CategoriaAtivo
   /** Preço médio em **centavos** (fallback quando não há cotação). */
   precoMedio: number
-  /** Preço de mercado em **centavos** (GOOGLEFINANCE ou API TD); `null` se ausente. */
+  /** Preço de mercado em **centavos** (GOOGLEFINANCE ou último preço conhecido); `null` se ausente. */
   precoMercado: number | null
   /** Preço de mercado em **centavos** (Brapi); `null` se ausente (fallback do GOOGLEFINANCE). */
   precoBrapi?: number | null
@@ -110,30 +109,10 @@ export function resolverCotacao(entrada: EntradaCotacao): CotacaoResolvida {
         atualizadoEm,
       }
     }
-  } else if (isTesouroDireto(categoria)) {
-    if (precoValido(mercado)) {
-      return {
-        ticker,
-        categoria,
-        precoAtual: mercado,
-        fonte: 'tesouro',
-        status: 'disponivel',
-        usandoFallback: false,
-        atualizadoEm,
-      }
-    }
-    if (precoValido(precoManual)) {
-      return {
-        ticker,
-        categoria,
-        precoAtual: precoManual,
-        fonte: 'manual',
-        status: 'manual',
-        usandoFallback: false,
-        atualizadoEm,
-      }
-    }
-  } else if (isRendaFixa(categoria)) {
+  } else if (permiteMarcacaoManual(categoria)) {
+    // Renda Fixa e Tesouro Direto são marcados manualmente (RF19): o valor
+    // informado pelo usuário tem prioridade; na ausência, usamos o último
+    // preço conhecido (planilha) como estimativa.
     if (precoValido(precoManual)) {
       return {
         ticker,

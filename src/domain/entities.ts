@@ -192,8 +192,8 @@ export interface Snapshot {
  * Parâmetro de configuração persistido na aba `Configuracoes` (chave/valor).
  *
  * Guarda ajustes do usuário **na própria planilha** (em vez de variáveis de
- * ambiente), como o token da Brapi e o endpoint de cotações do Tesouro. As
- * chaves canônicas vivem em `domain/configuracoes.ts` (`CONFIG_CHAVES`).
+ * ambiente), como o token da Brapi. As chaves canônicas vivem em
+ * `domain/configuracoes.ts` (`CONFIG_CHAVES`).
  */
 export interface Configuracao {
   /** Identificador estável do parâmetro (ver `CONFIG_CHAVES`). */

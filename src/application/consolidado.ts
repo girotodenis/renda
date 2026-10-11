@@ -1,14 +1,11 @@
 import { aplicarPrecosAtuais, calcularPosicoes } from '@/lib/consolidado'
 import type { PrecosAtuais } from '@/lib/consolidado'
-import { isTesouroDireto } from '@/lib/categoria'
 import { precosManuaisDeOperacoes, precosPersistidosDeOperacoes } from '@/lib/cotacoes'
 import { buildConsolidadoRows, formulaSeparatorForLocale } from '@/lib/sheetFormulas'
 import { SHEET_HEADERS } from '@/lib/sheetsSchema'
 import { consolidadoRepo, operacoesRepo } from '@/services/repositories'
 import type { RepositoryContext } from '@/services/repositories'
 import { clearValues, columnLetter, getSpreadsheetLocale, updateValues } from '@/services/sheets'
-import { buscarCotacoesTesouro } from '@/services/tesouro'
-import { carregarConfiguracoes } from '@/services/configuracoes'
 import type { Consolidado, Operacao } from '@/types/domain'
 
 /**
@@ -29,7 +26,7 @@ const CONSOLIDADO_SHEET = 'Consolidado' as const
 export interface SyncConsolidadoOptions {
   /** Ignora o cache e relê as operações da API (refresh explícito). */
   forceRefreshOperacoes?: boolean
-  /** Cotações atuais em centavos (ex.: Tesouro Direto / preço manual). */
+  /** Cotações atuais em centavos (ex.: preço manual da carteira). */
   precosAtuais?: PrecosAtuais
 }
 
@@ -82,34 +79,23 @@ export async function syncConsolidado(
   const operacoes = await operacoesRepo.list(context, {
     forceRefresh: options.forceRefreshOperacoes,
   })
-  const precosAtuais = options.precosAtuais ?? (await precosDaCarteira(context, operacoes))
+  const precosAtuais = options.precosAtuais ?? (await precosDaCarteira(operacoes))
   return writeConsolidado(context, operacoes, precosAtuais)
 }
 
 /**
- * Cotações para as classes sem `GOOGLEFINANCE` (RF19): Renda Fixa usa a
- * marcação a mercado manual (`Valor Bruto Atual`) e o Tesouro Direto usa a API
- * de dados abertos (cache-first). Falhas são ignoradas — o `writeConsolidado`
- * cai no preço médio como fallback (RNF04).
+ * Preços para as classes sem `GOOGLEFINANCE` (RF19): Renda Fixa e Tesouro Direto
+ * usam a marcação manual (`Valor Bruto Atual`) e os ativos B3 podem ter preço
+ * persistido via Brapi (fallback do `GOOGLEFINANCE`). Sem preço, o
+ * `writeConsolidado` cai no preço médio como fallback (RNF04).
  */
 async function precosDaCarteira(
-  context: RepositoryContext,
   operacoes: readonly Operacao[],
 ): Promise<Map<string, number>> {
   const precos = new Map<string, number>(precosManuaisDeOperacoes(operacoes))
 
   // B3 (Ação/FII/BDR/ETF): preço persistido via Brapi (fallback do GOOGLEFINANCE).
   for (const [ticker, preco] of precosPersistidosDeOperacoes(operacoes)) precos.set(ticker, preco)
-
-  const tickersTesouro = calcularPosicoes(operacoes)
-    .filter((posicao) => isTesouroDireto(posicao.categoria) && posicao.quantidadeAtual > 0)
-    .map((posicao) => posicao.ticker)
-
-  if (tickersTesouro.length > 0) {
-    const config = await carregarConfiguracoes(context)
-    const cotacoes = await buscarCotacoesTesouro(tickersTesouro, { apiUrl: config.tesouroApiUrl })
-    for (const [ticker, cotacao] of cotacoes) precos.set(ticker, cotacao.preco)
-  }
 
   return precos
 }

@@ -48,7 +48,7 @@ export function isRendaFixa(categoria: CategoriaAtivo): boolean {
   return categoria === CategoriaAtivo.RendaFixa
 }
 
-/** `true` para Tesouro Direto (cotação via API de dados abertos / preço manual). */
+/** `true` para Tesouro Direto (preço por marcação manual). */
 export function isTesouroDireto(categoria: CategoriaAtivo): boolean {
   return categoria === CategoriaAtivo.TesouroDireto
 }

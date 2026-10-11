@@ -114,24 +114,8 @@ describe('precoMercadoValido', () => {
   })
 })
 
-describe('resolverCotacao — Tesouro Direto (API/cache/manual)', () => {
-  it('usa a cotação da API quando disponível', () => {
-    const cotacao = resolverCotacao({
-      ticker: 'TD-IPCA-2029',
-      categoria: CategoriaAtivo.TesouroDireto,
-      ...base,
-      precoMercado: 350000,
-      atualizadoEm: '2026-10-06',
-    })
-    expect(cotacao).toMatchObject({
-      precoAtual: 350000,
-      fonte: 'tesouro',
-      status: 'disponivel',
-      atualizadoEm: '2026-10-06',
-    })
-  })
-
-  it('usa a marcação manual quando a API falha', () => {
+describe('resolverCotacao — Tesouro Direto (marcação manual)', () => {
+  it('usa a marcação manual quando informada', () => {
     const cotacao = resolverCotacao({
       ticker: 'TD-IPCA-2029',
       categoria: CategoriaAtivo.TesouroDireto,
@@ -141,7 +125,7 @@ describe('resolverCotacao — Tesouro Direto (API/cache/manual)', () => {
     expect(cotacao).toMatchObject({ precoAtual: 340000, status: 'manual', fonte: 'manual' })
   })
 
-  it('usa fallback (preço médio) sem API e sem preço manual', () => {
+  it('usa fallback (preço médio) sem preço manual', () => {
     const cotacao = resolverCotacao({
       ticker: 'TD-IPCA-2029',
       categoria: CategoriaAtivo.TesouroDireto,

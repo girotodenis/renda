@@ -40,8 +40,8 @@ interface ValorManualModalProps {
  * Tesouro Direto (RF19).
  *
  * O valor informado é gravado na operação mais recente do ticker
- * (`Valor Bruto Atual`) por `definirValorManualTicker` e passa a ser usado
- * sempre que a integração (API do Tesouro / estimativa) não retornar cotação.
+ * (`Valor Bruto Atual`) por `definirValorManualTicker` e passa a ser o preço
+ * usado no cálculo (ou uma estimativa quando não informado).
  * Como a sincronização do `Consolidado` nunca reescreve a aba `Operacoes`, o
  * valor informado pelo usuário **não é apagado** por falhas de integração
  * (RNF04).
