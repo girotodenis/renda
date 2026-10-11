@@ -4,8 +4,8 @@
 > offline e, ao reconectar, sincronize as alterações com a planilha do Google.
 >
 > **Data de criação:** 2026-10-10
-> **Última atualização:** 2026-10-10 (Fase 1 concluída)
-> **Estado geral:** `em andamento` — Fases 0 e 1 concluídas; próximas fases pendentes.
+> **Última atualização:** 2026-10-10 (Fase 2 concluída)
+> **Estado geral:** `em andamento` — Fases 0, 1 e 2 concluídas; próximas fases pendentes.
 
 ---
 
@@ -33,7 +33,7 @@
 | --- | --- | --- | --- |
 | Fase 0 | PWA instalável + shell offline (manifest/SW/ícones) | `[x]` concluída | 2026-10-10 |
 | Fase 1 | Repositórios offline (outbox + atualização otimista) | `[x]` concluída | 2026-10-10 |
-| Fase 2 | Sincronização automática (flush + Consolidado) | `[ ]` pendente | — |
+| Fase 2 | Sincronização automática (flush + Consolidado) | `[x]` concluída | 2026-10-10 |
 | Fase 3 | Auth resiliente offline | `[ ]` pendente | — |
 | Fase 4 | UX de sincronização (badge/contador/botão) | `[ ]` pendente | — |
 | Fase 5 | Melhorias opcionais (IndexedDB, Periodic Sync, tabs) | `[ ]` pendente | — |
@@ -400,10 +400,93 @@ npm run preview   # teste manual: offline → ações → online → conferir pl
 ```
 
 ### Estado
-- [ ] pendente
+- [x] concluída em 2026-10-10
 
 ### Notas/Desvios
-— (preencher ao executar)
+
+**Arquivos realmente alterados** (`git status`):
+
+- `src/application/sync.ts` (novo) — `sincronizarPendentes(context, opcoes?)`,
+  `SyncResult`, `SyncOptions`/`SyncDependencies` e a máquina de replay FIFO.
+- `src/application/sync.test.ts` (novo) — 6 testes com dependências falsas.
+- `src/infrastructure/repositories.ts` — repositórios **crus** mantidos
+  internamente; exports dos repositórios envoltos preservados; novos
+  `RawSheetRepository`, `rawRepositories` (mapa por `SheetName`) e
+  `replayMutation(context, mutation)`.
+- `src/presentation/hooks/useSync.ts` (novo) — disparador central de sync.
+- `src/presentation/app/layout/AppLayout.tsx` — chama `useSync()` uma vez.
+- `PLANO_PWA.md` — estado e notas.
+
+**Decisões tomadas:**
+
+- **Exposição dos repositórios crus:** `repositories.ts` agora constrói os repos
+  crus (`*RepoRaw`) e os envolve com `withOfflineOutbox` mantendo os mesmos
+  exports (`operacoesRepo`, etc.). Para o replay, expõe `rawRepositories:
+  Record<SheetName, RawSheetRepository>` (contrato apagado para `unknown`, com
+  `append`/`replaceAll`/`update?`/`remove?`/`refresh`/`idOf?`) e a função
+  `replayMutation` que aplica a mutação no repo cru correspondente a
+  `mutation.sheet`. Assim o sync **não** passa pelo decorador — falha de rede
+  durante o replay é propagada (item fica na fila), sem risco de reenfileiramento
+  em loop. `update`/`remove` usam o CRUD cru (que já relê a aba antes de
+  reescrever — re-leitura segura).
+- **Tratamento de erros no replay:** sucesso → `remove(id)` e continua; erro de
+  rede/quota (`status` 0 ou 429) → interrompe o loop e mantém o item; 401 →
+  chama o callback opcional `obterToken` (a UI injeta `ensureAccessToken` via
+  `useSync`) e re-tenta **uma** vez com o novo token — se o callback retornar
+  `null` ou a re-tentativa falhar, interrompe; demais erros (403/500) → mantém
+  o item, registra o primeiro erro em `SyncResult.erro` e **continua**.
+- **429 sem backoff exponencial:** a Tarefa original citava backoff para 429,
+  mas o **Critério/escopo** da fase fixa `status 0 ou 429 → interrompe`;
+  seguimos o escopo (interrompe e mantém o item para o próximo ciclo).
+- **Idempotência do `append`:** antes de reaplicar, `sync.ts` consulta o repo cru
+  via `refresh` e compara o `idOf` da entidade com as linhas existentes — pula
+  se já existir (aplica apenas a abas com IDs: `Operacoes`/`Proventos`).
+- **Pós-flush:** se `aplicadas > 0`, chama `syncConsolidado(context)` **uma** vez
+  e `prefetchAllSheets(context)` **uma** vez; falha nessa etapa é best-effort
+  (não reenfileira nada, apenas atrasa o recálculo do derivado).
+- **Disparadores centralizados:** `useSync()` em `AppLayout` cobre montagem
+  (uma vez), reconexão (`window.online` via `useOnlineStatus`) e retry periódico
+  de 60s enquanto `SyncResult.pendentes > 0`, com trava de reentrância
+  (`inFlightRef`). O hook consome apenas a camada `application`
+  (`sincronizarPendentes`) — não importa infraestrutura diretamente, preservando
+  a regra `presentation → application`.
+- **Snapshot do histórico (item 4):** **nenhum ajuste necessário.**
+  `registrarSnapshot` monta o `Snapshot` com `snapshotDoResumo(resumo,
+  options.data)` (data ISO de hoje no momento da ação) **antes** de enfileirar o
+  `replaceAll`; a mutação carrega a lista completa de snapshots com a data já
+  fixada no dia da ação, e o replay grava exatamente essas linhas (nunca
+  recalcula a data).
+
+**Desvios do plano:**
+
+- Criado `src/presentation/hooks/useSync.ts` em vez de editar `App.tsx`
+  diretamente (o plano previa `App.tsx` **ou** `AppLayout`). Não foi criado o
+  `src/infrastructure/network.ts` — a decisão online/offline já está em
+  `outbox.ts` (`isOnline`) e o hook usa `useOnlineStatus`.
+- O disparador opcional "após cada escrita (best-effort)" **não** foi
+  implementado: é invasivo (exigiria tocar todos os pontos de escrita) e os
+  disparadores obrigatórios (montagem, `online`, retry 60s) já cobrem os
+  critérios de aceite. Fica como melhoria para a Fase 4.
+- **Achado fora de escopo (não alterado):** `registrarSnapshot` chama
+  `historicoRepo.refresh` antes do `replaceAll`, então, **totalmente offline**, a
+  gravação do snapshot ainda não enfileira (o `refresh` falha). O snapshot
+  automático já é pulado quando offline (`useDashboard` guarda por `isOffline`)
+  e os caminhos manuais/best-effort só são alcançáveis online. A **data** está
+  correta (fixada no dia da ação); a viabilização do snapshot 100% offline fica
+  sugerida para a Fase 3/4, fora deste escopo.
+
+**Validação executada (2026-10-10):**
+
+- `npm run typecheck` — ok.
+- `npm test -- --run` — **180 testes / 16 arquivos**, todos verdes (6 novos em
+  `sync.test.ts`).
+- `npm run lint` — ok.
+- `npm run build` — ok (gera `dist/sw.js`/`dist/manifest.webmanifest`; aviso de
+  chunk > 500 kB é pré-existente).
+- Testes-chave verdes: FIFO, interrupção em erro de rede no meio preservando os
+  itens restantes, skip de `append` duplicado, `syncConsolidado` chamado **uma**
+  vez ao final, renovação de token em 401 (re-tenta uma vez) e interrupção
+  quando a renovação falha.
 
 ---
 

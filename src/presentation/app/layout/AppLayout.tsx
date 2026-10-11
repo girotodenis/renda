@@ -3,6 +3,7 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '@/app/providers/authContext'
 import { cn } from '@/lib/cn'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
+import { useSync } from '@/presentation/hooks/useSync'
 
 const navItemClass = 'inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors'
 
@@ -10,6 +11,10 @@ export function AppLayout() {
   const { status, logout } = useAuth()
   const online = useOnlineStatus()
   const isAuthenticated = status === 'authenticated'
+
+  // Inicializa o disparador central de sincronização (Fase 2): reconexão,
+  // montagem e retry periódico enquanto houver pendências.
+  useSync()
 
   const navItems = isAuthenticated
     ? ([
