@@ -72,6 +72,7 @@ declare global {
     setSelectFolderEnabled: (value: boolean) => GooglePickerDocsView
     setMimeTypes: (mimeTypes: string) => GooglePickerDocsView
     setMode: (mode: string) => GooglePickerDocsView
+    setParent: (parentId: string) => GooglePickerDocsView
   }
 
   interface GooglePickerBuilder {

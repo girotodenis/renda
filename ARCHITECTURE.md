@@ -85,6 +85,9 @@ domínio:
 
 - `sheets/gateway.ts` — Google Sheets API v4 (RF01–RF06).
 - `drive.ts`, `googleIdentity.ts`, `googleConfig.ts` — Google Picker e OAuth.
+  `drive.ts` também garante a pasta padrão `minhasacoe_app` (`ensureAppFolder`) e
+  move para ela as planilhas criadas (`moveFileToFolder`) — tudo coberto pelo
+  escopo `drive.file`, sem permissões extras.
 - `brapi.ts` — fallback de cotação B3 (cache-first, nunca lança).
 - `storage.ts` — `localStorage` para token/workspace/consent (RNF05).
 - `db.ts` + `kvStore.ts` — IndexedDB (stores `sheets`/`outbox`) com espelho em

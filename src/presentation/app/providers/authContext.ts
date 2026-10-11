@@ -1,5 +1,17 @@
 import { createContext, useContext } from 'react'
-import type { AuthStatus, SpreadsheetWorkspace } from '@/domain/workspace'
+import type { AuthStatus, PlanilhaExistente, SpreadsheetWorkspace } from '@/domain/workspace'
+
+/** Opções de criação da planilha padrão. */
+export interface OpcoesCriarPlanilha {
+  /** Ignora a verificação de título duplicado e cria uma planilha nova. */
+  force?: boolean
+}
+
+/** Resultado de uma tentativa de criação da planilha padrão. */
+export type ResultadoCriacaoPlanilha =
+  | { status: 'created' }
+  | { status: 'duplicate'; existente: PlanilhaExistente }
+  | { status: 'error' }
 
 /** Contexto de sessão exposto pelo `AuthProvider`. */
 export interface AuthContextValue {
@@ -23,8 +35,19 @@ export interface AuthContextValue {
   logout: () => Promise<void>
   /** Abre o Google Picker e carrega a planilha selecionada. */
   selecionarPlanilha: () => Promise<void>
-  /** Cria uma planilha padrão com as 5 abas e a define como workspace. */
-  criarPlanilha: (title?: string) => Promise<void>
+  /**
+   * Cria uma planilha padrão com as 5 abas e a define como workspace.
+   *
+   * Antes de criar, verifica se já existe uma planilha com o mesmo título.
+   * Quando existe (e `options.force` não está ligado), devolve
+   * `{ status: 'duplicate' }` sem criar nada, para que a UI pergunte ao usuário.
+   */
+  criarPlanilha: (
+    title?: string,
+    options?: OpcoesCriarPlanilha,
+  ) => Promise<ResultadoCriacaoPlanilha>
+  /** Torna ativa uma planilha existente pelo `spreadsheetId` (garantindo as abas). */
+  abrirPlanilha: (spreadsheetId: string) => Promise<void>
   /**
    * Garante um access token válido (renova silenciosamente se necessário).
    * Retorna `null` quando não foi possível obter um token.
