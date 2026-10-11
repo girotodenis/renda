@@ -10,9 +10,11 @@ import { isOnline } from '@/application/online'
 import { consentStorage, tokenStorage, workspaceStorage } from '@/infrastructure/storage'
 import type { StoredToken } from '@/infrastructure/storage'
 import {
+  ensureAppFolder,
   findSpreadsheetsByName,
   GoogleDriveError,
   GooglePickerError,
+  moveFileToFolder,
   pickSpreadsheet,
 } from '@/infrastructure/drive'
 import {
@@ -45,6 +47,33 @@ interface AuthProviderProps {
 
 /** Intervalo de nova tentativa quando a renovação silenciosa falha por rede. */
 const TOKEN_REFRESH_RETRY_MS = 60_000
+
+/**
+ * Move uma planilha recém-criada para a pasta padrão do app (`minhasacoe_app`),
+ * criando a pasta se necessário. Best-effort: usa apenas o escopo `drive.file`
+ * (sem novas permissões) e, se falhar, a planilha permanece válida na raiz.
+ */
+async function organizarNaPastaDoApp(accessToken: string, spreadsheetId: string): Promise<void> {
+  try {
+    const folderId = await ensureAppFolder(accessToken)
+    await moveFileToFolder(accessToken, spreadsheetId, folderId)
+  } catch {
+    // Organização é cosmética; qualquer falha não impede o uso da planilha.
+  }
+}
+
+/**
+ * Garante a pasta padrão do app (`minhasacoe_app`) para o Picker abrir direto
+ * nela, criando-a se necessário. Best-effort: em falha devolve `null` e o Picker
+ * abre no modo padrão.
+ */
+async function garantirPastaDoApp(accessToken: string): Promise<string | null> {
+  try {
+    return await ensureAppFolder(accessToken)
+  } catch {
+    return null
+  }
+}
 
 function describeError(error: unknown): string {
   if (error instanceof SheetsApiError) {
@@ -288,7 +317,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     setIsBusy(true)
     try {
-      const picked = await pickSpreadsheet(token)
+      const folderId = await garantirPastaDoApp(token)
+      const picked = await pickSpreadsheet(token, { folderId })
       if (!picked) return
       const loaded = await loadSpreadsheetWorkspace(token, picked.spreadsheetId)
       salvarWorkspace(loaded)
@@ -348,6 +378,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
         const created = await createDefaultSpreadsheet(token, title)
         salvarWorkspace(created)
+        await organizarNaPastaDoApp(token, created.spreadsheetId)
         return { status: 'created' }
       } catch (creationError) {
         setError(describeError(creationError))

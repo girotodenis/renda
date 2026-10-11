@@ -14,6 +14,15 @@ import { googleConfig, MISSING_PICKER_KEY_MESSAGE } from '@/infrastructure/googl
 const GAPI_SCRIPT_SRC = 'https://apis.google.com/js/api.js'
 const GAPI_LOAD_TIMEOUT_MS = 15000
 const DRIVE_FILES_ENDPOINT = 'https://www.googleapis.com/drive/v3/files'
+const DRIVE_FOLDER_MIME_TYPE = 'application/vnd.google-apps.folder'
+
+/**
+ * Nome da pasta padrão onde o app organiza as planilhas que cria.
+ *
+ * A pasta é criada PELO app, então o escopo `drive.file` já a cobre — não é
+ * preciso pedir nenhuma permissão adicional (nem novo consentimento).
+ */
+export const DEFAULT_APP_FOLDER_NAME = 'minhasacoe_app'
 
 let gapiScriptPromise: Promise<void> | null = null
 let pickerLibraryPromise: Promise<void> | null = null
@@ -39,6 +48,23 @@ export class GoogleDriveError extends Error {
 
 export type DriveSpreadsheetSelection = PlanilhaExistente
 
+/** Converte uma resposta HTTP de falha do Drive em `GoogleDriveError` (pt-BR). */
+function toDriveError(response: Response): GoogleDriveError {
+  if (response.status === 401) {
+    return new GoogleDriveError(401, 'Sessão expirada. Faça login novamente.')
+  }
+  if (response.status === 403) {
+    return new GoogleDriveError(
+      403,
+      'Permissão negada pelo Google Drive. Verifique se a API Drive está habilitada e se os escopos foram autorizados.',
+    )
+  }
+  if (response.status === 429) {
+    return new GoogleDriveError(429, 'Cota da API do Google excedida. Tente novamente em instantes.')
+  }
+  return new GoogleDriveError(response.status, `Falha na API do Google Drive (HTTP ${response.status}).`)
+}
+
 /** `true` quando a seleção de planilha existente pode ser oferecida na UI. */
 export function isSpreadsheetSelectionAvailable(): boolean {
   return googleConfig.pickerApiKey !== null
@@ -46,6 +72,11 @@ export function isSpreadsheetSelectionAvailable(): boolean {
 
 interface DriveFileListResponse {
   files?: { id?: string; name?: string }[]
+}
+
+interface DriveFileResponse {
+  id?: string
+  parents?: string[]
 }
 
 /**
@@ -84,19 +115,7 @@ export async function findSpreadsheetsByName(
   })
 
   if (!response.ok) {
-    if (response.status === 401) {
-      throw new GoogleDriveError(401, 'Sessão expirada. Faça login novamente.')
-    }
-    if (response.status === 403) {
-      throw new GoogleDriveError(
-        403,
-        'Permissão negada pelo Google Drive. Verifique se a API Drive está habilitada e se os escopos foram autorizados.',
-      )
-    }
-    if (response.status === 429) {
-      throw new GoogleDriveError(429, 'Cota da API do Google excedida. Tente novamente em instantes.')
-    }
-    throw new GoogleDriveError(response.status, `Falha na API do Google Drive (HTTP ${response.status}).`)
+    throw toDriveError(response)
   }
 
   const body = (await response.json()) as DriveFileListResponse
@@ -107,6 +126,107 @@ export async function findSpreadsheetsByName(
     }
   }
   return found
+}
+
+/** Escapa um valor para uso seguro dentro de uma consulta do Drive (`q`). */
+function escapeDriveQueryValue(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+}
+
+/**
+ * Procura a pasta padrão do app e devolve seu id — ou `null` se ela ainda não
+ * existir. Não tem efeitos colaterais (não cria nada), o que permite usá-la para
+ * posicionar o Picker sem criar a pasta só por abrir a seleção.
+ *
+ * Lança `GoogleDriveError` em falha da API; o chamador decide se segue (falha aberta).
+ */
+export async function findAppFolder(
+  accessToken: string,
+  name: string = DEFAULT_APP_FOLDER_NAME,
+): Promise<string | null> {
+  const trimmed = name.trim().length > 0 ? name.trim() : DEFAULT_APP_FOLDER_NAME
+  const query = [
+    `name = '${escapeDriveQueryValue(trimmed)}'`,
+    `mimeType = '${DRIVE_FOLDER_MIME_TYPE}'`,
+    'trashed = false',
+  ].join(' and ')
+
+  const params = new URLSearchParams({ q: query, fields: 'files(id)', pageSize: '1' })
+  const found = await fetch(`${DRIVE_FILES_ENDPOINT}?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (!found.ok) throw toDriveError(found)
+
+  const foundBody = (await found.json()) as DriveFileListResponse
+  const existingId = foundBody.files?.[0]?.id
+  return typeof existingId === 'string' && existingId.length > 0 ? existingId : null
+}
+
+/**
+ * Garante a existência da pasta padrão do app (`minhasacoe_app`) e devolve seu id.
+ *
+ * É compatível com o escopo `drive.file`: a pasta é criada PELO app, que passa a
+ * enxergá-la e gerenciá-la sem escopos adicionais. Limitação inerente ao escopo:
+ * se o usuário criar manualmente uma pasta com o mesmo nome, o app não a verá
+ * (o `drive.file` só dá visibilidade a arquivos que o app criou/abriu) e criará
+ * a sua própria.
+ *
+ * Lança `GoogleDriveError` em falha da API; o chamador decide se segue (falha aberta).
+ */
+export async function ensureAppFolder(
+  accessToken: string,
+  name: string = DEFAULT_APP_FOLDER_NAME,
+): Promise<string> {
+  const existing = await findAppFolder(accessToken, name)
+  if (existing) return existing
+
+  const trimmed = name.trim().length > 0 ? name.trim() : DEFAULT_APP_FOLDER_NAME
+  const created = await fetch(`${DRIVE_FILES_ENDPOINT}?fields=id`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ name: trimmed, mimeType: DRIVE_FOLDER_MIME_TYPE }),
+  })
+  if (!created.ok) throw toDriveError(created)
+
+  const createdBody = (await created.json()) as DriveFileResponse
+  if (typeof createdBody.id !== 'string' || createdBody.id.length === 0) {
+    throw new GoogleDriveError(500, 'O Google Drive não retornou o id da pasta criada.')
+  }
+  return createdBody.id
+}
+
+/**
+ * Move para `folderId` um arquivo que o app criou, removendo o(s) pai(s) atual(is).
+ *
+ * O escopo `drive.file` cobre a operação porque tanto o arquivo quanto a pasta
+ * foram criados pelo app. Lança `GoogleDriveError` em falha; o chamador trata
+ * como best-effort (a planilha continua válida na raiz se a organização falhar).
+ */
+export async function moveFileToFolder(
+  accessToken: string,
+  fileId: string,
+  folderId: string,
+): Promise<void> {
+  const parentsResponse = await fetch(
+    `${DRIVE_FILES_ENDPOINT}/${encodeURIComponent(fileId)}?fields=parents`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  )
+  if (!parentsResponse.ok) throw toDriveError(parentsResponse)
+
+  const body = (await parentsResponse.json()) as DriveFileResponse
+  const previousParents = (body.parents ?? []).filter((parent) => parent !== folderId)
+
+  const params = new URLSearchParams({ addParents: folderId })
+  if (previousParents.length > 0) params.set('removeParents', previousParents.join(','))
+
+  const response = await fetch(
+    `${DRIVE_FILES_ENDPOINT}/${encodeURIComponent(fileId)}?${params.toString()}`,
+    { method: 'PATCH', headers: { Authorization: `Bearer ${accessToken}` } },
+  )
+  if (!response.ok) throw toDriveError(response)
 }
 
 function loadGapiScript(): Promise<void> {
@@ -148,11 +268,24 @@ function loadPickerLibrary(): Promise<void> {
   return pickerLibraryPromise
 }
 
+/** Opções de abertura do Google Picker. */
+export interface PickSpreadsheetOptions {
+  /**
+   * Pasta exibida inicialmente pelo Picker. Quando o app já criou a pasta
+   * `minhasacoe_app`, o Picker abre direto nela; o usuário ainda pode navegar
+   * para outras pastas (inclusive a raiz) normalmente.
+   */
+  folderId?: string | null
+}
+
 /**
  * Abre o Google Picker para o usuário escolher uma planilha existente.
  * Retorna `null` quando o usuário cancela a seleção.
  */
-export async function pickSpreadsheet(accessToken: string): Promise<DriveSpreadsheetSelection | null> {
+export async function pickSpreadsheet(
+  accessToken: string,
+  options?: PickSpreadsheetOptions,
+): Promise<DriveSpreadsheetSelection | null> {
   const apiKey = googleConfig.pickerApiKey
   if (!apiKey) {
     throw new GooglePickerError(MISSING_PICKER_KEY_MESSAGE)
@@ -170,6 +303,10 @@ export async function pickSpreadsheet(accessToken: string): Promise<DriveSpreads
         .setMimeTypes('application/vnd.google-apps.spreadsheet')
         .setIncludeFolders(false)
         .setSelectFolderEnabled(false)
+
+      if (options?.folderId) {
+        view.setParent(options.folderId)
+      }
 
       const builder = new pickerApi.PickerBuilder()
         .addView(view)
