@@ -16,6 +16,9 @@ const GOOGLE_ORIGINS_REGEX = /^https:\/\/(?:accounts|apis|sheets|www)\.google(?:
 
 // https://vite.dev/config/
 export default defineConfig({
+  // 1. OBRIGATÓRIO PARA GITHUB PAGES: Define o caminho base do projeto
+  base: '/renda/',
+
   plugins: [
     react(),
     VitePWA({
@@ -29,23 +32,24 @@ export default defineConfig({
         description: 'Controle de investimentos e rebalanceamento de carteira.',
         lang: 'pt-BR',
         display: 'standalone',
-        start_url: '/',
-        scope: '/',
+        // 2. CAMINHOS DO PWA: Devem refletir o subdiretório do GitHub Pages
+        start_url: '/renda/',
+        scope: '/renda/',
         theme_color: '#2563eb',
         background_color: '#ffffff',
         icons: [
           {
-            src: '/icon-192.png',
+            src: 'icon-192.png',
             sizes: '192x192',
             type: 'image/png',
           },
           {
-            src: '/icon-512.png',
+            src: 'icon-512.png',
             sizes: '512x512',
             type: 'image/png',
           },
           {
-            src: '/maskable-512.png',
+            src: 'maskable-512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'maskable',
@@ -55,8 +59,8 @@ export default defineConfig({
       workbox: {
         // App shell: JS/CSS/HTML e assets locais.
         globPatterns: ['**/*.{js,css,html,svg,png,ico,woff2}'],
-        // SPA: qualquer navegação sem arquivo correspondente cai no index.html.
-        navigateFallback: '/index.html',
+        // 3. SPA FALLBACK: Deve apontar para o index.html dentro da subpasta do repositório
+        navigateFallback: '/renda/index.html',
         // Rede de segurança: navegações para os domínios do Google nunca usam o fallback.
         navigateFallbackDenylist: [GOOGLE_ORIGINS_REGEX],
         // Explicita que os domínios do Google não são cacheados (sempre rede).
