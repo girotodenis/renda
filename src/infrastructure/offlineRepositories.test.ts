@@ -3,17 +3,20 @@ import { CategoriaAtivo, OperacaoTipo } from '@/domain/entities'
 import type { Consolidado, Operacao } from '@/domain/entities'
 import type { CrudRepository, RepositoryContext } from '@/domain/repositories/ports'
 import { readSheetCache, writeSheetCache } from '@/infrastructure/cache'
+import { _resetForTests } from '@/infrastructure/kvStore'
 import { withOfflineOutbox } from '@/infrastructure/offlineRepositories'
-import { clear, count, list as outboxList } from '@/infrastructure/outbox'
+import { count, list as outboxList } from '@/infrastructure/outbox'
 import { consolidadoRepo, operacoesRepo } from '@/infrastructure/repositories'
 
 /**
- * Testes do decorador offline dos repositórios (Fase 1 do plano PWA).
+ * Testes do decorador offline dos repositórios (Fase 1 do plano PWA),
+ * adaptados à Fase 5 (cache/outbox no IndexedDB com espelho em memória).
  *
  * Cobrem a atualização otimista do cache + enfileiramento no outbox quando
  * offline (ou em falha de rede/quota) e a garantia de que a aba derivada
- * `Consolidado` **nunca** enfileira. O ambiente de testes é `node`, então
- * `window.localStorage`, `navigator` e `fetch` são simulados.
+ * `Consolidado` **nunca** enfileira. O ambiente de testes é `node` (sem
+ * `indexedDB`), então o espelho em memória é resetado a cada teste e
+ * `navigator`/`fetch` são simulados.
  */
 
 interface Item {
@@ -77,31 +80,6 @@ function createFakeRepo(options: { appendError?: unknown } = {}): FakeRepo {
   }
 }
 
-/** `localStorage` em memória, suficiente para o cache e o outbox. */
-function createMemoryStorage(): Storage {
-  const store = new Map<string, string>()
-  return {
-    get length() {
-      return store.size
-    },
-    clear() {
-      store.clear()
-    },
-    getItem(key: string) {
-      return store.has(key) ? (store.get(key) as string) : null
-    },
-    key(index: number) {
-      return [...store.keys()][index] ?? null
-    },
-    removeItem(key: string) {
-      store.delete(key)
-    },
-    setItem(key: string, value: string) {
-      store.set(key, value)
-    },
-  }
-}
-
 const context: RepositoryContext = { accessToken: 'token', spreadsheetId: 'planilha' }
 
 /** Lê as linhas em cache de uma aba (helper dos asserts). */
@@ -110,9 +88,8 @@ function cachedRows<T>(sheetName: 'Operacoes'): T[] | undefined {
 }
 
 beforeEach(() => {
-  vi.stubGlobal('window', { localStorage: createMemoryStorage() })
+  _resetForTests()
   vi.stubGlobal('navigator', { onLine: false })
-  clear()
 })
 
 afterEach(() => {

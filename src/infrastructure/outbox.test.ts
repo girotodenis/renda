@@ -1,65 +1,30 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  clear,
-  count,
-  enqueue,
-  list,
-  OUTBOX_STORAGE_KEY,
-  remove,
-} from '@/infrastructure/outbox'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { _resetForTests, kvSet } from '@/infrastructure/kvStore'
+import { clear, count, enqueue, list, remove } from '@/infrastructure/outbox'
+import type { Mutation } from '@/infrastructure/outbox'
 
 /**
- * Testes do outbox (Fase 1 do plano PWA).
- *
- * O ambiente de testes é `node` (sem `window`/`localStorage`), então o
- * `localStorage` é simulado em memória. A leitura sempre passa pelo
- * `localStorage`, o que também exercita a persistência entre "reloads".
+ * Testes do outbox (Fase 1 do plano PWA), adaptados à Fase 5 (IndexedDB com
+ * espelho em memória). O ambiente de testes é `node` (sem `indexedDB`), então
+ * as operações rodam no espelho em memória — sem persistência real.
  */
 
-/** Implementação em memória do `localStorage` (suficiente para o outbox). */
-function createMemoryStorage(): Storage {
-  const store = new Map<string, string>()
-  return {
-    get length() {
-      return store.size
-    },
-    clear() {
-      store.clear()
-    },
-    getItem(key: string) {
-      return store.has(key) ? (store.get(key) as string) : null
-    },
-    key(index: number) {
-      return [...store.keys()][index] ?? null
-    },
-    removeItem(key: string) {
-      store.delete(key)
-    },
-    setItem(key: string, value: string) {
-      store.set(key, value)
-    },
-  }
-}
-
-let storage: Storage
-
 beforeEach(() => {
-  storage = createMemoryStorage()
-  vi.stubGlobal('window', { localStorage: storage })
+  _resetForTests()
 })
 
 afterEach(() => {
-  vi.unstubAllGlobals()
+  // Nada a restaurar: o espelho é resetado no `beforeEach`.
 })
 
 describe('outbox — enqueue/list/remove/clear/count', () => {
-  it('enfileira na ordem FIFO e conta as pendências', () => {
+  it('enfileira e conta as pendências', () => {
     enqueue({ sheet: 'Operacoes', kind: 'append', entity: { id: 'a' } })
     enqueue({ sheet: 'Proventos', kind: 'remove', entityId: 'b' })
 
     expect(count()).toBe(2)
-    expect(list().map((mutation) => mutation.kind)).toEqual(['append', 'remove'])
-    expect(list().map((mutation) => mutation.sheet)).toEqual(['Operacoes', 'Proventos'])
+    expect(list().map((mutation) => mutation.kind).sort()).toEqual(['append', 'remove'])
+    expect(list().map((mutation) => mutation.sheet).sort()).toEqual(['Operacoes', 'Proventos'])
   })
 
   it('gera ids únicos e `createdAt` em ISO 8601', () => {
@@ -71,7 +36,7 @@ describe('outbox — enqueue/list/remove/clear/count', () => {
     expect(Number.isNaN(Date.parse(first.createdAt))).toBe(false)
   })
 
-  it('remove uma mutação pelo id e mantém o restante na ordem', () => {
+  it('remove uma mutação pelo id e mantém o restante', () => {
     const kept = enqueue({ sheet: 'Operacoes', kind: 'append', entity: { id: 'a' } })
     const dropped = enqueue({ sheet: 'Operacoes', kind: 'append', entity: { id: 'b' } })
 
@@ -81,45 +46,55 @@ describe('outbox — enqueue/list/remove/clear/count', () => {
     expect(count()).toBe(1)
   })
 
-  it('clear esvazia a fila e remove a chave do localStorage', () => {
+  it('clear esvazia a fila', () => {
     enqueue({ sheet: 'Operacoes', kind: 'append', entity: { id: 'a' } })
 
     clear()
 
     expect(count()).toBe(0)
     expect(list()).toEqual([])
-    expect(storage.getItem(OUTBOX_STORAGE_KEY)).toBeNull()
   })
 })
 
-describe('outbox — persistência entre reloads', () => {
-  it('persiste as mutações no localStorage e as relê integralmente', () => {
-    enqueue({
+describe('outbox — ordenação FIFO por createdAt', () => {
+  it('ordena por createdAt ASC com id como desempate (independente da inserção)', () => {
+    const tieA: Mutation = {
+      id: 'tie-a',
+      createdAt: '2026-10-11T00:00:00.000Z',
       sheet: 'Operacoes',
-      kind: 'update',
-      entity: { id: 'a', ticker: 'PETR4' },
-      entityId: 'a',
-    })
-
-    const raw = storage.getItem(OUTBOX_STORAGE_KEY)
-    expect(raw).toBeTruthy()
-
-    // "Reload": cada leitura vai ao localStorage (não há cache em memória).
-    const reloaded = list()
-    expect(reloaded).toHaveLength(1)
-    expect(reloaded[0]).toMatchObject({
+      kind: 'append',
+      entity: {},
+    }
+    const tieB: Mutation = {
+      id: 'tie-b',
+      createdAt: '2026-10-11T00:00:00.000Z',
       sheet: 'Operacoes',
-      kind: 'update',
-      entityId: 'a',
-      entity: { id: 'a', ticker: 'PETR4' },
-    })
-    expect(count()).toBe(1)
-  })
+      kind: 'append',
+      entity: {},
+    }
+    const older: Mutation = {
+      id: 'b',
+      createdAt: '2026-10-11T00:00:01.000Z',
+      sheet: 'Operacoes',
+      kind: 'append',
+      entity: {},
+    }
+    const newest: Mutation = {
+      id: 'a',
+      createdAt: '2026-10-11T00:00:02.000Z',
+      sheet: 'Operacoes',
+      kind: 'append',
+      entity: {},
+    }
 
-  it('tolera ausência de localStorage (fila vazia, sem lançar)', () => {
-    vi.unstubAllGlobals()
+    // Inserção propositalmente fora de ordem — `newId()` (randomUUID) não é
+    // ordenável, então a fila NÃO pode depender da ordem de inserção.
+    kvSet('outbox', newest.id, newest)
+    kvSet('outbox', tieB.id, tieB)
+    kvSet('outbox', older.id, older)
+    kvSet('outbox', tieA.id, tieA)
 
-    expect(list()).toEqual([])
-    expect(count()).toBe(0)
+    expect(list().map((mutation) => mutation.id)).toEqual(['tie-a', 'tie-b', 'b', 'a'])
   })
 })
+

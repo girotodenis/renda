@@ -4,8 +4,8 @@
 > offline e, ao reconectar, sincronize as alterações com a planilha do Google.
 >
 > **Data de criação:** 2026-10-10
-> **Última atualização:** 2026-10-11 (Fase 4 concluída)
-> **Estado geral:** `em andamento` — Fases 0, 1, 2, 3 e 4 concluídas; resta a Fase 5 (opcional).
+> **Última atualização:** 2026-10-11 (Fase 5 concluída)
+> **Estado geral:** `concluído` — Fases 0, 1, 2, 3, 4 e 5 concluídas.
 
 ---
 
@@ -36,7 +36,7 @@
 | Fase 2 | Sincronização automática (flush + Consolidado) | `[x]` concluída | 2026-10-10 |
 | Fase 3 | Auth resiliente offline | `[x]` concluída | 2026-10-11 |
 | Fase 4 | UX de sincronização (badge/contador/botão) | `[x]` concluída | 2026-10-11 |
-| Fase 5 | Melhorias opcionais (IndexedDB, Periodic Sync, tabs) | `[ ]` pendente | — |
+| Fase 5 | Melhorias opcionais (IndexedDB, Periodic Sync, tabs) | `[x]` concluída | 2026-10-11 |
 
 ---
 
@@ -771,10 +771,99 @@ Robustez e alcance (não bloqueia o MVP — só após as fases 0–4 validadas).
 - Definidos por tarefa; manter comandos globais verdes.
 
 ### Estado
-- [ ] pendente
+- [x] concluída em 2026-10-11
 
 ### Notas/Desvios
-— (preencher ao executar)
+
+**Arquivos realmente alterados** (`git status`):
+
+- `src/infrastructure/db.ts` (novo) — primitivas assíncronas de IndexedDB:
+  banco `minhaacoes` v1, object stores `sheets` (key
+  `${spreadsheetId}.${sheetName}`) e `outbox` (key `mutation.id`); `openDb()`
+  singleton; `IdbBackend` + `getBackend()`/`_setBackendForTests` (injeção para
+  testes); quando `indexedDB` não existe (Node) as primitivas **não lançam**
+  (resolvem `null`/`[]`, virando no-op).
+- `src/infrastructure/kvStore.ts` (novo) — espelho em memória (um `Map` por
+  store), `ensureHydrated()` idempotente, leituras/escritas síncronas
+  (`kvGet/kvSet/kvDelete/kvClear/kvKeys/kvSize`) com persistência assíncrona
+  fire-and-forget, e a migração única do `localStorage`.
+- `src/infrastructure/cache.ts` — mesmo contrato público (assinaturas
+  inalteradas), agora sobre o kvStore; chaves da store `sheets` são
+  `${spreadsheetId}.${sheetName}` (sem o prefixo versionado do localStorage);
+  `invalidateSpreadsheetCache`/`clearAllSheetCache`/`listCachedSpreadsheets`
+  iteram as chaves do espelho.
+- `src/infrastructure/outbox.ts` — mesmo contrato público; a fila agora vive na
+  store `outbox` (uma entrada por mutação, key `mutation.id`); `list()` ordena
+  por `createdAt` ASC com `id` como desempate (não confia na ordem de inserção,
+  pois `newId()` usa `crypto.randomUUID`); `OUTBOX_STORAGE_KEY` mantido apenas
+  como referência da chave legada.
+- `src/main.tsx` — `bootstrap()` aguarda `ensureHydrated()` antes de
+  `createRoot().render(...)`, com `try/catch` (falha → render com espelho vazio).
+- `src/infrastructure/kvStore.test.ts` (novo) — fallback sem IndexedDB,
+  persistência/releitura do espelho (backend em memória) e migração única.
+- `src/infrastructure/outbox.test.ts` e `src/infrastructure/offlineRepositories.test.ts`
+  — adaptados ao espelho em memória (reset por teste) e à ordenação por
+  `createdAt`.
+- `PLANO_PWA.md` — estado e notas.
+
+**Decisões tomadas:**
+
+- **API síncrona preservada (memory mirror):** `cache.ts` e `outbox.ts` mantêm
+  as mesmas assinaturas síncronas. Leituras leem de um espelho em memória
+  (`Map` por store) hidratado uma única vez; escritas atualizam o espelho de
+  forma síncrona e disparam a persistência no IndexedDB de forma assíncrona
+  (fire-and-forget, com `catch`). `main.tsx` bloqueia o render até a hidratação
+  (com `try/catch` → segue vazio em falha). Nenhum chamador
+  (`Repository.readCache`, `temCacheCompleto`, `lerDashboardDoCache`,
+  `useDashboard`, `applyOptimistic`, `sync.ts`) precisou mudar.
+- **`token`/`workspace`/`consent` continuam no `localStorage`** (`storage.ts`
+  intocado) — só cache de abas e outbox migraram.
+- **Object stores e chaves:** `sheets` key `${spreadsheetId}.${sheetName}`;
+  `outbox` key `mutation.id` (uma entrada por mutação, em vez do array único do
+  localStorage — facilita `remove` e `clear` por entrada).
+- **Migração única:** em `ensureHydrated()`, se o IndexedDB estiver **vazio**
+  (ambas as stores) e o `localStorage` tiver as chaves antigas
+  (`minhaacoes.cache.v1.*` e `minhaacoes.outbox.v1`), importa para o IDB e só
+  **depois** remove as chaves do localStorage (evita perda se a importação
+  falhar no meio). Se o IDB já tiver dados, a migração é pulada (IDB é a fonte
+  da verdade).
+- **Fallback sem IndexedDB (Node):** `db.ts` detecta `typeof indexedDB ===
+  'undefined'` e resolve `null`/`[]`; o kvStore opera só no espelho em memória.
+  Nenhum import lança em ambiente sem IDB.
+- **Ordenação FIFO estável:** `list()` faz `sort` por `createdAt` (localeCompare)
+  com `id` como desempate — necessário porque `newId()` usa `randomUUID` (não
+  ordenável) e duas mutações no mesmo milissegundo teriam ordem instável.
+- **Testes sem `fake-indexeddb`:** os testes de persistência/releitura e migração
+  usam um backend em memória (`IdbBackend`) injetado via `_setBackendForTests`
+  e `_resetForTests` — não foi necessário adicionar a devDependency.
+
+**Desvios do plano:**
+
+- Escolhida a tarefa **1 (IndexedDB)**; as demais (Periodic Sync, tabs, conflitos)
+  não foram tocadas.
+- Nada de estrutural. O `IdbBackend` injetável e os hooks `_setBackendForTests`
+  /`_resetForTests` são internos de teste (prefixo `_`), sem alterar a API pública.
+
+**Validação executada (2026-10-11):**
+
+- `npm run typecheck` — ok.
+- `npm test -- --run` — **183 testes / 17 arquivos**, todos verdes (3 novos:
+  4 em `kvStore.test.ts`, 5 em `outbox.test.ts` reescrito, 11 em
+  `offlineRepositories.test.ts` reescrito; `sync.test.ts` e demais intactos).
+- `npm run lint` — ok.
+- `npm run build` — ok; PWA `generateSW`, 16 entradas de precache (~1005 KiB),
+  gera `dist/sw.js` + `dist/workbox-*.js` (aviso de chunk > 500 kB pré-existente).
+- `npm run preview` (porta 4173) + verificação no navegador: o app shell abre sem
+  erros de console; após limpar o SW/cache antigos, o app cria o IndexedDB
+  `minhaacoes` com as stores `sheets` e `outbox`. **Migração end-to-end validada:**
+  semeei `localStorage` com `minhaacoes.cache.v1.planilha.Operacoes` e
+  `minhaacoes.outbox.v1`, recarreguei e confirmei que o IDB recebeu os registros
+  (`sheets` → key `planilha.Operacoes`; `outbox` → key `m-1`), as chaves antigas
+  foram removidas do localStorage e o badge exibiu `1 alteração pendente`
+  (prova de que o espelho foi hidratado e a fila persiste).
+- Fluxo Google real (login/escrita na planilha) não é possível neste ambiente
+  (sem `VITE_GOOGLE_CLIENT_ID`) — mesma limitação das Fases 3/4; a persistência
+  da fila foi comprovada pela migração + badge acima.
 
 ---
 

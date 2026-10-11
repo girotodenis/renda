@@ -1,16 +1,21 @@
 import { newId } from '@/domain/ids'
 import type { SheetName } from '@/domain/sheetsSchema'
-import { readStorageJson, removeStorageKey, writeStorageJson } from '@/infrastructure/storage'
+import { kvClear, kvDelete, kvGet, kvKeys, kvSet } from '@/infrastructure/kvStore'
 
 /**
- * Outbox — fila persistente de mutações offline (Fase 1 do plano PWA).
+ * Outbox — fila persistente de mutações offline (Fase 1 do plano PWA), agora
+ * no IndexedDB (Fase 5) com espelho em memória para leitura síncrona.
  *
  * Toda escrita que **não** puder ir imediatamente para a planilha (sem rede ou
  * falha de rede/quota) é registrada aqui e reaplicada depois pela sincronização
- * (Fase 2). A fila vive no `localStorage`, então sobrevive a recargas do app.
+ * (Fase 2). A fila vive na object store `outbox` do IndexedDB (uma entrada por
+ * mutação, chaveada por `mutation.id`), então sobrevive a recargas do app.
  */
 
-/** Chave versionada da fila no `localStorage`. */
+/**
+ * Chave legada da fila no `localStorage` (formato das Fases 0–4). Mantida
+ * apenas como referência documental/migração — a fila não usa mais esta chave.
+ */
 export const OUTBOX_STORAGE_KEY = 'minhaacoes.outbox.v1'
 
 /** Tipo de escrita enfileirada (espelha as operações dos repositórios). */
@@ -37,12 +42,24 @@ export interface Mutation {
 export type MutationDraft = Omit<Mutation, 'id' | 'createdAt'>
 
 function readAll(): Mutation[] {
-  const stored = readStorageJson<Mutation[]>(OUTBOX_STORAGE_KEY)
-  return Array.isArray(stored) ? stored : []
+  const mutations: Mutation[] = []
+  for (const key of kvKeys('outbox')) {
+    const mutation = kvGet<Mutation>('outbox', key)
+    if (mutation) mutations.push(mutation)
+  }
+  return mutations
 }
 
-function writeAll(mutations: readonly Mutation[]): void {
-  writeStorageJson(OUTBOX_STORAGE_KEY, mutations)
+/**
+ * Ordena por `createdAt` ASC, com `id` como desempate. A ordem de inserção
+ * **não** pode ser usada: `newId()` usa `crypto.randomUUID` (não ordenável por
+ * tempo), então duas mutações criadas no mesmo milissegundo teriam ordem
+ * instável sem o desempate.
+ */
+function compareByCreatedAt(a: Mutation, b: Mutation): number {
+  const byCreatedAt = a.createdAt.localeCompare(b.createdAt)
+  if (byCreatedAt !== 0) return byCreatedAt
+  return a.id.localeCompare(b.id)
 }
 
 /** Adiciona uma mutação ao fim da fila e devolve o registro persistido. */
@@ -52,30 +69,28 @@ export function enqueue(draft: MutationDraft): Mutation {
     id: newId(),
     createdAt: new Date().toISOString(),
   }
-  const mutations = readAll()
-  mutations.push(mutation)
-  writeAll(mutations)
+  kvSet('outbox', mutation.id, mutation)
   return mutation
 }
 
 /** Lista as mutações pendentes, em ordem FIFO de enfileiramento. */
 export function list(): Mutation[] {
-  return readAll()
+  return readAll().sort(compareByCreatedAt)
 }
 
 /** Remove uma mutação pelo ID (usada após o sucesso da sincronização). */
 export function remove(id: string): void {
-  writeAll(readAll().filter((mutation) => mutation.id !== id))
+  kvDelete('outbox', id)
 }
 
 /** Esvazia a fila. */
 export function clear(): void {
-  removeStorageKey(OUTBOX_STORAGE_KEY)
+  kvClear('outbox')
 }
 
 /** Quantidade de mutações pendentes. */
 export function count(): number {
-  return readAll().length
+  return kvKeys('outbox').length
 }
 
 /**
