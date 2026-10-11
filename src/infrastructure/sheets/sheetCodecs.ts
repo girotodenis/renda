@@ -12,6 +12,7 @@ import {
 import type { CellValue } from '@/lib/sheetCells'
 import type { SheetName } from '@/lib/sheetsSchema'
 import type {
+  Configuracao,
   Consolidado,
   IndexadorRendaFixa,
   MetaRebalanceamento,
@@ -214,5 +215,14 @@ export const valuationCodec: SheetCodec<Valuation> = {
     precoTeto: cellToOptionalCentavos(at(row, 2)),
     margemSeguranca: cellToOptionalNumber(at(row, 3)),
     anotacoes: cellToText(at(row, 4)),
+  }),
+}
+
+export const configuracoesCodec: SheetCodec<Configuracao> = {
+  sheetName: 'Configuracoes',
+  toRow: (configuracao) => [configuracao.chave, configuracao.valor],
+  fromRow: (row) => ({
+    chave: cellToText(at(row, 0)),
+    valor: cellToText(at(row, 1)),
   }),
 }

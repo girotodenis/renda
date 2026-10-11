@@ -12,6 +12,7 @@ export const SHEET_NAMES = [
   'Metas_Rebalanceamento',
   'Historico',
   'Valuation',
+  'Configuracoes',
 ] as const
 
 export type SheetName = (typeof SHEET_NAMES)[number]
@@ -71,4 +72,5 @@ export const SHEET_HEADERS: Record<SheetName, readonly string[]> = {
     'Margem de Segurança (%)',
     'Anotações da Análise',
   ],
+  Configuracoes: ['Chave', 'Valor'],
 }

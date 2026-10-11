@@ -8,6 +8,7 @@ import { consolidadoRepo, operacoesRepo } from '@/services/repositories'
 import type { RepositoryContext } from '@/services/repositories'
 import { clearValues, columnLetter, getSpreadsheetLocale, updateValues } from '@/services/sheets'
 import { buscarCotacoesTesouro } from '@/services/tesouro'
+import { carregarConfiguracoes } from '@/services/configuracoes'
 import type { Consolidado, Operacao } from '@/types/domain'
 
 /**
@@ -81,7 +82,7 @@ export async function syncConsolidado(
   const operacoes = await operacoesRepo.list(context, {
     forceRefresh: options.forceRefreshOperacoes,
   })
-  const precosAtuais = options.precosAtuais ?? (await precosDaCarteira(operacoes))
+  const precosAtuais = options.precosAtuais ?? (await precosDaCarteira(context, operacoes))
   return writeConsolidado(context, operacoes, precosAtuais)
 }
 
@@ -91,7 +92,10 @@ export async function syncConsolidado(
  * de dados abertos (cache-first). Falhas são ignoradas — o `writeConsolidado`
  * cai no preço médio como fallback (RNF04).
  */
-async function precosDaCarteira(operacoes: readonly Operacao[]): Promise<Map<string, number>> {
+async function precosDaCarteira(
+  context: RepositoryContext,
+  operacoes: readonly Operacao[],
+): Promise<Map<string, number>> {
   const precos = new Map<string, number>(precosManuaisDeOperacoes(operacoes))
 
   // B3 (Ação/FII/BDR/ETF): preço persistido via Brapi (fallback do GOOGLEFINANCE).
@@ -102,7 +106,8 @@ async function precosDaCarteira(operacoes: readonly Operacao[]): Promise<Map<str
     .map((posicao) => posicao.ticker)
 
   if (tickersTesouro.length > 0) {
-    const cotacoes = await buscarCotacoesTesouro(tickersTesouro)
+    const config = await carregarConfiguracoes(context)
+    const cotacoes = await buscarCotacoesTesouro(tickersTesouro, { apiUrl: config.tesouroApiUrl })
     for (const [ticker, cotacao] of cotacoes) precos.set(ticker, cotacao.preco)
   }
 

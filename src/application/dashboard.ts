@@ -20,6 +20,7 @@ import type { RepositoryContext } from '@/services/repositories'
 import { registrarSnapshot } from '@/services/historico'
 import { buscarCotacoesTesouro, lerCotacaoCache } from '@/services/tesouro'
 import { buscarCotacoesBrapi, lerCotacaoCache as lerCotacaoCacheBrapi } from '@/services/brapi'
+import { carregarConfiguracoes } from '@/services/configuracoes'
 import type { Consolidado, Operacao, Provento, Snapshot, Valuation } from '@/types/domain'
 
 /**
@@ -201,11 +202,17 @@ export async function carregarDashboard(
   const proventos = proventosRepo.readCache(spreadsheetId) ?? []
   const historico = historicoRepo.readCache(spreadsheetId) ?? []
   const valuation = await carregarValuations(context, options.offline === true)
-  const cotacoesTesouro = await resolverCotacoesTesouro(operacoes, options.offline === true)
+  const config = await carregarConfiguracoes(context, options.offline === true)
+  const cotacoesTesouro = await resolverCotacoesTesouro(
+    operacoes,
+    options.offline === true,
+    config.tesouroApiUrl,
+  )
   const cotacoesBrapi = await resolverCotacoesBrapi(
     operacoes,
     linhasConsolidado,
     options.offline === true,
+    config.brapiToken,
   )
 
   return montarDashboard({
@@ -243,6 +250,7 @@ async function carregarValuations(
 async function resolverCotacoesTesouro(
   operacoes: readonly Operacao[],
   offline: boolean,
+  apiUrl: string,
 ): Promise<Map<string, number>> {
   const tickers = tickersTesouro(calcularPosicoes(operacoes))
   const cotacoes = new Map<string, number>()
@@ -256,7 +264,7 @@ async function resolverCotacoesTesouro(
     return cotacoes
   }
 
-  const resolvidas = await buscarCotacoesTesouro(tickers)
+  const resolvidas = await buscarCotacoesTesouro(tickers, { apiUrl })
   for (const [ticker, cotacao] of resolvidas) cotacoes.set(ticker, cotacao.preco)
   return cotacoes
 }
@@ -299,6 +307,7 @@ async function resolverCotacoesBrapi(
   operacoes: readonly Operacao[],
   linhasConsolidado: readonly Consolidado[],
   offline: boolean,
+  token: string,
 ): Promise<Map<string, number>> {
   const tickers = tickersBrapi(calcularPosicoes(operacoes), precosDoConsolidado(linhasConsolidado))
   if (tickers.length === 0) return new Map()
@@ -306,7 +315,7 @@ async function resolverCotacoesBrapi(
   if (offline) return cotacoesBrapiDoCache(operacoes, linhasConsolidado)
 
   const cotacoes = new Map<string, number>()
-  const resolvidas = await buscarCotacoesBrapi(tickers)
+  const resolvidas = await buscarCotacoesBrapi(tickers, { token })
   for (const [ticker, preco] of resolvidas) cotacoes.set(ticker, preco)
   return cotacoes
 }

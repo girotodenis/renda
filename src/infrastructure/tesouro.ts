@@ -1,6 +1,7 @@
+import { DEFAULT_TESOURO_API_URL } from '@/domain/configuracoes'
 import { toISO } from '@/lib/dates'
 import { parseDecimalBR, toCentavos } from '@/lib/money'
-import { readStorageJson, writeStorageJson } from '@/lib/storage'
+import { clearStorageKeys, readStorageJson, writeStorageJson } from '@/lib/storage'
 
 /**
  * Cotação de **Tesouro Direto** via API de dados abertos (Tesouro Nacional),
@@ -15,10 +16,6 @@ import { readStorageJson, writeStorageJson } from '@/lib/storage'
  *   "sem cotação" — o app usa o preço manual/médio e nunca trava a UI (RNF04).
  */
 
-/** Endpoint CKAN (dados abertos) do Tesouro Transparente. Sobrescrevível por env. */
-const DEFAULT_TESOURO_API_URL =
-  'https://www.tesourotransparente.gov.br/ckan/api/3/action/datastore_search?resource_id=df56aa42-484a-4a59-8184-7676580c81e3&limit=2000'
-
 /** Tempo máximo de espera pela API antes de desistir (fallback manual). */
 const REQUEST_TIMEOUT_MS = 8000
 
@@ -27,10 +24,16 @@ const CACHE_TTL_MS = 24 * 60 * 60 * 1000
 
 const CACHE_PREFIX = 'minhaacoes.tesouro.v1.'
 
-function readEnvUrl(): string {
-  const env = import.meta.env as unknown as Record<string, string | undefined>
-  const value = env.VITE_TESOURO_API_URL
-  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : DEFAULT_TESOURO_API_URL
+/** Opções da busca de cotações do Tesouro Direto. */
+export interface BuscarTesouroOptions {
+  /** Endpoint configurado pelo usuário (vazio = `DEFAULT_TESOURO_API_URL`). */
+  apiUrl?: string
+}
+
+/** Endpoint efetivo: o configurado pelo usuário quando informado; senão o padrão. */
+function resolverApiUrl(apiUrl?: string): string {
+  const valor = typeof apiUrl === 'string' ? apiUrl.trim() : ''
+  return valor.length > 0 ? valor : DEFAULT_TESOURO_API_URL
 }
 
 /** Cotação de um título do Tesouro. */
@@ -205,9 +208,13 @@ export function lerCotacaoCache(ticker: string): TesouroCotacao | null {
 /**
  * Busca as cotações do Tesouro para os tickers informados (cache-first).
  * Nunca lança: em caso de falha retorna apenas o que estiver disponível.
+ *
+ * O endpoint é resolvido por `options.apiUrl` (config do usuário na planilha);
+ * quando vazio, usa o endpoint público padrão.
  */
 export async function buscarCotacoesTesouro(
   tickers: readonly string[],
+  options: BuscarTesouroOptions = {},
 ): Promise<Map<string, TesouroCotacao>> {
   const resultado = new Map<string, TesouroCotacao>()
   const pendentes: string[] = []
@@ -223,7 +230,7 @@ export async function buscarCotacoesTesouro(
   if (pendentes.length === 0) return resultado
   if (typeof fetch !== 'function') return resultado
 
-  const registros = await buscarRegistros()
+  const registros = await buscarRegistros(resolverApiUrl(options.apiUrl))
   if (registros.length === 0) return resultado
 
   for (const ticker of pendentes) {
@@ -236,13 +243,18 @@ export async function buscarCotacoesTesouro(
   return resultado
 }
 
+/** Remove as cotações do Tesouro do cache local (ex.: após mudar o endpoint). */
+export function clearTesouroCache(): void {
+  clearStorageKeys(CACHE_PREFIX)
+}
+
 /** Busca (best-effort) os registros da API. Falhas retornam `[]`. */
-async function buscarRegistros(): Promise<TesouroRegistro[]> {
+async function buscarRegistros(apiUrl: string): Promise<TesouroRegistro[]> {
   if (typeof AbortController !== 'function') return []
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
   try {
-    const response = await fetch(readEnvUrl(), {
+    const response = await fetch(apiUrl, {
       signal: controller.signal,
       headers: { Accept: 'application/json' },
     })

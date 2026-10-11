@@ -4,6 +4,7 @@ import { AuthProvider } from '@/app/providers/AuthProvider'
 import { ProtectedRoute, PublicOnlyRoute } from '@/app/routes/RouteGuards'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { LoginPage } from '@/features/auth/LoginPage'
+import { ConfiguracoesPage } from '@/features/configuracoes/ConfiguracoesPage'
 import { DashboardPage } from '@/features/dashboard/DashboardPage'
 import { DiagnosticoPage } from '@/features/diagnostico/DiagnosticoPage'
 import { EventosPage } from '@/features/eventos/EventosPage'
@@ -82,6 +83,14 @@ export function App() {
                 element={
                   <ProtectedRoute>
                     <DiagnosticoPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/configuracoes"
+                element={
+                  <ProtectedRoute>
+                    <ConfiguracoesPage />
                   </ProtectedRoute>
                 }
               />

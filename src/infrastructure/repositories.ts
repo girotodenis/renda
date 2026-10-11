@@ -2,6 +2,7 @@ import { newId } from '@/lib/ids'
 import type { CellValue } from '@/lib/sheetCells'
 import { toCell } from '@/lib/sheetCells'
 import {
+  configuracoesCodec,
   consolidadoCodec,
   historicoCodec,
   metasCodec,
@@ -21,7 +22,7 @@ import {
   getValues,
   updateValues,
 } from '@/services/sheets'
-import type { Consolidado, MetaRebalanceamento, Operacao, Provento, Snapshot, Valuation } from '@/types/domain'
+import type { Configuracao, Consolidado, MetaRebalanceamento, Operacao, Provento, Snapshot, Valuation } from '@/types/domain'
 
 /**
  * Repositórios por aba (Seção 2) — abstraem a planilha como um banco de dados.
@@ -196,6 +197,7 @@ const consolidadoRepoRaw = createRepository<Consolidado>({
 const metasRepoRaw = createRepository<MetaRebalanceamento>({ codec: metasCodec })
 const historicoRepoRaw = createRepository<Snapshot>({ codec: historicoCodec })
 const valuationRepoRaw = createRepository<Valuation>({ codec: valuationCodec })
+const configuracoesRepoRaw = createRepository<Configuracao>({ codec: configuracoesCodec })
 
 // Repositórios da camada de dados já **envoltos pelo decorador offline** (Fase 1):
 // escritas sem rede (ou com falha de rede/quota) vão para o outbox e refletem no
@@ -207,6 +209,7 @@ export const consolidadoRepo = withOfflineOutbox(consolidadoRepoRaw, { outboxEna
 export const metasRepo = withOfflineOutbox(metasRepoRaw)
 export const historicoRepo = withOfflineOutbox(historicoRepoRaw)
 export const valuationRepo = withOfflineOutbox(valuationRepoRaw)
+export const configuracoesRepo = withOfflineOutbox(configuracoesRepoRaw)
 
 /**
  * Repositório cru (sem decorador) com os contratos apagados para `unknown`.
@@ -261,6 +264,7 @@ export const rawRepositories: Record<SheetName, RawSheetRepository> = {
   Metas_Rebalanceamento: asRawSheetRepository(metasRepoRaw),
   Historico: asRawSheetRepository(historicoRepoRaw),
   Valuation: asRawSheetRepository(valuationRepoRaw),
+  Configuracoes: asRawSheetRepository(configuracoesRepoRaw),
 }
 
 /**

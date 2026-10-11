@@ -1,5 +1,5 @@
 import { parseDecimalBR, toCentavos } from '@/lib/money'
-import { readStorageJson, writeStorageJson } from '@/lib/storage'
+import { clearStorageKeys, readStorageJson, writeStorageJson } from '@/lib/storage'
 
 /**
  * Cotação de **B3 (Ação/FII/BDR/ETF)** via Brapi.dev, usada como **fallback**
@@ -23,11 +23,15 @@ const CACHE_TTL_MS = 15 * 60 * 1000
 
 const CACHE_PREFIX = 'minhaacoes.brapi.v1.'
 
-/** Lê o token da Brapi do ambiente (`VITE_BRAPI_TOKEN`); vazio se não configurado. */
-function readEnvToken(): string {
-  const env = import.meta.env as unknown as Record<string, string | undefined>
-  const value = env.VITE_BRAPI_TOKEN
-  return typeof value === 'string' ? value.trim() : ''
+/** Opções da busca de cotações B3 via Brapi. */
+export interface BuscarBrapiOptions {
+  /** Token da Brapi.dev (vazio = fallback desligado). */
+  token?: string
+}
+
+/** Normaliza o token recebido; vazio quando não configurado. */
+function resolverToken(token?: string): string {
+  return typeof token === 'string' ? token.trim() : ''
 }
 
 /** Cotação de um ticker B3. */
@@ -102,6 +106,11 @@ function gravarCache(ticker: string, cotacao: BrapiCotacao): void {
   writeStorageJson(cacheKey(ticker), { cotacao, gravadoEm: Date.now() })
 }
 
+/** Remove as cotações B3 do cache local (ex.: após trocar o token). */
+export function clearBrapiCache(): void {
+  clearStorageKeys(CACHE_PREFIX)
+}
+
 /** Lê a cotação do cache local, quando ainda válida. */
 export function lerCotacaoCache(ticker: string): BrapiCotacao | null {
   const registro = lerCache(ticker)
@@ -113,9 +122,13 @@ export function lerCotacaoCache(ticker: string): BrapiCotacao | null {
 /**
  * Busca cotações B3 (centavos) para os tickers informados (cache-first).
  * Nunca lança: em caso de falha retorna apenas o que estiver disponível.
+ *
+ * O token é resolvido por `options.token` (config do usuário na planilha);
+ * quando vazio, o fallback fica desligado (apenas cache).
  */
 export async function buscarCotacoesBrapi(
   tickers: readonly string[],
+  options: BuscarBrapiOptions = {},
 ): Promise<Map<string, number>> {
   const resultado = new Map<string, number>()
   const pendentes: string[] = []
@@ -129,7 +142,7 @@ export async function buscarCotacoesBrapi(
   }
 
   if (pendentes.length === 0) return resultado
-  const token = readEnvToken()
+  const token = resolverToken(options.token)
   if (token.length === 0) return resultado
   if (typeof fetch !== 'function') return resultado
 
