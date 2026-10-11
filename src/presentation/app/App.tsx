@@ -16,7 +16,10 @@ import { RebalanceamentoPage } from '@/presentation/features/rebalanceamento/Reb
 
 export function App() {
   return (
-    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+    <BrowserRouter
+      basename={import.meta.env.BASE_URL.replace(/\/$/, '')}
+      future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
+    >
       <AuthProvider>
         <ErrorBoundary title="Algo deu errado">
           <Routes>
