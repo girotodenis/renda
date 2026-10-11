@@ -14,5 +14,11 @@ export interface SpreadsheetWorkspace {
   updatedAt: string
 }
 
+/** Referência leve a uma planilha no Drive (id + título). */
+export interface PlanilhaExistente {
+  spreadsheetId: string
+  title: string
+}
+
 /** Estado de autenticação da sessão. */
 export type AuthStatus = 'loading' | 'unauthenticated' | 'authenticated'

@@ -1,8 +1,10 @@
+import type { PlanilhaExistente } from '@/domain/workspace'
 import { loadScript } from '@/infrastructure/loadScript'
 import { googleConfig, MISSING_PICKER_KEY_MESSAGE } from '@/infrastructure/googleConfig'
 
 /**
- * Google Drive — seleção de planilha existente via Google Picker (RF02).
+ * Google Drive — seleção de planilha existente via Google Picker (RF02) e
+ * busca por título (detecção de planilhas duplicadas antes de criar).
  *
  * O Picker usa o access token OAuth do usuário diretamente e exige uma chave de
  * API (`VITE_GOOGLE_PICKER_API_KEY`). Sob o escopo `drive.file`, o Picker é a
@@ -11,6 +13,7 @@ import { googleConfig, MISSING_PICKER_KEY_MESSAGE } from '@/infrastructure/googl
 
 const GAPI_SCRIPT_SRC = 'https://apis.google.com/js/api.js'
 const GAPI_LOAD_TIMEOUT_MS = 15000
+const DRIVE_FILES_ENDPOINT = 'https://www.googleapis.com/drive/v3/files'
 
 let gapiScriptPromise: Promise<void> | null = null
 let pickerLibraryPromise: Promise<void> | null = null
@@ -23,14 +26,87 @@ export class GooglePickerError extends Error {
   }
 }
 
-export interface DriveSpreadsheetSelection {
-  spreadsheetId: string
-  title: string
+/** Erro originado da API do Google Drive (`files.list`). */
+export class GoogleDriveError extends Error {
+  constructor(
+    public readonly status: number,
+    message: string,
+  ) {
+    super(message)
+    this.name = 'GoogleDriveError'
+  }
 }
+
+export type DriveSpreadsheetSelection = PlanilhaExistente
 
 /** `true` quando a seleção de planilha existente pode ser oferecida na UI. */
 export function isSpreadsheetSelectionAvailable(): boolean {
   return googleConfig.pickerApiKey !== null
+}
+
+interface DriveFileListResponse {
+  files?: { id?: string; name?: string }[]
+}
+
+/**
+ * Busca, no Drive, planilhas cujo título é exatamente `title` (RF02).
+ *
+ * É usada antes de criar a planilha padrão para detectar um nome já existente.
+ * Sob o escopo `drive.file` a listagem enxerga apenas arquivos criados/abertos
+ * por este app — suficiente para as planilhas da carteira.
+ *
+ * Lança `GoogleDriveError` em falha da API; o chamador decide se segue com a
+ * criação (falha aberta).
+ */
+export async function findSpreadsheetsByName(
+  accessToken: string,
+  title: string,
+): Promise<DriveSpreadsheetSelection[]> {
+  const trimmed = title.trim()
+  if (trimmed.length === 0) return []
+
+  const escapedTitle = trimmed.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+  const query = [
+    `name = '${escapedTitle}'`,
+    "mimeType = 'application/vnd.google-apps.spreadsheet'",
+    'trashed = false',
+  ].join(' and ')
+
+  const params = new URLSearchParams({
+    q: query,
+    fields: 'files(id,name)',
+    orderBy: 'modifiedTime desc',
+    pageSize: '10',
+  })
+
+  const response = await fetch(`${DRIVE_FILES_ENDPOINT}?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+
+  if (!response.ok) {
+    if (response.status === 401) {
+      throw new GoogleDriveError(401, 'Sessão expirada. Faça login novamente.')
+    }
+    if (response.status === 403) {
+      throw new GoogleDriveError(
+        403,
+        'Permissão negada pelo Google Drive. Verifique se a API Drive está habilitada e se os escopos foram autorizados.',
+      )
+    }
+    if (response.status === 429) {
+      throw new GoogleDriveError(429, 'Cota da API do Google excedida. Tente novamente em instantes.')
+    }
+    throw new GoogleDriveError(response.status, `Falha na API do Google Drive (HTTP ${response.status}).`)
+  }
+
+  const body = (await response.json()) as DriveFileListResponse
+  const found: DriveSpreadsheetSelection[] = []
+  for (const file of body.files ?? []) {
+    if (typeof file.id === 'string' && typeof file.name === 'string') {
+      found.push({ spreadsheetId: file.id, title: file.name })
+    }
+  }
+  return found
 }
 
 function loadGapiScript(): Promise<void> {

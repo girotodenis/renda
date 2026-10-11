@@ -1,11 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { AuthContext } from '@/presentation/app/providers/authContext'
-import type { AuthContextValue } from '@/presentation/app/providers/authContext'
+import type {
+  AuthContextValue,
+  OpcoesCriarPlanilha,
+  ResultadoCriacaoPlanilha,
+} from '@/presentation/app/providers/authContext'
 import { isOnline } from '@/application/online'
 import { consentStorage, tokenStorage, workspaceStorage } from '@/infrastructure/storage'
 import type { StoredToken } from '@/infrastructure/storage'
-import { GooglePickerError, pickSpreadsheet } from '@/infrastructure/drive'
+import {
+  findSpreadsheetsByName,
+  GoogleDriveError,
+  GooglePickerError,
+  pickSpreadsheet,
+} from '@/infrastructure/drive'
 import {
   GOOGLE_SCOPES,
   googleConfig,
@@ -46,7 +55,7 @@ function describeError(error: unknown): string {
     if (error.status === 429) return 'Cota da API do Google excedida. Tente novamente em instantes.'
     return `Erro na API do Google Sheets: ${error.message}`
   }
-  if (error instanceof GooglePickerError || error instanceof GoogleAuthError) {
+  if (error instanceof GooglePickerError || error instanceof GoogleAuthError || error instanceof GoogleDriveError) {
     return error.message
   }
   if (error instanceof Error && error.message.length > 0) {
@@ -258,6 +267,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return refreshed ? tokenRef.current : null
   }, [silentRefresh])
 
+  const salvarWorkspace = useCallback((loaded: SpreadsheetWorkspace) => {
+    workspaceStorage.save(loaded)
+    setWorkspace(loaded)
+  }, [])
+
   const selecionarPlanilha = useCallback(async () => {
     setError(null)
     if (!isSpreadsheetPickerConfigured()) {
@@ -277,17 +291,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const picked = await pickSpreadsheet(token)
       if (!picked) return
       const loaded = await loadSpreadsheetWorkspace(token, picked.spreadsheetId)
-      workspaceStorage.save(loaded)
-      setWorkspace(loaded)
+      salvarWorkspace(loaded)
     } catch (selectionError) {
       setError(describeError(selectionError))
     } finally {
       setIsBusy(false)
     }
-  }, [ensureAccessToken])
+  }, [ensureAccessToken, salvarWorkspace])
 
-  const criarPlanilha = useCallback(
-    async (title?: string) => {
+  const abrirPlanilha = useCallback(
+    async (spreadsheetId: string) => {
       setError(null)
       const token = await ensureAccessToken()
       if (!token) {
@@ -298,16 +311,52 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       setIsBusy(true)
       try {
-        const created = await createDefaultSpreadsheet(token, title)
-        workspaceStorage.save(created)
-        setWorkspace(created)
-      } catch (creationError) {
-        setError(describeError(creationError))
+        const loaded = await loadSpreadsheetWorkspace(token, spreadsheetId)
+        salvarWorkspace(loaded)
+      } catch (openError) {
+        setError(describeError(openError))
       } finally {
         setIsBusy(false)
       }
     },
-    [ensureAccessToken],
+    [ensureAccessToken, salvarWorkspace],
+  )
+
+  const criarPlanilha = useCallback(
+    async (title?: string, options?: OpcoesCriarPlanilha): Promise<ResultadoCriacaoPlanilha> => {
+      setError(null)
+      const token = await ensureAccessToken()
+      if (!token) {
+        setError('Sessão expirada. Faça login novamente.')
+        setStatus('unauthenticated')
+        return { status: 'error' }
+      }
+
+      setIsBusy(true)
+      try {
+        const trimmed = title?.trim() ?? ''
+        if (!options?.force && trimmed.length > 0) {
+          try {
+            const existentes = await findSpreadsheetsByName(token, trimmed)
+            const [existente] = existentes
+            if (existente) return { status: 'duplicate', existente }
+          } catch {
+            // Falha na verificação (rede/quota): segue com a criação. O Sheets
+            // aceita títulos duplicados e bloquear o usuário seria pior.
+          }
+        }
+
+        const created = await createDefaultSpreadsheet(token, title)
+        salvarWorkspace(created)
+        return { status: 'created' }
+      } catch (creationError) {
+        setError(describeError(creationError))
+        return { status: 'error' }
+      } finally {
+        setIsBusy(false)
+      }
+    },
+    [ensureAccessToken, salvarWorkspace],
   )
 
   const clearError = useCallback(() => setError(null), [])
@@ -325,10 +374,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       logout,
       selecionarPlanilha,
       criarPlanilha,
+      abrirPlanilha,
       ensureAccessToken,
       clearError,
     }),
     [
+      abrirPlanilha,
       accessToken,
       clearError,
       criarPlanilha,
