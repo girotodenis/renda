@@ -1,7 +1,7 @@
 import { z } from 'zod'
-import { formatMoneyInput, parseBRL, toCentavos } from '@/lib/money'
-import { CategoriaAtivo, ProventoTipo } from '@/types/domain'
-import type { Provento } from '@/types/domain'
+import { formatMoneyInput, parseBRL, toCentavos } from '@/domain/money'
+import { CategoriaAtivo, ProventoTipo } from '@/domain/entities'
+import type { Provento } from '@/domain/entities'
 
 /**
  * Schema `zod` do formulário de provento (dividendo/JCP/rendimento) — RF05.

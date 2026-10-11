@@ -1,7 +1,7 @@
-import { round2 } from '@/lib/money'
-import { fatorQuantidade, isTipoEventoCorporativo } from '@/lib/eventosCorporativos'
-import type { CategoriaAtivo, Consolidado, Operacao } from '@/types/domain'
-import { OperacaoTipo } from '@/types/domain'
+import { round2 } from '@/domain/money'
+import { fatorQuantidade, isTipoEventoCorporativo } from '@/domain/eventosCorporativos'
+import type { CategoriaAtivo, Consolidado, Operacao } from '@/domain/entities'
+import { OperacaoTipo } from '@/domain/entities'
 
 /**
  * Fórmulas de cálculo da carteira (Seção 5.1) — módulo **puro** e testável.

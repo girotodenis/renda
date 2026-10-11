@@ -1,25 +1,25 @@
 import { Loader2, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
-import { useAuth } from '@/app/providers/authContext'
-import { Alert } from '@/components/Alert'
-import { Pagination } from '@/components/Pagination'
-import { PAGE_SIZE, usePagination } from '@/hooks/usePagination'
-import { EventoCorporativoForm } from '@/features/eventos/EventoCorporativoForm'
-import { eventoToOperacao, toEventoPayload } from '@/features/eventos/eventoSchema'
-import type { EventoFormOutput } from '@/features/eventos/eventoSchema'
-import { categoriaLabel } from '@/lib/categoria'
-import { formatarDataBR } from '@/lib/dates'
+import { useAuth } from '@/presentation/app/providers/authContext'
+import { Alert } from '@/presentation/components/Alert'
+import { Pagination } from '@/presentation/components/Pagination'
+import { PAGE_SIZE, usePagination } from '@/presentation/hooks/usePagination'
+import { EventoCorporativoForm } from '@/presentation/features/eventos/EventoCorporativoForm'
+import { eventoToOperacao, toEventoPayload } from '@/presentation/features/eventos/eventoSchema'
+import type { EventoFormOutput } from '@/presentation/features/eventos/eventoSchema'
+import { categoriaLabel } from '@/domain/categoria'
+import { formatarDataBR } from '@/domain/dates'
 import {
   EVENTO_CORPORATIVO_LABELS,
   descreverEvento,
   eventosDeOperacoes,
-} from '@/lib/eventosCorporativos'
-import type { EventoCorporativo } from '@/lib/eventosCorporativos'
-import { operacoesRepo } from '@/services/repositories'
-import type { RepositoryContext } from '@/services/repositories'
-import { describeSheetsError } from '@/services/sheets'
-import type { CategoriaAtivo, Operacao } from '@/types/domain'
-import { sincronizarConsolidadoESnapshot } from './escritasAtivo'
+} from '@/domain/eventosCorporativos'
+import type { EventoCorporativo } from '@/domain/eventosCorporativos'
+import { operacoesRepo } from '@/infrastructure/repositories'
+import type { RepositoryContext } from '@/infrastructure/repositories'
+import { describeSheetsError } from '@/infrastructure/sheets/gateway'
+import type { CategoriaAtivo, Operacao } from '@/domain/entities'
+import { sincronizarConsolidadoESnapshot } from '@/application/escritasAtivo'
 
 /** Estado do formulário: fechado, novo lançamento ou edição de um evento. */
 type FormState =

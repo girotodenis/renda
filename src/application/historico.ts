@@ -1,8 +1,8 @@
-import type { ResumoCarteira } from '@/lib/consolidado'
-import { toISO } from '@/lib/dates'
-import { historicoRepo } from '@/services/repositories'
-import type { RepositoryContext } from '@/services/repositories'
-import type { Snapshot } from '@/types/domain'
+import type { ResumoCarteira } from '@/domain/consolidado'
+import { toISO } from '@/domain/dates'
+import { historicoRepo } from '@/infrastructure/repositories'
+import type { RepositoryContext } from '@/infrastructure/repositories'
+import type { Snapshot } from '@/domain/entities'
 
 /**
  * Snapshot do patrimônio na aba `Historico` (Seção 2 / RF18).

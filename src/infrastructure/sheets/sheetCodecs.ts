@@ -1,4 +1,4 @@
-import { parseCategoriaAtivo } from '@/lib/categoria'
+import { parseCategoriaAtivo } from '@/domain/categoria'
 import {
   cellToCentavos,
   cellToIsoDate,
@@ -8,9 +8,9 @@ import {
   cellToText,
   centavosToCell,
   optionalCentavosToCell,
-} from '@/lib/sheetCells'
-import type { CellValue } from '@/lib/sheetCells'
-import type { SheetName } from '@/lib/sheetsSchema'
+} from '@/infrastructure/sheets/sheetCells'
+import type { CellValue } from '@/infrastructure/sheets/sheetCells'
+import type { SheetName } from '@/domain/sheetsSchema'
 import type {
   Configuracao,
   Consolidado,
@@ -22,8 +22,8 @@ import type {
   ProventoTipo,
   Snapshot,
   Valuation,
-} from '@/types/domain'
-import { CategoriaAtivo, IndexadorRendaFixa as Indexador, OperacaoTipo as TipoOperacao, ProventoTipo as TipoProvento } from '@/types/domain'
+} from '@/domain/entities'
+import { CategoriaAtivo, IndexadorRendaFixa as Indexador, OperacaoTipo as TipoOperacao, ProventoTipo as TipoProvento } from '@/domain/entities'
 
 /**
  * Codecs linha ↔ entidade por aba.

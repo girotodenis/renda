@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-import type { AuthStatus, SpreadsheetWorkspace } from '@/types/auth'
+import type { AuthStatus, SpreadsheetWorkspace } from '@/domain/workspace'
 
 /** Contexto de sessão exposto pelo `AuthProvider`. */
 export interface AuthContextValue {

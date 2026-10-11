@@ -1,5 +1,5 @@
-import { round2 } from '@/lib/money'
-import type { Consolidado, Valuation } from '@/types/domain'
+import { round2 } from '@/domain/money'
+import type { Consolidado, Valuation } from '@/domain/entities'
 
 /**
  * Regras de valuation — módulo **puro** e testável.

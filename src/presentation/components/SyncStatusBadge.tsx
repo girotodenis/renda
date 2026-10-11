@@ -1,5 +1,5 @@
 import { AlertTriangle, CheckCircle2, Loader2, RefreshCw, WifiOff } from 'lucide-react'
-import { cn } from '@/lib/cn'
+import { cn } from '@/presentation/cn'
 import type { SyncPhase } from '@/presentation/hooks/useSync'
 
 /**

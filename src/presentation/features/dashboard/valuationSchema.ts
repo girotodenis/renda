@@ -1,6 +1,6 @@
 import { z } from 'zod'
-import { formatMoneyInput, parseBRL, parseDecimalBR, toCentavos } from '@/lib/money'
-import type { CategoriaAtivo, Valuation } from '@/types/domain'
+import { formatMoneyInput, parseBRL, parseDecimalBR, toCentavos } from '@/domain/money'
+import type { CategoriaAtivo, Valuation } from '@/domain/entities'
 
 /**
  * Schema `zod` do formulário de valuation (aba `Valuation`) — alerta de

@@ -1,12 +1,12 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Loader2 } from 'lucide-react'
 import { useForm } from 'react-hook-form'
-import { FormField, inputClassName } from '@/components/FormField'
-import { CATEGORIA_ATIVO_LABELS } from '@/lib/categoria'
-import type { Provento } from '@/types/domain'
-import { CategoriaAtivo, ProventoTipo } from '@/types/domain'
-import { proventoFormDefaults, proventoFormSchema } from '@/features/proventos/proventoSchema'
-import type { ProventoFormInput, ProventoFormOutput } from '@/features/proventos/proventoSchema'
+import { FormField, inputClassName } from '@/presentation/components/FormField'
+import { CATEGORIA_ATIVO_LABELS } from '@/domain/categoria'
+import type { Provento } from '@/domain/entities'
+import { CategoriaAtivo, ProventoTipo } from '@/domain/entities'
+import { proventoFormDefaults, proventoFormSchema } from '@/presentation/features/proventos/proventoSchema'
+import type { ProventoFormInput, ProventoFormOutput } from '@/presentation/features/proventos/proventoSchema'
 
 interface ProventoFormProps {
   /** Provento em edição (`undefined` = novo lançamento). */

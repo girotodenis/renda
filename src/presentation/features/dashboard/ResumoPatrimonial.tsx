@@ -1,12 +1,12 @@
 import { PiggyBank, TrendingDown, TrendingUp, Wallet } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { cn } from '@/lib/cn'
-import type { ResumoCarteira } from '@/lib/consolidado'
+import { cn } from '@/presentation/cn'
+import type { ResumoCarteira } from '@/domain/consolidado'
 import {
   classeValor,
   formatarCentavos,
   formatarPercentual,
-} from '@/features/dashboard/formatters'
+} from '@/presentation/features/dashboard/formatters'
 
 interface ResumoPatrimonialProps {
   resumo: ResumoCarteira

@@ -1,7 +1,7 @@
-import { valuationRepo } from '@/services/repositories'
-import type { RepositoryContext } from '@/services/repositories'
-import { ensureRequiredSheets } from '@/services/sheets'
-import type { Valuation } from '@/types/domain'
+import { valuationRepo } from '@/infrastructure/repositories'
+import type { RepositoryContext } from '@/infrastructure/repositories'
+import { ensureRequiredSheets } from '@/infrastructure/sheets/gateway'
+import type { Valuation } from '@/domain/entities'
 
 /**
  * Casos de uso de escrita da análise de valuation (aba `Valuation`).

@@ -4,9 +4,9 @@ import {
   registrosDeConfig,
 } from '@/domain/configuracoes'
 import type { IntegracoesConfig } from '@/domain/configuracoes'
-import { configuracoesRepo } from '@/services/repositories'
-import type { RepositoryContext } from '@/services/repositories'
-import { ensureRequiredSheets } from '@/services/sheets'
+import { configuracoesRepo } from '@/infrastructure/repositories'
+import type { RepositoryContext } from '@/infrastructure/repositories'
+import { ensureRequiredSheets } from '@/infrastructure/sheets/gateway'
 
 /**
  * Casos de uso das configurações de integrações (aba `Configuracoes`).

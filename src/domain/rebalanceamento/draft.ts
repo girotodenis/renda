@@ -1,5 +1,5 @@
-import { formatMoneyInput, parseBRL, parseDecimalBR, toCentavos } from '@/lib/money'
-import { CategoriaAtivo } from '@/types/domain'
+import { formatMoneyInput, parseBRL, parseDecimalBR, toCentavos } from '@/domain/money'
+import { CategoriaAtivo } from '@/domain/entities'
 import type { ConfiguracaoMetas, ItemMetaConfig } from './types'
 
 /**

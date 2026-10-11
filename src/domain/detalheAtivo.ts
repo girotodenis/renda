@@ -1,9 +1,9 @@
-import type { AgregadoProvento } from '@/lib/dashboard'
-import { formatarMesAnoBR, toISO } from '@/lib/dates'
-import { fatorQuantidade, isTipoEventoCorporativo } from '@/lib/eventosCorporativos'
-import { round2 } from '@/lib/money'
-import { OperacaoTipo } from '@/types/domain'
-import type { CategoriaAtivo, Consolidado, Operacao, Provento } from '@/types/domain'
+import type { AgregadoProvento } from '@/domain/dashboard'
+import { formatarMesAnoBR } from '@/domain/dates'
+import { fatorQuantidade, isTipoEventoCorporativo } from '@/domain/eventosCorporativos'
+import { round2 } from '@/domain/money'
+import { OperacaoTipo } from '@/domain/entities'
+import type { CategoriaAtivo, Consolidado, Operacao, Provento } from '@/domain/entities'
 
 /**
  * Detalhe de um ativo por ticker (RF10 — modal do Dashboard) — módulo **puro** e
@@ -183,16 +183,16 @@ export function filtrarProventosDoTicker(
  * Calcula o detalhe de um ativo (RF10). Retorna `null` quando o ticker não tem
  * compras nem posição no consolidado (evita modal vazia) ou é vazio.
  *
- * Os proventos entram na janela `[1ª compra, dataReferencia]` (fim = hoje por
- * padrão), de modo que proventos recebidos após a última compra continuem
- * contando.
+ * Os proventos entram na janela `[1ª compra, dataReferencia]` (fim explícito,
+ * calculado na borda pelo chamador), de modo que proventos recebidos após a
+ * última compra continuem contando.
  */
 export function calcularDetalheAtivo(
   ticker: string,
   operacoes: readonly Operacao[],
   proventos: readonly Provento[],
   consolidado: readonly Consolidado[],
-  dataReferencia: string = toISO(new Date()),
+  dataReferencia: string,
 ): DetalheAtivo | null {
   const alvo = normalizar(ticker)
   if (alvo.length === 0) return null

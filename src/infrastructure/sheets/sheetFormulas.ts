@@ -1,8 +1,8 @@
-import { usaGoogFinance } from '@/lib/categoria'
-import type { PosicaoConsolidada, PrecosAtuais } from '@/lib/consolidado'
-import { fromCentavos } from '@/lib/money'
-import type { CellValue } from '@/lib/sheetCells'
-import { SHEET_HEADERS } from '@/lib/sheetsSchema'
+import { usaGoogFinance } from '@/domain/categoria'
+import type { PosicaoConsolidada, PrecosAtuais } from '@/domain/consolidado'
+import { fromCentavos } from '@/domain/money'
+import type { CellValue } from '@/infrastructure/sheets/sheetCells'
+import { SHEET_HEADERS } from '@/domain/sheetsSchema'
 
 /**
  * Fórmulas da aba `Consolidado` (Seção 5.1).

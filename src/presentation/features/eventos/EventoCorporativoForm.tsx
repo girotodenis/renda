@@ -1,17 +1,17 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Loader2 } from 'lucide-react'
 import { useForm } from 'react-hook-form'
-import { FormField, inputClassName } from '@/components/FormField'
-import { CATEGORIA_ATIVO_LABELS } from '@/lib/categoria'
+import { FormField, inputClassName } from '@/presentation/components/FormField'
+import { CATEGORIA_ATIVO_LABELS } from '@/domain/categoria'
 import {
   EVENTO_CORPORATIVO_LABELS,
   EVENTO_CORPORATIVO_VALOR_LABELS,
-} from '@/lib/eventosCorporativos'
-import type { EventoCorporativo } from '@/lib/eventosCorporativos'
-import { toISO } from '@/lib/dates'
-import { CategoriaAtivo, EVENTO_CORPORATIVO_TIPOS, OperacaoTipo } from '@/types/domain'
-import { eventoFormDefaults, eventoFormSchema } from '@/features/eventos/eventoSchema'
-import type { EventoFormInput, EventoFormOutput } from '@/features/eventos/eventoSchema'
+} from '@/domain/eventosCorporativos'
+import type { EventoCorporativo } from '@/domain/eventosCorporativos'
+import { toISO } from '@/domain/dates'
+import { CategoriaAtivo, EVENTO_CORPORATIVO_TIPOS, OperacaoTipo } from '@/domain/entities'
+import { eventoFormDefaults, eventoFormSchema } from '@/presentation/features/eventos/eventoSchema'
+import type { EventoFormInput, EventoFormOutput } from '@/presentation/features/eventos/eventoSchema'
 
 interface EventoCorporativoFormProps {
   /** Evento em edição (`undefined` = novo lançamento). */

@@ -1,4 +1,4 @@
-import { CategoriaAtivo } from '@/types/domain'
+import { CategoriaAtivo } from '@/domain/entities'
 
 /**
  * Helpers do enum canônico `CategoriaAtivo`.

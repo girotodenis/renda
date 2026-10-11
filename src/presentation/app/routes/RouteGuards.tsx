@@ -1,7 +1,7 @@
 import { Loader2 } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
-import { useAuth } from '@/app/providers/authContext'
+import { useAuth } from '@/presentation/app/providers/authContext'
 
 /** Tela de carregamento exibida enquanto a sessão é restaurada. */
 export function FullPageLoader({ message }: { message: string }) {

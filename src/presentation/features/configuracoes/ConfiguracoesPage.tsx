@@ -1,12 +1,12 @@
 import { CheckCircle2, Eye, EyeOff, KeyRound, Loader2, Save, Settings } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useAuth } from '@/app/providers/authContext'
-import { Alert } from '@/components/Alert'
-import { FormField, inputClassName } from '@/components/FormField'
-import { carregarConfiguracoes, salvarConfiguracoes } from '@/services/configuracoes'
-import { clearBrapiCache } from '@/services/brapi'
-import { describeSheetsError } from '@/services/sheets'
+import { useAuth } from '@/presentation/app/providers/authContext'
+import { Alert } from '@/presentation/components/Alert'
+import { FormField, inputClassName } from '@/presentation/components/FormField'
+import { carregarConfiguracoes, salvarConfiguracoes } from '@/application/configuracoes'
+import { clearBrapiCache } from '@/infrastructure/brapi'
+import { describeSheetsError } from '@/infrastructure/sheets/gateway'
 
 /**
  * Página de configurações das integrações (aba `Configuracoes` da planilha).

@@ -1,25 +1,23 @@
 import { Layers, Loader2, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useAuth } from '@/app/providers/authContext'
-import { Alert } from '@/components/Alert'
-import { EventoCorporativoForm } from '@/features/eventos/EventoCorporativoForm'
-import { eventoToOperacao, toEventoPayload } from '@/features/eventos/eventoSchema'
-import type { EventoFormOutput } from '@/features/eventos/eventoSchema'
-import { categoriaLabel } from '@/lib/categoria'
-import { calcularResumo } from '@/lib/consolidado'
-import { formatarDataBR } from '@/lib/dates'
+import { useAuth } from '@/presentation/app/providers/authContext'
+import { Alert } from '@/presentation/components/Alert'
+import { EventoCorporativoForm } from '@/presentation/features/eventos/EventoCorporativoForm'
+import { eventoToOperacao, toEventoPayload } from '@/presentation/features/eventos/eventoSchema'
+import type { EventoFormOutput } from '@/presentation/features/eventos/eventoSchema'
+import { categoriaLabel } from '@/domain/categoria'
+import { formatarDataBR } from '@/domain/dates'
 import {
   EVENTO_CORPORATIVO_LABELS,
   descreverEvento,
   eventosDeOperacoes,
-} from '@/lib/eventosCorporativos'
-import type { EventoCorporativo } from '@/lib/eventosCorporativos'
-import { syncConsolidado } from '@/services/consolidado'
-import { registrarSnapshot } from '@/services/historico'
-import { consolidadoRepo, operacoesRepo } from '@/services/repositories'
-import type { RepositoryContext } from '@/services/repositories'
-import { describeSheetsError } from '@/services/sheets'
+} from '@/domain/eventosCorporativos'
+import type { EventoCorporativo } from '@/domain/eventosCorporativos'
+import { sincronizarConsolidadoESnapshot } from '@/application/escritasAtivo'
+import { operacoesRepo } from '@/infrastructure/repositories'
+import type { RepositoryContext } from '@/infrastructure/repositories'
+import { describeSheetsError } from '@/infrastructure/sheets/gateway'
 
 function byMostRecent(a: EventoCorporativo, b: EventoCorporativo): number {
   return b.data.localeCompare(a.data) || a.ticker.localeCompare(b.ticker)
@@ -75,20 +73,6 @@ export function EventosPage() {
     void load()
   }, [load])
 
-  /** Recalcula o consolidado e registra um snapshot (best-effort). */
-  async function sincronizarConsolidado(context: RepositoryContext) {
-    try {
-      const consolidado = await syncConsolidado(context)
-      try {
-        await registrarSnapshot(context, calcularResumo(consolidado))
-      } catch {
-        // Snapshot é best-effort — não bloqueia o evento já salvo.
-      }
-    } catch {
-      consolidadoRepo.invalidateCache(context.spreadsheetId)
-    }
-  }
-
   async function handleSubmit(values: EventoFormOutput) {
     const context = await resolveContext()
     if (!context) return
@@ -101,7 +85,7 @@ export function EventosPage() {
       await operacoesRepo.append(context, eventoToOperacao(evento))
       const operacoes = await operacoesRepo.refresh(context)
       setEventos(eventosDeOperacoes(operacoes))
-      await sincronizarConsolidado(context)
+      await sincronizarConsolidadoESnapshot(context)
       setNotice(`${descreverEvento(evento)} de ${evento.ticker} registrado com sucesso.`)
       setIsFormOpen(false)
     } catch (saveError) {
@@ -127,7 +111,7 @@ export function EventosPage() {
       await operacoesRepo.remove(context, evento.id)
       const operacoes = await operacoesRepo.refresh(context)
       setEventos(eventosDeOperacoes(operacoes))
-      await sincronizarConsolidado(context)
+      await sincronizarConsolidadoESnapshot(context)
       setNotice('Evento excluído com sucesso.')
     } catch (deleteError) {
       setError(describeSheetsError(deleteError))

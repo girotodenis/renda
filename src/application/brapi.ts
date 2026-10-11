@@ -1,9 +1,7 @@
-import { calcularResumo } from '@/lib/consolidado'
-import { syncConsolidado } from '@/services/consolidado'
-import { registrarSnapshot } from '@/services/historico'
-import { consolidadoRepo, operacoesRepo } from '@/services/repositories'
-import type { RepositoryContext } from '@/services/repositories'
-import type { Operacao } from '@/types/domain'
+import { sincronizarConsolidadoESnapshot } from '@/application/escritasAtivo'
+import { operacoesRepo } from '@/infrastructure/repositories'
+import type { RepositoryContext } from '@/infrastructure/repositories'
+import type { Operacao } from '@/domain/entities'
 
 /**
  * Persistência das cotações B3 obtidas via Brapi na planilha (fallback do
@@ -63,7 +61,7 @@ export async function persistirCotacoesBrapi(
 
 /**
  * Persiste os preços Brapi e reescreve o `Consolidado` + snapshot do dia.
- * Espelha `sincronizarConsolidadoESnapshot` com o passo extra de gravação.
+ * Reutiliza `sincronizarConsolidadoESnapshot` com o passo extra de gravação.
  */
 export async function persistirESincronizarCotacoesBrapi(
   context: RepositoryContext,
@@ -71,15 +69,5 @@ export async function persistirESincronizarCotacoesBrapi(
 ): Promise<void> {
   const alteradas = await persistirCotacoesBrapi(context, precos)
   if (alteradas === 0) return
-
-  try {
-    const consolidado = await syncConsolidado(context)
-    try {
-      await registrarSnapshot(context, calcularResumo(consolidado))
-    } catch {
-      // Snapshot é best-effort — não bloqueia a gravação já feita.
-    }
-  } catch {
-    consolidadoRepo.invalidateCache(context.spreadsheetId)
-  }
+  await sincronizarConsolidadoESnapshot(context)
 }

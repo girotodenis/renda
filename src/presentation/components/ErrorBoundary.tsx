@@ -1,6 +1,6 @@
 import { Component } from 'react'
 import type { ErrorInfo, ReactNode } from 'react'
-import { Alert } from '@/components/Alert'
+import { Alert } from '@/presentation/components/Alert'
 
 interface ErrorBoundaryProps {
   children: ReactNode

@@ -1,5 +1,5 @@
-import { parseDecimalBR, toCentavos } from '@/lib/money'
-import { clearStorageKeys, readStorageJson, writeStorageJson } from '@/lib/storage'
+import { parseDecimalBR, toCentavos } from '@/domain/money'
+import { clearStorageKeys, readStorageJson, writeStorageJson } from '@/infrastructure/storage'
 
 /**
  * Cotação de **B3 (Ação/FII/BDR/ETF)** via Brapi.dev, usada como **fallback**

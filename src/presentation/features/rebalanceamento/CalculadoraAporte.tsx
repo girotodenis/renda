@@ -1,11 +1,11 @@
 import { AlertTriangle, Calculator } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { FormField, inputClassName } from '@/components/FormField'
-import { cn } from '@/lib/cn'
-import { formatarBRL, fromCentavos, parseBRL, toCentavos } from '@/lib/money'
-import { aporteInteligente, rebalanceamentoCompleto, AVISO_IR_VENDAS } from '@/lib/rebalanceamento'
-import type { Carteira, ItemAporte, MetasPorTicker, PrecoTeto } from '@/lib/rebalanceamento'
-import { formatarCentavos } from '@/features/dashboard/formatters'
+import { FormField, inputClassName } from '@/presentation/components/FormField'
+import { cn } from '@/presentation/cn'
+import { formatarBRL, fromCentavos, parseBRL, toCentavos } from '@/domain/money'
+import { aporteInteligente, rebalanceamentoCompleto, AVISO_IR_VENDAS } from '@/domain/rebalanceamento'
+import type { Carteira, ItemAporte, MetasPorTicker, PrecoTeto } from '@/domain/rebalanceamento'
+import { formatarCentavos } from '@/presentation/features/dashboard/formatters'
 
 type Modo = 'aporte' | 'completo'
 

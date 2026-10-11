@@ -1,5 +1,5 @@
-import { round2 } from '@/lib/money'
-import type { CategoriaAtivo } from '@/types/domain'
+import { round2 } from '@/domain/money'
+import type { CategoriaAtivo } from '@/domain/entities'
 import type { MetaInput } from './types'
 
 /**

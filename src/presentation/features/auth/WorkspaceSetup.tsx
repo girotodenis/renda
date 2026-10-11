@@ -1,7 +1,7 @@
 import { FilePlus2, Loader2, Search } from 'lucide-react'
 import { useState } from 'react'
-import { useAuth } from '@/app/providers/authContext'
-import { Alert } from '@/components/Alert'
+import { useAuth } from '@/presentation/app/providers/authContext'
+import { Alert } from '@/presentation/components/Alert'
 
 const DEFAULT_TITLE = 'Minhas Ações — Carteira'
 

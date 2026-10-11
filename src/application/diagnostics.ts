@@ -1,6 +1,6 @@
-import { toISO } from '@/lib/dates'
-import type { CellValue } from '@/lib/sheetCells'
-import type { SheetName } from '@/lib/sheetsSchema'
+import { toISO } from '@/domain/dates'
+import type { CellValue } from '@/infrastructure/sheets/sheetCells'
+import type { SheetName } from '@/domain/sheetsSchema'
 import {
   consolidadoRepo,
   historicoRepo,
@@ -8,17 +8,17 @@ import {
   operacoesRepo,
   prefetchAllSheets,
   proventosRepo,
-} from '@/services/repositories'
-import type { RepositoryContext } from '@/services/repositories'
-import { getSheetsRequestCount, resetSheetsRequestCount } from '@/services/sheets'
-import { CategoriaAtivo, OperacaoTipo, ProventoTipo } from '@/types/domain'
+} from '@/infrastructure/repositories'
+import type { RepositoryContext } from '@/infrastructure/repositories'
+import { getSheetsRequestCount, resetSheetsRequestCount } from '@/infrastructure/sheets/gateway'
+import { CategoriaAtivo, OperacaoTipo, ProventoTipo } from '@/domain/entities'
 import type {
   Consolidado,
   MetaRebalanceamento,
   Operacao,
   Provento,
   Snapshot,
-} from '@/types/domain'
+} from '@/domain/entities'
 
 /**
  * Diagnóstico da camada de dados (critério de conclusão da Etapa 2).

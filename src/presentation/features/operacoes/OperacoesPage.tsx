@@ -1,23 +1,21 @@
 import { ArrowLeftRight, Loader2, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useAuth } from '@/app/providers/authContext'
-import { Alert } from '@/components/Alert'
-import { OperacaoForm } from '@/features/operacoes/OperacaoForm'
-import { toOperacaoPayload } from '@/features/operacoes/operacaoSchema'
-import type { OperacaoFormOutput } from '@/features/operacoes/operacaoSchema'
-import { categoriaLabel } from '@/lib/categoria'
-import { calcularResumo } from '@/lib/consolidado'
-import { formatarDataBR } from '@/lib/dates'
-import { isTipoEventoCorporativo } from '@/lib/eventosCorporativos'
-import { formatarBRL, fromCentavos } from '@/lib/money'
-import { syncConsolidado } from '@/services/consolidado'
-import { registrarSnapshot } from '@/services/historico'
-import { consolidadoRepo, operacoesRepo } from '@/services/repositories'
-import type { RepositoryContext } from '@/services/repositories'
-import { describeSheetsError } from '@/services/sheets'
-import type { Operacao } from '@/types/domain'
-import { OperacaoTipo } from '@/types/domain'
+import { useAuth } from '@/presentation/app/providers/authContext'
+import { Alert } from '@/presentation/components/Alert'
+import { OperacaoForm } from '@/presentation/features/operacoes/OperacaoForm'
+import { toOperacaoPayload } from '@/presentation/features/operacoes/operacaoSchema'
+import type { OperacaoFormOutput } from '@/presentation/features/operacoes/operacaoSchema'
+import { categoriaLabel } from '@/domain/categoria'
+import { formatarDataBR } from '@/domain/dates'
+import { isTipoEventoCorporativo } from '@/domain/eventosCorporativos'
+import { formatarBRL, fromCentavos } from '@/domain/money'
+import { sincronizarConsolidadoESnapshot } from '@/application/escritasAtivo'
+import { operacoesRepo } from '@/infrastructure/repositories'
+import type { RepositoryContext } from '@/infrastructure/repositories'
+import { describeSheetsError } from '@/infrastructure/sheets/gateway'
+import type { Operacao } from '@/domain/entities'
+import { OperacaoTipo } from '@/domain/entities'
 
 /** Estado do formulário: fechado, novo lançamento ou edição de uma operação. */
 type FormState = { mode: 'closed' } | { mode: 'create' } | { mode: 'edit'; operacao: Operacao }
@@ -78,25 +76,6 @@ export function OperacoesPage() {
     void load()
   }, [load])
 
-  /**
-   * Recalcula e materializa a aba `Consolidado` (Seção 5.1) a partir das
-   * operações atuais e registra um snapshot no `Historico` (Seção 2). Em caso
-   * de falha, apenas invalida o cache para o próximo acesso recalcular — sem
-   * impedir o lançamento já salvo (RNF04).
-   */
-  async function sincronizarConsolidado(context: RepositoryContext) {
-    try {
-      const consolidado = await syncConsolidado(context)
-      try {
-        await registrarSnapshot(context, calcularResumo(consolidado))
-      } catch {
-        // Snapshot é best-effort — não bloqueia a operação já salva.
-      }
-    } catch {
-      consolidadoRepo.invalidateCache(context.spreadsheetId)
-    }
-  }
-
   async function handleSubmit(values: OperacaoFormOutput) {
     const context = await resolveContext()
     if (!context || formState.mode === 'closed') return
@@ -119,7 +98,7 @@ export function OperacoesPage() {
         setNotice('Operação atualizada com sucesso.')
       }
       setOperacoes(await operacoesRepo.refresh(context))
-      await sincronizarConsolidado(context)
+      await sincronizarConsolidadoESnapshot(context)
       setFormState({ mode: 'closed' })
     } catch (saveError) {
       setError(describeSheetsError(saveError))
@@ -143,7 +122,7 @@ export function OperacoesPage() {
     try {
       await operacoesRepo.remove(context, operacao.id)
       setOperacoes(await operacoesRepo.refresh(context))
-      await sincronizarConsolidado(context)
+      await sincronizarConsolidadoESnapshot(context)
       setNotice('Operação excluída com sucesso.')
     } catch (deleteError) {
       setError(describeSheetsError(deleteError))

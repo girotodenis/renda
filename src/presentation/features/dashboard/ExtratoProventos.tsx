@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
-import { Pagination } from '@/components/Pagination'
-import { usePagination } from '@/hooks/usePagination'
-import { cn } from '@/lib/cn'
+import { Pagination } from '@/presentation/components/Pagination'
+import { usePagination } from '@/presentation/hooks/usePagination'
+import { cn } from '@/presentation/cn'
 import {
   agruparProventosPorMes,
   agruparProventosPorTicker,
@@ -9,10 +9,10 @@ import {
   anosComProventos,
   filtrarProventos,
   totalProventos,
-} from '@/lib/dashboard'
-import type { AgregadoProvento } from '@/lib/dashboard'
-import { formatarCentavos } from '@/features/dashboard/formatters'
-import type { Provento } from '@/types/domain'
+} from '@/domain/dashboard'
+import type { AgregadoProvento } from '@/domain/dashboard'
+import { formatarCentavos } from '@/presentation/features/dashboard/formatters'
+import type { Provento } from '@/domain/entities'
 
 type Modo = 'anual' | 'mensal'
 

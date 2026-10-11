@@ -1,5 +1,5 @@
-import { permiteMarcacaoManual, usaGoogFinance } from '@/lib/categoria'
-import type { CategoriaAtivo, Operacao } from '@/types/domain'
+import { permiteMarcacaoManual, usaGoogFinance } from '@/domain/categoria'
+import type { CategoriaAtivo, Operacao } from '@/domain/entities'
 
 /**
  * Resolução de **cotações** por ativo (RF10, RF19, RNF04).

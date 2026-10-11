@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { converterNotasEmMetas, normalizarMetas } from '@/lib/rebalanceamento/metas'
-import type { MetaInput } from '@/lib/rebalanceamento/types'
-import { CategoriaAtivo } from '@/types/domain'
+import { converterNotasEmMetas, normalizarMetas } from '@/domain/rebalanceamento/metas'
+import type { MetaInput } from '@/domain/rebalanceamento/types'
+import { CategoriaAtivo } from '@/domain/entities'
 
 /**
  * Testes das Seções 5.2 (nota → meta) e 5.7 (classe vs. ticker).

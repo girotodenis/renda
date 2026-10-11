@@ -1,4 +1,4 @@
-import { fromCentavos, round2, toCentavos } from '@/lib/money'
+import { fromCentavos, round2, toCentavos } from '@/domain/money'
 
 /**
  * Conversão de células da planilha ↔ valores tipados do domínio.

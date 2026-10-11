@@ -1,6 +1,6 @@
-import { newId } from '@/lib/ids'
-import type { CellValue } from '@/lib/sheetCells'
-import { toCell } from '@/lib/sheetCells'
+import { newId } from '@/domain/ids'
+import type { CellValue } from '@/infrastructure/sheets/sheetCells'
+import { toCell } from '@/infrastructure/sheets/sheetCells'
 import {
   configuracoesCodec,
   consolidadoCodec,
@@ -9,11 +9,11 @@ import {
   operacoesCodec,
   proventosCodec,
   valuationCodec,
-} from '@/lib/sheetCodecs'
-import type { SheetCodec } from '@/lib/sheetCodecs'
-import { SHEET_HEADERS } from '@/lib/sheetsSchema'
-import type { SheetName } from '@/lib/sheetsSchema'
-import { invalidateSheetCache, readSheetCache, writeSheetCache } from '@/services/cache'
+} from '@/infrastructure/sheets/sheetCodecs'
+import type { SheetCodec } from '@/infrastructure/sheets/sheetCodecs'
+import { SHEET_HEADERS } from '@/domain/sheetsSchema'
+import type { SheetName } from '@/domain/sheetsSchema'
+import { invalidateSheetCache, readSheetCache, writeSheetCache } from '@/infrastructure/cache'
 import {
   appendValues,
   batchGetValues,
@@ -21,8 +21,8 @@ import {
   columnLetter,
   getValues,
   updateValues,
-} from '@/services/sheets'
-import type { Configuracao, Consolidado, MetaRebalanceamento, Operacao, Provento, Snapshot, Valuation } from '@/types/domain'
+} from '@/infrastructure/sheets/gateway'
+import type { Configuracao, Consolidado, MetaRebalanceamento, Operacao, Provento, Snapshot, Valuation } from '@/domain/entities'
 
 /**
  * Repositórios por aba (Seção 2) — abstraem a planilha como um banco de dados.

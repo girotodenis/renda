@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { cn } from '@/lib/cn'
+import { cn } from '@/presentation/cn'
 
 /** Classes padrão dos inputs de formulário (texto, número, data e select). */
 export const inputClassName =

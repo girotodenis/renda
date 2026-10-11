@@ -10,10 +10,10 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { formatarCentavos, formatarCentavosCompacto } from '@/features/dashboard/formatters'
-import { serieDecomposicaoRetorno, serieProventosPorMes } from '@/lib/detalheAtivo'
-import type { DetalheAtivo, PontoDecomposicao } from '@/lib/detalheAtivo'
-import type { Provento } from '@/types/domain'
+import { formatarCentavos, formatarCentavosCompacto } from '@/presentation/features/dashboard/formatters'
+import { serieDecomposicaoRetorno, serieProventosPorMes } from '@/domain/detalheAtivo'
+import type { DetalheAtivo, PontoDecomposicao } from '@/domain/detalheAtivo'
+import type { Provento } from '@/domain/entities'
 
 /** Rótulos curtos para o eixo X do waterfall (o tooltip mantém o texto completo). */
 const ROTULOS_CURTOS: Record<string, string> = {

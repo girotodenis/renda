@@ -1,13 +1,13 @@
-import { usaGoogFinance } from '@/lib/categoria'
-import { aplicarPrecosAtuais, calcularPosicoes, calcularResumo } from '@/lib/consolidado'
-import type { PosicaoConsolidada, ResumoCarteira } from '@/lib/consolidado'
+import { usaGoogFinance } from '@/domain/categoria'
+import { aplicarPrecosAtuais, calcularPosicoes, calcularResumo } from '@/domain/consolidado'
+import type { PosicaoConsolidada, ResumoCarteira } from '@/domain/consolidado'
 import {
   precosDeCotacoes,
   precosManuaisDeOperacoes,
   precoMercadoValido,
   resolverCotacoes,
-} from '@/lib/cotacoes'
-import type { CotacaoResolvida, EntradaCotacao } from '@/lib/cotacoes'
+} from '@/domain/cotacoes'
+import type { CotacaoResolvida, EntradaCotacao } from '@/domain/cotacoes'
 import {
   consolidadoRepo,
   historicoRepo,
@@ -15,12 +15,12 @@ import {
   prefetchAllSheets,
   proventosRepo,
   valuationRepo,
-} from '@/services/repositories'
-import type { RepositoryContext } from '@/services/repositories'
-import { registrarSnapshot } from '@/services/historico'
-import { buscarCotacoesBrapi, lerCotacaoCache as lerCotacaoCacheBrapi } from '@/services/brapi'
-import { carregarConfiguracoes } from '@/services/configuracoes'
-import type { Consolidado, Operacao, Provento, Snapshot, Valuation } from '@/types/domain'
+} from '@/infrastructure/repositories'
+import type { RepositoryContext } from '@/infrastructure/repositories'
+import { registrarSnapshot } from '@/application/historico'
+import { buscarCotacoesBrapi, lerCotacaoCache as lerCotacaoCacheBrapi } from '@/infrastructure/brapi'
+import { carregarConfiguracoes } from '@/application/configuracoes'
+import type { Consolidado, Operacao, Provento, Snapshot, Valuation } from '@/domain/entities'
 
 /**
  * Orquestração de dados do dashboard (RF07–RF11, RF19, RNF02/RNF04/RNF06/RNF08).

@@ -3,8 +3,8 @@ import {
   CategoriaAtivo,
   OperacaoTipo,
   ProventoTipo,
-} from '@/types/domain'
-import type { MetaRebalanceamento, Operacao, Provento } from '@/types/domain'
+} from '@/domain/entities'
+import type { MetaRebalanceamento, Operacao, Provento } from '@/domain/entities'
 import {
   atualizarCategoriaDeMetas,
   atualizarCategoriaDeOperacoes,

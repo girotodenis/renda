@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { rebalanceamentoCompleto, AVISO_IR_VENDAS } from '@/lib/rebalanceamento/completo'
-import { calcularDesvios, TOLERANCIA_DESVIO_PERCENT } from '@/lib/rebalanceamento/desvios'
-import type { Carteira } from '@/lib/rebalanceamento/types'
-import { CategoriaAtivo } from '@/types/domain'
-import type { Consolidado } from '@/types/domain'
+import { rebalanceamentoCompleto, AVISO_IR_VENDAS } from '@/domain/rebalanceamento/completo'
+import { calcularDesvios, TOLERANCIA_DESVIO_PERCENT } from '@/domain/rebalanceamento/desvios'
+import type { Carteira } from '@/domain/rebalanceamento/types'
+import { CategoriaAtivo } from '@/domain/entities'
+import type { Consolidado } from '@/domain/entities'
 
 /**
  * Testes do rebalanceamento completo (Seção 5.4) e dos alertas de desvio (RF16).

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { aporteInteligente } from '@/lib/rebalanceamento/aporte'
-import type { Carteira } from '@/lib/rebalanceamento/types'
-import { CategoriaAtivo } from '@/types/domain'
-import type { Consolidado } from '@/types/domain'
+import { aporteInteligente } from '@/domain/rebalanceamento/aporte'
+import type { Carteira } from '@/domain/rebalanceamento/types'
+import { CategoriaAtivo } from '@/domain/entities'
+import type { Consolidado } from '@/domain/entities'
 
 /**
  * Testes do aporte inteligente (Seção 5.3) e do preço teto (Seção 5.5).

@@ -1,7 +1,7 @@
-import type { CellValue } from '@/lib/sheetCells'
-import { SHEET_HEADERS, SHEET_NAMES } from '@/lib/sheetsSchema'
-import type { SheetName } from '@/lib/sheetsSchema'
-import type { SheetIdMap, SpreadsheetWorkspace } from '@/types/auth'
+import type { CellValue } from '@/infrastructure/sheets/sheetCells'
+import { SHEET_HEADERS, SHEET_NAMES } from '@/domain/sheetsSchema'
+import type { SheetName } from '@/domain/sheetsSchema'
+import type { SheetIdMap, SpreadsheetWorkspace } from '@/domain/workspace'
 
 /**
  * Google Sheets API v4 — criação/leitura de planilhas e cabeçalhos.

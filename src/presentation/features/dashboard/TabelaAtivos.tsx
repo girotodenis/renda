@@ -1,18 +1,18 @@
 import { Pencil, Plus } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import { categoriaLabel, permiteMarcacaoManual } from '@/lib/categoria'
-import { cn } from '@/lib/cn'
-import { STATUS_COTACAO_LABELS } from '@/lib/cotacoes'
-import type { CotacaoResolvida } from '@/lib/cotacoes'
-import type { CategoriaAtivo, Consolidado } from '@/types/domain'
-import { agruparAtivosParaTabela } from '@/lib/dashboard'
-import type { GrupoCategoriaTabela } from '@/lib/dashboard'
+import { categoriaLabel, permiteMarcacaoManual } from '@/domain/categoria'
+import { cn } from '@/presentation/cn'
+import { STATUS_COTACAO_LABELS } from '@/domain/cotacoes'
+import type { CotacaoResolvida } from '@/domain/cotacoes'
+import type { CategoriaAtivo, Consolidado } from '@/domain/entities'
+import { agruparAtivosParaTabela } from '@/domain/dashboard'
+import type { GrupoCategoriaTabela } from '@/domain/dashboard'
 import {
   classeValor,
   formatarCentavos,
   formatarPercentual,
-} from '@/features/dashboard/formatters'
+} from '@/presentation/features/dashboard/formatters'
 
 interface TabelaAtivosProps {
   /**

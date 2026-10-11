@@ -1,8 +1,8 @@
 import { ArrowLeftRight, Coins, FileUp, Layers, LayoutDashboard, LogIn, LogOut, Scale, Settings, Stethoscope, Wallet, WifiOff } from 'lucide-react'
 import { NavLink, Outlet } from 'react-router-dom'
-import { useAuth } from '@/app/providers/authContext'
-import { cn } from '@/lib/cn'
-import { useOnlineStatus } from '@/hooks/useOnlineStatus'
+import { useAuth } from '@/presentation/app/providers/authContext'
+import { cn } from '@/presentation/cn'
+import { useOnlineStatus } from '@/presentation/hooks/useOnlineStatus'
 import { SyncStatusBadge } from '@/presentation/components/SyncStatusBadge'
 import { useSyncStatus } from '@/presentation/hooks/useSyncStatus'
 

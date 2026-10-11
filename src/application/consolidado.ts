@@ -1,12 +1,12 @@
-import { aplicarPrecosAtuais, calcularPosicoes } from '@/lib/consolidado'
-import type { PrecosAtuais } from '@/lib/consolidado'
-import { precosManuaisDeOperacoes, precosPersistidosDeOperacoes } from '@/lib/cotacoes'
-import { buildConsolidadoRows, formulaSeparatorForLocale } from '@/lib/sheetFormulas'
-import { SHEET_HEADERS } from '@/lib/sheetsSchema'
-import { consolidadoRepo, operacoesRepo } from '@/services/repositories'
-import type { RepositoryContext } from '@/services/repositories'
-import { clearValues, columnLetter, getSpreadsheetLocale, updateValues } from '@/services/sheets'
-import type { Consolidado, Operacao } from '@/types/domain'
+import { aplicarPrecosAtuais, calcularPosicoes } from '@/domain/consolidado'
+import type { PrecosAtuais } from '@/domain/consolidado'
+import { precosManuaisDeOperacoes, precosPersistidosDeOperacoes } from '@/domain/cotacoes'
+import { buildConsolidadoRows, formulaSeparatorForLocale } from '@/infrastructure/sheets/sheetFormulas'
+import { SHEET_HEADERS } from '@/domain/sheetsSchema'
+import { consolidadoRepo, operacoesRepo } from '@/infrastructure/repositories'
+import type { RepositoryContext } from '@/infrastructure/repositories'
+import { clearValues, columnLetter, getSpreadsheetLocale, updateValues } from '@/infrastructure/sheets/gateway'
+import type { Consolidado, Operacao } from '@/domain/entities'
 
 /**
  * Materialização da aba `Consolidado` (Seção 5.1) via repositório.
