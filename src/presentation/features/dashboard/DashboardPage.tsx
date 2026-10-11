@@ -1,21 +1,22 @@
-import { ExternalLink, LayoutDashboard, Loader2, RefreshCw, Save } from 'lucide-react'
-import { lazy, Suspense, useMemo, useState } from 'react'
+import { ExternalLink, Files, LayoutDashboard, Loader2, RefreshCw, Save } from 'lucide-react'
+import { lazy, Suspense, useCallback, useMemo, useState } from 'react'
 import { useAuth } from '@/app/providers/authContext'
 import { Alert } from '@/components/Alert'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { TrocarPlanilhaModal } from '@/features/auth/TrocarPlanilhaModal'
 import { WorkspaceSetup } from '@/features/auth/WorkspaceSetup'
 import { DetalheAtivoModal } from '@/features/dashboard/DetalheAtivoModal'
-import { ExtratoProventos } from '@/features/dashboard/ExtratoProventos'
+import { NovaOperacaoModal } from '@/features/dashboard/NovaOperacaoModal'
 import { ResumoPatrimonial } from '@/features/dashboard/ResumoPatrimonial'
 import { TabelaAtivos } from '@/features/dashboard/TabelaAtivos'
+import { ValorManualModal } from '@/features/dashboard/ValorManualModal'
+import type { AlvoValorManual } from '@/features/dashboard/ValorManualModal'
 import { useDashboard } from '@/hooks/useDashboard'
-import {
-  alocacaoPorAtivo,
-  alocacaoPorCategoria,
-  ativosParaTabela,
-  serieEvolucao,
-} from '@/lib/dashboard'
+import { alocacaoPorAtivo, alocacaoPorCategoria, serieEvolucao, tickersParaNavegacao } from '@/lib/dashboard'
+import { precosManuaisDeOperacoes } from '@/lib/cotacoes'
 import { calcularDetalheAtivo } from '@/lib/detalheAtivo'
+import { tickersComOportunidade } from '@/domain/valuation'
+import type { CategoriaAtivo } from '@/types/domain'
 
 /**
  * Gráficos carregados sob demanda (lazy) para não inflar o bundle inicial com
@@ -23,16 +24,20 @@ import { calcularDetalheAtivo } from '@/lib/detalheAtivo'
  * (RNF06).
  */
 const AlocacaoChart = lazy(() =>
-  import('@/features/dashboard/AlocacaoChart').then((modulo) => ({ default: modulo.AlocacaoChart })),
+  import('@/features/dashboard/AlocacaoChart').then((modulo) => ({
+    default: modulo.AlocacaoChart,
+  })),
 )
 const EvolucaoChart = lazy(() =>
-  import('@/features/dashboard/EvolucaoChart').then((modulo) => ({ default: modulo.EvolucaoChart })),
+  import('@/features/dashboard/EvolucaoChart').then((modulo) => ({
+    default: modulo.EvolucaoChart,
+  })),
 )
 
 /**
  * Dashboard (RF07–RF11, RF18) — tela inicial de desempenho da carteira após o
- * login. Exibe o resumo patrimonial, a alocação, a evolução patrimonial, a
- * tabela de ativos e o extrato de proventos.
+ * login. Exibe o resumo patrimonial, a alocação, a evolução patrimonial e a
+ * tabela de ativos. O extrato de proventos vive na tela de Proventos.
  */
 export function DashboardPage() {
   const { workspace, error } = useAuth()
@@ -72,20 +77,50 @@ function DashboardContent() {
   const consolidado = useMemo(() => data?.consolidado ?? [], [data])
   const porCategoria = useMemo(() => alocacaoPorCategoria(consolidado), [consolidado])
   const porAtivo = useMemo(() => alocacaoPorAtivo(consolidado), [consolidado])
-  const ativos = useMemo(() => ativosParaTabela(consolidado), [consolidado])
   const serie = useMemo(() => serieEvolucao(data?.historico ?? []), [data])
   const [ativoSelecionado, setAtivoSelecionado] = useState<string | null>(null)
+  const [categoriaNovaOperacao, setCategoriaNovaOperacao] = useState<CategoriaAtivo | null>(null)
+  const [valorManualAlvo, setValorManualAlvo] = useState<AlvoValorManual | null>(null)
+  const [trocarPlanilhaAberto, setTrocarPlanilhaAberto] = useState(false)
   const detalheAtivo = useMemo(
     () =>
       ativoSelecionado && data
-        ? calcularDetalheAtivo(
-            ativoSelecionado,
-            data.operacoes,
-            data.proventos,
-            data.consolidado,
-          )
+        ? calcularDetalheAtivo(ativoSelecionado, data.operacoes, data.proventos, data.consolidado)
         : null,
     [ativoSelecionado, data],
+  )
+  // Tickers na ordem da tabela de ativos (base da navegação anterior/próximo).
+  const tickersNavegacao = useMemo(() => tickersParaNavegacao(consolidado), [consolidado])
+  const indiceAtivo = useMemo(
+    () => (ativoSelecionado ? tickersNavegacao.indexOf(ativoSelecionado) : -1),
+    [ativoSelecionado, tickersNavegacao],
+  )
+  /** Abre o ticker anterior/próximo com navegação circular (envolve nas pontas). */
+  const navegarAtivo = useCallback(
+    (offset: number) => {
+      if (tickersNavegacao.length === 0) return
+      const base = indiceAtivo >= 0 ? indiceAtivo : 0
+      const destino = (base + offset + tickersNavegacao.length) % tickersNavegacao.length
+      setAtivoSelecionado(tickersNavegacao[destino])
+    },
+    [indiceAtivo, tickersNavegacao],
+  )
+  const oportunidades = useMemo(
+    () => tickersComOportunidade(data?.valuation ?? [], consolidado),
+    [data, consolidado],
+  )
+  const valuationAtivo = useMemo(() => {
+    if (!ativoSelecionado || !data) return null
+    const alvo = ativoSelecionado.trim().toUpperCase()
+    return data.valuation.find((item) => item.ticker.trim().toUpperCase() === alvo) ?? null
+  }, [ativoSelecionado, data])
+  const valorManualAtual = useMemo(() => {
+    if (!valorManualAlvo) return null
+    return precosManuaisDeOperacoes(data?.operacoes ?? []).get(valorManualAlvo.ticker) ?? null
+  }, [valorManualAlvo, data])
+  const cotacaoManualAlvo = useMemo(
+    () => (valorManualAlvo ? (data?.cotacoes.get(valorManualAlvo.ticker) ?? null) : null),
+    [valorManualAlvo, data],
   )
   const cotacoesIndisponiveis = useMemo(() => {
     const lista: string[] = []
@@ -127,14 +162,19 @@ function DashboardContent() {
           </a>
           <button
             type="button"
+            onClick={() => setTrocarPlanilhaAberto(true)}
+            className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100"
+          >
+            <Files className="h-4 w-4" aria-hidden />
+            Trocar planilha
+          </button>
+          <button
+            type="button"
             onClick={() => void refresh()}
             disabled={isRefreshing}
             className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <RefreshCw
-              className={isRefreshing ? 'h-4 w-4 animate-spin' : 'h-4 w-4'}
-              aria-hidden
-            />
+            <RefreshCw className={isRefreshing ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} aria-hidden />
             Atualizar
           </button>
           <button
@@ -176,7 +216,7 @@ function DashboardContent() {
         <>
           <ResumoPatrimonial resumo={data.resumo} />
 
-          {ativos.length === 0 && data.proventos.length === 0 ? (
+          {consolidado.length === 0 && data.proventos.length === 0 ? (
             <Alert variant="info" title="Carteira vazia">
               Lance suas operações em <strong>Operações</strong> para ver o resumo patrimonial, os
               gráficos e a tabela de ativos.
@@ -197,18 +237,44 @@ function DashboardContent() {
           </div>
 
           <TabelaAtivos
-            ativos={ativos}
+            consolidado={consolidado}
             cotacoes={data.cotacoes}
+            oportunidades={oportunidades}
             onSelecionarAtivo={setAtivoSelecionado}
+            onNovaOperacao={setCategoriaNovaOperacao}
+            onEditarValorManual={(ticker, categoria) => setValorManualAlvo({ ticker, categoria })}
           />
-          <ExtratoProventos proventos={data.proventos} />
           <DetalheAtivoModal
             detalhe={detalheAtivo}
+            operacoes={data.operacoes}
             proventos={data.proventos}
+            valuation={valuationAtivo}
+            onChanged={refresh}
             onClose={() => setAtivoSelecionado(null)}
+            onAnterior={tickersNavegacao.length > 1 ? () => navegarAtivo(-1) : undefined}
+            onProximo={tickersNavegacao.length > 1 ? () => navegarAtivo(1) : undefined}
+            posicaoNavegacao={indiceAtivo >= 0 ? indiceAtivo + 1 : undefined}
+            totalNavegacao={tickersNavegacao.length}
+          />
+          <NovaOperacaoModal
+            categoria={categoriaNovaOperacao}
+            onClose={() => setCategoriaNovaOperacao(null)}
+            onSaved={refresh}
+          />
+          <ValorManualModal
+            alvo={valorManualAlvo}
+            valorManualAtual={valorManualAtual}
+            cotacaoAtual={cotacaoManualAlvo}
+            onClose={() => setValorManualAlvo(null)}
+            onSaved={refresh}
           />
         </>
       )}
+
+      <TrocarPlanilhaModal
+        open={trocarPlanilhaAberto}
+        onClose={() => setTrocarPlanilhaAberto(false)}
+      />
     </section>
   )
 }

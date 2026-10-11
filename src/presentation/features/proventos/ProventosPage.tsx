@@ -1,11 +1,14 @@
 import { Coins, Loader2, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '@/app/providers/authContext'
 import { Alert } from '@/components/Alert'
+import { Pagination } from '@/components/Pagination'
+import { ExtratoProventos } from '@/features/dashboard/ExtratoProventos'
 import { ProventoForm } from '@/features/proventos/ProventoForm'
 import { toProventoPayload } from '@/features/proventos/proventoSchema'
 import type { ProventoFormOutput } from '@/features/proventos/proventoSchema'
+import { usePagination } from '@/hooks/usePagination'
 import { categoriaLabel } from '@/lib/categoria'
 import { formatarDataBR } from '@/lib/dates'
 import { formatarBRL, fromCentavos } from '@/lib/money'
@@ -17,6 +20,9 @@ import type { Provento } from '@/types/domain'
 
 /** Estado do formulário: fechado, novo lançamento ou edição de um provento. */
 type FormState = { mode: 'closed' } | { mode: 'create' } | { mode: 'edit'; provento: Provento }
+
+/** Registros exibidos por página na tabela de proventos. */
+const PROVENTOS_PAGE_SIZE = 20
 
 function byMostRecent(a: Provento, b: Provento): number {
   return b.dataPagamento.localeCompare(a.dataPagamento) || a.ticker.localeCompare(b.ticker)
@@ -38,6 +44,7 @@ export function ProventosPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [filtroTicker, setFiltroTicker] = useState('')
 
   const resolveContext = useCallback(async (): Promise<RepositoryContext | null> => {
     if (!workspace) {
@@ -140,7 +147,27 @@ export function ProventosPage() {
     }
   }
 
-  const sorted = proventos ? [...proventos].sort(byMostRecent) : []
+  const sorted = useMemo(() => (proventos ? [...proventos].sort(byMostRecent) : []), [proventos])
+
+  /** Tickers distintos presentes nos lançamentos, para o filtro. */
+  const tickers = useMemo(() => {
+    const unicos = new Set<string>()
+    for (const provento of proventos ?? []) {
+      const ticker = provento.ticker.trim().toUpperCase()
+      if (ticker) unicos.add(ticker)
+    }
+    return [...unicos].sort((a, b) => a.localeCompare(b))
+  }, [proventos])
+
+  const filtrados = useMemo(
+    () =>
+      filtroTicker
+        ? sorted.filter((provento) => provento.ticker.trim().toUpperCase() === filtroTicker)
+        : sorted,
+    [sorted, filtroTicker],
+  )
+
+  const { page, pageItems, setPage } = usePagination(filtrados, PROVENTOS_PAGE_SIZE, filtroTicker)
 
   return (
     <section className="space-y-6">
@@ -217,69 +244,124 @@ export function ProventosPage() {
             Nenhum provento lançado ainda. Clique em <strong>Novo provento</strong> para começar.
           </p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-                <tr>
-                  <th scope="col" className="px-4 py-2 font-semibold">Data Com</th>
-                  <th scope="col" className="px-4 py-2 font-semibold">Data Pagamento</th>
-                  <th scope="col" className="px-4 py-2 font-semibold">Categoria</th>
-                  <th scope="col" className="px-4 py-2 font-semibold">Ticker</th>
-                  <th scope="col" className="px-4 py-2 font-semibold">Tipo</th>
-                  <th scope="col" className="px-4 py-2 text-right font-semibold">Valor Total</th>
-                  <th scope="col" className="px-4 py-2 text-right font-semibold">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sorted.map((provento) => (
-                  <tr key={provento.id} className="border-t border-slate-100">
-                    <td className="px-4 py-2 tabular-nums text-slate-700">
-                      {provento.dataCom ? formatarDataBR(provento.dataCom) : '—'}
-                    </td>
-                    <td className="px-4 py-2 tabular-nums text-slate-700">
-                      {formatarDataBR(provento.dataPagamento)}
-                    </td>
-                    <td className="px-4 py-2 text-slate-700">{categoriaLabel(provento.categoria)}</td>
-                    <td className="px-4 py-2 font-mono font-medium text-slate-900">
-                      {provento.ticker}
-                    </td>
-                    <td className="px-4 py-2 text-slate-700">{provento.tipo}</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-slate-700">
-                      {formatarBRL(fromCentavos(provento.valorTotal))}
-                    </td>
-                    <td className="px-4 py-2">
-                      <div className="flex justify-end gap-1">
-                        <button
-                          type="button"
-                          onClick={() => setFormState({ mode: 'edit', provento })}
-                          disabled={formState.mode !== 'closed' || deletingId !== null}
-                          aria-label={`Editar provento de ${provento.ticker}`}
-                          className="rounded-md p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                          <Pencil className="h-4 w-4" aria-hidden />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void handleDelete(provento)}
-                          disabled={formState.mode !== 'closed' || deletingId !== null}
-                          aria-label={`Excluir provento de ${provento.ticker}`}
-                          className="rounded-md p-2 text-slate-500 transition-colors hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                          {deletingId === provento.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                          ) : (
-                            <Trash2 className="h-4 w-4" aria-hidden />
-                          )}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <>
+            <div className="flex flex-wrap items-end justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3">
+              <label className="flex flex-col gap-1 text-xs font-medium text-slate-500">
+                Filtrar por ticker
+                <select
+                  value={filtroTicker}
+                  onChange={(event) => setFiltroTicker(event.target.value)}
+                  className="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-700"
+                >
+                  <option value="">Todos os tickers</option>
+                  {tickers.map((ticker) => (
+                    <option key={ticker} value={ticker}>
+                      {ticker}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <p className="text-xs text-slate-500" aria-live="polite">
+                {filtrados.length} de {sorted.length} lançamentos
+              </p>
+            </div>
+
+            {filtrados.length === 0 ? (
+              <p className="px-4 py-6 text-sm text-slate-500">
+                Nenhum provento para o ticker selecionado.
+              </p>
+            ) : (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                      <tr>
+                        <th scope="col" className="px-4 py-2 font-semibold">
+                          Data Com
+                        </th>
+                        <th scope="col" className="px-4 py-2 font-semibold">
+                          Data Pagamento
+                        </th>
+                        <th scope="col" className="px-4 py-2 font-semibold">
+                          Categoria
+                        </th>
+                        <th scope="col" className="px-4 py-2 font-semibold">
+                          Ticker
+                        </th>
+                        <th scope="col" className="px-4 py-2 font-semibold">
+                          Tipo
+                        </th>
+                        <th scope="col" className="px-4 py-2 text-right font-semibold">
+                          Valor Total
+                        </th>
+                        <th scope="col" className="px-4 py-2 text-right font-semibold">
+                          Ações
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pageItems.map((provento) => (
+                        <tr key={provento.id} className="border-t border-slate-100">
+                          <td className="px-4 py-2 tabular-nums text-slate-700">
+                            {provento.dataCom ? formatarDataBR(provento.dataCom) : '—'}
+                          </td>
+                          <td className="px-4 py-2 tabular-nums text-slate-700">
+                            {formatarDataBR(provento.dataPagamento)}
+                          </td>
+                          <td className="px-4 py-2 text-slate-700">
+                            {categoriaLabel(provento.categoria)}
+                          </td>
+                          <td className="px-4 py-2 font-mono font-medium text-slate-900">
+                            {provento.ticker}
+                          </td>
+                          <td className="px-4 py-2 text-slate-700">{provento.tipo}</td>
+                          <td className="px-4 py-2 text-right tabular-nums text-slate-700">
+                            {formatarBRL(fromCentavos(provento.valorTotal))}
+                          </td>
+                          <td className="px-4 py-2">
+                            <div className="flex justify-end gap-1">
+                              <button
+                                type="button"
+                                onClick={() => setFormState({ mode: 'edit', provento })}
+                                disabled={formState.mode !== 'closed' || deletingId !== null}
+                                aria-label={`Editar provento de ${provento.ticker}`}
+                                className="rounded-md p-2 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 disabled:cursor-not-allowed disabled:opacity-40"
+                              >
+                                <Pencil className="h-4 w-4" aria-hidden />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => void handleDelete(provento)}
+                                disabled={formState.mode !== 'closed' || deletingId !== null}
+                                aria-label={`Excluir provento de ${provento.ticker}`}
+                                className="rounded-md p-2 text-slate-500 transition-colors hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-40"
+                              >
+                                {deletingId === provento.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                                ) : (
+                                  <Trash2 className="h-4 w-4" aria-hidden />
+                                )}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <Pagination
+                  page={page}
+                  pageSize={PROVENTOS_PAGE_SIZE}
+                  total={filtrados.length}
+                  onPageChange={setPage}
+                />
+              </>
+            )}
+          </>
         )}
       </div>
+
+      {proventos && proventos.length > 0 ? <ExtratoProventos proventos={proventos} /> : null}
     </section>
   )
 }

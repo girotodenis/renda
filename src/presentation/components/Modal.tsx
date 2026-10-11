@@ -13,6 +13,8 @@ interface ModalProps {
   children: ReactNode
   /** Classe extra aplicada ao painel (largura etc.). */
   className?: string
+  /** Ações extras exibidas no lado direito do cabeçalho (antes do botão fechar). */
+  acoes?: ReactNode
 }
 
 /**
@@ -22,7 +24,7 @@ interface ModalProps {
  * bloqueia o scroll do body enquanto aberto; move o foco para o painel ao abrir
  * e devolve o foco ao elemento anterior ao fechar.
  */
-export function Modal({ open, onClose, titulo, children, className }: ModalProps) {
+export function Modal({ open, onClose, titulo, children, className, acoes }: ModalProps) {
   const tituloId = useId()
   const painelRef = useRef<HTMLDivElement>(null)
   const focoAnteriorRef = useRef<HTMLElement | null>(null)
@@ -77,14 +79,17 @@ export function Modal({ open, onClose, titulo, children, className }: ModalProps
           <h2 id={tituloId} className="text-lg font-semibold text-slate-900">
             {titulo}
           </h2>
-          <button
-            type="button"
-            onClick={() => onCloseRef.current()}
-            aria-label="Fechar"
-            className="-m-1 rounded-md p-1 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
-          >
-            <X className="h-5 w-5" aria-hidden />
-          </button>
+          <div className="flex shrink-0 items-center gap-1">
+            {acoes}
+            <button
+              type="button"
+              onClick={() => onCloseRef.current()}
+              aria-label="Fechar"
+              className="-m-1 rounded-md p-1 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+            >
+              <X className="h-5 w-5" aria-hidden />
+            </button>
+          </div>
         </header>
         <div className="px-5 py-4">{children}</div>
       </div>

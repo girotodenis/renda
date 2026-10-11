@@ -11,8 +11,9 @@ import type { ConfiguracaoMetas, ItemMetaConfig } from './types'
 /** Categorias na ordem canônica de exibição. */
 export const CATEGORIAS_META: readonly CategoriaAtivo[] = [
   CategoriaAtivo.Acao,
-  CategoriaAtivo.Fii,
   CategoriaAtivo.Bdr,
+  CategoriaAtivo.Etf,
+  CategoriaAtivo.Fii,
   CategoriaAtivo.TesouroDireto,
   CategoriaAtivo.RendaFixa,
 ]

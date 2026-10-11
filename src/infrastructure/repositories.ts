@@ -7,6 +7,7 @@ import {
   metasCodec,
   operacoesCodec,
   proventosCodec,
+  valuationCodec,
 } from '@/lib/sheetCodecs'
 import type { SheetCodec } from '@/lib/sheetCodecs'
 import { SHEET_HEADERS } from '@/lib/sheetsSchema'
@@ -20,7 +21,7 @@ import {
   getValues,
   updateValues,
 } from '@/services/sheets'
-import type { Consolidado, MetaRebalanceamento, Operacao, Provento, Snapshot } from '@/types/domain'
+import type { Consolidado, MetaRebalanceamento, Operacao, Provento, Snapshot, Valuation } from '@/types/domain'
 
 /**
  * Repositórios por aba (Seção 2) — abstraem a planilha como um banco de dados.
@@ -36,6 +37,8 @@ import type {
   Repository,
   RepositoryContext,
 } from '@/domain/repositories/ports'
+import { withOfflineOutbox } from '@/infrastructure/offlineRepositories'
+import type { Mutation } from '@/infrastructure/outbox'
 
 export type {
   CrudRepository,
@@ -177,20 +180,125 @@ export function createCrudRepository<T>(
   }
 }
 
-export const operacoesRepo = createCrudRepository<Operacao>({
-  codec: operacoesCodec,
-  idOf: (operacao) => operacao.id,
-})
-export const proventosRepo = createCrudRepository<Provento>({
-  codec: proventosCodec,
-  idOf: (provento) => provento.id,
-})
-export const consolidadoRepo = createRepository<Consolidado>({
+// IDs estáveis das entidades com CRUD (usados pelo `update`/`remove` offline).
+const operacaoId = (operacao: Operacao): string => operacao.id
+const proventoId = (provento: Provento): string => provento.id
+
+// Repositórios **crus** (sem o decorador offline). Usados apenas pela
+// sincronização da Fase 2 (`replayMutation`), que reaplica as mutações do
+// outbox sem reenfileirá-las em caso de falha de rede.
+const operacoesRepoRaw = createCrudRepository<Operacao>({ codec: operacoesCodec, idOf: operacaoId })
+const proventosRepoRaw = createCrudRepository<Provento>({ codec: proventosCodec, idOf: proventoId })
+const consolidadoRepoRaw = createRepository<Consolidado>({
   codec: consolidadoCodec,
   writableColumnCount: 2,
 })
-export const metasRepo = createRepository<MetaRebalanceamento>({ codec: metasCodec })
-export const historicoRepo = createRepository<Snapshot>({ codec: historicoCodec })
+const metasRepoRaw = createRepository<MetaRebalanceamento>({ codec: metasCodec })
+const historicoRepoRaw = createRepository<Snapshot>({ codec: historicoCodec })
+const valuationRepoRaw = createRepository<Valuation>({ codec: valuationCodec })
+
+// Repositórios da camada de dados já **envoltos pelo decorador offline** (Fase 1):
+// escritas sem rede (ou com falha de rede/quota) vão para o outbox e refletem no
+// cache local imediatamente. O `Consolidado` é aba derivada — passa direto
+// (sem outbox), pois é recalculado pela sincronização da Fase 2.
+export const operacoesRepo = withOfflineOutbox(operacoesRepoRaw, { idOf: operacaoId })
+export const proventosRepo = withOfflineOutbox(proventosRepoRaw, { idOf: proventoId })
+export const consolidadoRepo = withOfflineOutbox(consolidadoRepoRaw, { outboxEnabled: false })
+export const metasRepo = withOfflineOutbox(metasRepoRaw)
+export const historicoRepo = withOfflineOutbox(historicoRepoRaw)
+export const valuationRepo = withOfflineOutbox(valuationRepoRaw)
+
+/**
+ * Repositório cru (sem decorador) com os contratos apagados para `unknown`.
+ *
+ * A sincronização (Fase 2) precisa reaplicar as mutações do outbox **sem**
+ * passar pelo decorador offline — caso contrário, uma falha de rede durante o
+ * replay reenfileiraria a mesma mutação em loop. Este contrato expõe apenas o
+ * necessário para o replay e para a checagem de idempotência do `append`.
+ */
+export interface RawSheetRepository {
+  readonly sheetName: SheetName
+  append(context: RepositoryContext, entity: unknown): Promise<unknown>
+  replaceAll(context: RepositoryContext, entities: readonly unknown[]): Promise<void>
+  update?(context: RepositoryContext, entity: unknown): Promise<unknown>
+  remove?(context: RepositoryContext, id: string): Promise<void>
+  /** Relê a aba da API (usado na checagem de idempotência do `append`). */
+  refresh(context: RepositoryContext): Promise<unknown[]>
+  /** Extrai o ID estável da entidade (apenas abas com IDs — `Operacoes`/`Proventos`). */
+  idOf?(entity: unknown): string
+}
+
+/** Converte um repositório tipado em `RawSheetRepository` (type-erasure). */
+function asRawSheetRepository<T>(
+  repo: Repository<T>,
+  idOf?: (entity: T) => string,
+): RawSheetRepository {
+  const crud = repo as Partial<CrudRepository<T>>
+  return {
+    sheetName: repo.sheetName,
+    append: (context, entity) => repo.append(context, entity as T),
+    replaceAll: (context, entities) => repo.replaceAll(context, entities as readonly T[]),
+    update:
+      typeof crud.update === 'function'
+        ? (context, entity) =>
+            (crud.update as (c: RepositoryContext, e: T) => Promise<T>)(context, entity as T)
+        : undefined,
+    remove:
+      typeof crud.remove === 'function'
+        ? (context, id) =>
+            (crud.remove as (c: RepositoryContext, id: string) => Promise<void>)(context, id)
+        : undefined,
+    refresh: async (context) => repo.refresh(context),
+    idOf: idOf ? (entity) => idOf(entity as T) : undefined,
+  }
+}
+
+/** Repositórios crus por aba, usados pelo replay da sincronização (Fase 2). */
+export const rawRepositories: Record<SheetName, RawSheetRepository> = {
+  Operacoes: asRawSheetRepository(operacoesRepoRaw, operacaoId),
+  Proventos: asRawSheetRepository(proventosRepoRaw, proventoId),
+  Consolidado: asRawSheetRepository(consolidadoRepoRaw),
+  Metas_Rebalanceamento: asRawSheetRepository(metasRepoRaw),
+  Historico: asRawSheetRepository(historicoRepoRaw),
+  Valuation: asRawSheetRepository(valuationRepoRaw),
+}
+
+/**
+ * Reaplica uma mutação do outbox diretamente no repositório cru correspondente.
+ *
+ * **Não** passa pelo decorador offline: em falha de rede o erro é propagado ao
+ * chamador (que decide se mantém o item na fila), sem reenfileirar. Para
+ * `update`/`remove`, o CRUD cru já relê a aba antes de reescrever (re-leitura
+ * segura).
+ */
+export async function replayMutation(
+  context: RepositoryContext,
+  mutation: Mutation,
+): Promise<void> {
+  const repo = rawRepositories[mutation.sheet]
+  if (!repo) throw new Error(`Aba desconhecida no outbox: ${mutation.sheet}`)
+
+  switch (mutation.kind) {
+    case 'append':
+      if (mutation.entity === undefined) throw new Error('Mutação append sem entity.')
+      await repo.append(context, mutation.entity)
+      return
+    case 'replaceAll':
+      await repo.replaceAll(context, mutation.entities ?? [])
+      return
+    case 'update': {
+      if (!repo.update) throw new Error(`Aba ${mutation.sheet} não suporta update.`)
+      if (mutation.entity === undefined) throw new Error('Mutação update sem entity.')
+      await repo.update(context, mutation.entity)
+      return
+    }
+    case 'remove': {
+      if (!repo.remove) throw new Error(`Aba ${mutation.sheet} não suporta remove.`)
+      await repo.remove(context, mutation.entityId ?? '')
+      return
+    }
+  }
+}
 
 interface SheetReader {
   sheetName: SheetName

@@ -283,4 +283,18 @@ describe('sheetFormulas', () => {
     expect(String(petr4?.[8])).toContain('$H3/$F3*100')
     expect(String(petr4?.[9])).toContain('SUM($G$2:$G$3)')
   })
+
+  it('grava valor estático (não fórmula) quando há cotação persistida para Ação (fallback Brapi)', () => {
+    const posicoes = calcularPosicoes([
+      operacao({ ticker: 'PETR4', quantidade: 100, precoUnitario: 1000, tipo: OperacaoTipo.Compra }),
+    ])
+
+    const rows = buildConsolidadoRows({
+      posicoes,
+      precosAtuais: new Map([['PETR4', 2500]]),
+      separator: ';',
+    })
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.[4]).toBe(25)
+  })
 })

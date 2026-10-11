@@ -26,8 +26,9 @@ import { CategoriaAtivo } from '@/types/domain'
 
 const CATEGORIAS_ORDEM: readonly CategoriaAtivo[] = [
   CategoriaAtivo.Acao,
-  CategoriaAtivo.Fii,
   CategoriaAtivo.Bdr,
+  CategoriaAtivo.Etf,
+  CategoriaAtivo.Fii,
   CategoriaAtivo.TesouroDireto,
   CategoriaAtivo.RendaFixa,
 ]

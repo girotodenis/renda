@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { isRendaFixa } from '@/lib/categoria'
+import { isRendaFixa, permiteMarcacaoManual } from '@/lib/categoria'
 import { formatMoneyInput, parseBRL, parseDecimalBR, toCentavos } from '@/lib/money'
 import { CategoriaAtivo, IndexadorRendaFixa, OPERACAO_MOVIMENTO_TIPOS, OperacaoTipo } from '@/types/domain'
 import type { Operacao } from '@/types/domain'
@@ -158,7 +158,10 @@ export function toOperacaoPayload(values: OperacaoFormOutput): Omit<Operacao, 'i
     indexador: rendaFixa && values.indexador !== '' ? values.indexador : null,
     percentualIndexador: rendaFixa ? values.percentualIndexador : null,
     vencimento: rendaFixa && values.vencimento !== '' ? values.vencimento : null,
-    valorBrutoAtual: rendaFixa ? values.valorBrutoAtual : null,
+    // Renda Fixa e Tesouro Direto preservam a marcação manual do valor atual —
+    // inclusive ao editar a operação (o valor é pré-carregado em
+    // `operacaoFormDefaults`), sem ser apagado por falhas de integração (RF19).
+    valorBrutoAtual: permiteMarcacaoManual(values.categoria) ? values.valorBrutoAtual : null,
   }
 }
 

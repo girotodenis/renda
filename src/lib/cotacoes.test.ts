@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   precosDeCotacoes,
   precosManuaisDeOperacoes,
+  precosPersistidosDeOperacoes,
+  precoMercadoValido,
   resolverCotacao,
   resolverCotacoes,
   temCotacaoIndisponivel,
@@ -51,6 +53,64 @@ describe('resolverCotacao — Ação/FII/BDR (GOOGLEFINANCE)', () => {
       precoMercado: 0,
     })
     expect(cotacao.usandoFallback).toBe(true)
+  })
+
+  it('usa o preço da Brapi como fallback quando o GOOGLEFINANCE falha', () => {
+    const cotacao = resolverCotacao({
+      ticker: 'PETR4',
+      categoria: CategoriaAtivo.Acao,
+      ...base,
+      precoMercado: null,
+      precoBrapi: 2500,
+    })
+    expect(cotacao).toMatchObject({
+      precoAtual: 2500,
+      fonte: 'brapi',
+      status: 'disponivel',
+      usandoFallback: false,
+    })
+  })
+
+  it('prioriza o GOOGLEFINANCE sobre a Brapi', () => {
+    const cotacao = resolverCotacao({
+      ticker: 'PETR4',
+      categoria: CategoriaAtivo.Acao,
+      ...base,
+      precoMercado: 2600,
+      precoBrapi: 2500,
+    })
+    expect(cotacao).toMatchObject({ precoAtual: 2600, fonte: 'googlefinance' })
+  })
+
+  it('trata cotação do GOOGLEFINANCE abaixo de R$ 0,20 como erro e usa a Brapi', () => {
+    const cotacao = resolverCotacao({
+      ticker: 'PETR4',
+      categoria: CategoriaAtivo.Acao,
+      ...base,
+      precoMercado: 11, // R$ 0,11 — ticker não encontrado no GOOGLEFINANCE
+      precoBrapi: 2500,
+    })
+    expect(cotacao).toMatchObject({ precoAtual: 2500, fonte: 'brapi', usandoFallback: false })
+  })
+
+  it('aceita o GOOGLEFINANCE a partir de R$ 0,20', () => {
+    const cotacao = resolverCotacao({
+      ticker: 'PETR4',
+      categoria: CategoriaAtivo.Acao,
+      ...base,
+      precoMercado: 20,
+    })
+    expect(cotacao).toMatchObject({ precoAtual: 20, fonte: 'googlefinance' })
+  })
+})
+
+describe('precoMercadoValido', () => {
+  it('rejeita GOOGLEFINANCE abaixo de R$ 0,20, mas aceita outras categorias', () => {
+    expect(precoMercadoValido(11, CategoriaAtivo.Acao)).toBe(false)
+    expect(precoMercadoValido(20, CategoriaAtivo.Acao)).toBe(true)
+    expect(precoMercadoValido(2500, CategoriaAtivo.Acao)).toBe(true)
+    expect(precoMercadoValido(11, CategoriaAtivo.TesouroDireto)).toBe(true)
+    expect(precoMercadoValido(null, CategoriaAtivo.Acao)).toBe(false)
   })
 })
 
@@ -161,7 +221,7 @@ describe('precosManuaisDeOperacoes', () => {
     }
   }
 
-  it('pega o Valor Bruto Atual mais recente por ticker de Renda Fixa', () => {
+  it('pega o Valor Bruto Atual mais recente por ticker (Renda Fixa e Tesouro)', () => {
     const precos = precosManuaisDeOperacoes([
       operacao({
         ticker: 'CDB-BANCO',
@@ -176,6 +236,12 @@ describe('precosManuaisDeOperacoes', () => {
         valorBrutoAtual: 108000,
       }),
       operacao({
+        ticker: 'Tesouro Selic 2029',
+        data: '2026-03-01',
+        categoria: CategoriaAtivo.TesouroDireto,
+        valorBrutoAtual: 1520000,
+      }),
+      operacao({
         ticker: 'PETR4',
         data: '2026-06-01',
         categoria: CategoriaAtivo.Acao,
@@ -183,6 +249,56 @@ describe('precosManuaisDeOperacoes', () => {
       }),
     ])
     expect(precos.get('CDB-BANCO')).toBe(108000)
+    expect(precos.get('Tesouro Selic 2029')).toBe(1520000)
     expect(precos.has('PETR4')).toBe(false)
+  })
+})
+
+describe('precosPersistidosDeOperacoes', () => {
+  function operacao(partial: Partial<Operacao> & Pick<Operacao, 'ticker' | 'data' | 'categoria'>): Operacao {
+    return {
+      id: `op-${partial.ticker}-${partial.data}`,
+      tipo: OperacaoTipo.Compra,
+      quantidade: 1,
+      precoUnitario: 1000,
+      taxas: 0,
+      indexador: null,
+      percentualIndexador: null,
+      vencimento: null,
+      valorBrutoAtual: null,
+      ...partial,
+    }
+  }
+
+  it('pega o Valor Bruto Atual mais recente por ticker B3 (fallback Brapi)', () => {
+    const precos = precosPersistidosDeOperacoes([
+      operacao({
+        ticker: 'PETR4',
+        data: '2026-01-01',
+        categoria: CategoriaAtivo.Acao,
+        valorBrutoAtual: 2500,
+      }),
+      operacao({
+        ticker: 'PETR4',
+        data: '2026-06-01',
+        categoria: CategoriaAtivo.Acao,
+        valorBrutoAtual: 2800,
+      }),
+      operacao({
+        ticker: 'HGLG11',
+        data: '2026-03-01',
+        categoria: CategoriaAtivo.Fii,
+        valorBrutoAtual: 15000,
+      }),
+      operacao({
+        ticker: 'CDB-BANCO',
+        data: '2026-06-01',
+        categoria: CategoriaAtivo.RendaFixa,
+        valorBrutoAtual: 999999,
+      }),
+    ])
+    expect(precos.get('PETR4')).toBe(2800)
+    expect(precos.get('HGLG11')).toBe(15000)
+    expect(precos.has('CDB-BANCO')).toBe(false)
   })
 })

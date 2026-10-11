@@ -11,6 +11,7 @@ export const SHEET_NAMES = [
   'Consolidado',
   'Metas_Rebalanceamento',
   'Historico',
+  'Valuation',
 ] as const
 
 export type SheetName = (typeof SHEET_NAMES)[number]
@@ -63,4 +64,11 @@ export const SHEET_HEADERS: Record<SheetName, readonly string[]> = {
     'Preço Teto (opcional)',
   ],
   Historico: ['Data', 'Patrimônio Total', 'Total Investido', 'Lucro Acumulado'],
+  Valuation: [
+    'Ticker',
+    'Categoria',
+    'Preço Teto',
+    'Margem de Segurança (%)',
+    'Anotações da Análise',
+  ],
 }

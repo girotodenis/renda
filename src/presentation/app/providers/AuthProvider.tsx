@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { AuthContext } from '@/app/providers/authContext'
 import type { AuthContextValue } from '@/app/providers/authContext'
+import { isOnline } from '@/infrastructure/outbox'
 import { consentStorage, tokenStorage, workspaceStorage } from '@/lib/storage'
 import type { StoredToken } from '@/lib/storage'
 import { GooglePickerError, pickSpreadsheet } from '@/services/drive'
@@ -120,13 +121,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
       return true
     } catch {
       const stored = tokenStorage.load()
-      if (stored && isTokenValid(stored, 0)) {
-        // Falha transitória de rede: mantém a sessão e tenta novamente em instantes.
+      // Sem rede: mantém a sessão mesmo com o token expirado — as escritas vão
+      // para o outbox e a leitura é do cache, então não é preciso deslogar. A
+      // segunda condição cobre a falha transitória de renovação com o token
+      // ainda válido (dentro da antiga margem de segurança).
+      if (stored && (!isOnline() || isTokenValid(stored, 0))) {
         tokenRef.current = stored.accessToken
         setAccessToken(stored.accessToken)
+        setStatus('authenticated')
         scheduleRefreshIn(TOKEN_REFRESH_RETRY_MS)
         return true
       }
+      // Falha real (consentimento revogado, popup fechado, erro do GIS): desloga.
       clearRefreshTimer()
       tokenStorage.clear()
       tokenRef.current = null
@@ -139,6 +145,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
   useEffect(() => {
     silentRefreshRef.current = silentRefresh
   }, [silentRefresh])
+
+  // Ao reconectar, renova o token antes do próximo flush. A `useSync` reage ao
+  // mesmo evento `online` e dispara a sincronização (chamando
+  // `ensureAccessToken`), logo a renovação aqui já garante um token novo para o
+  // replay. Só tenta quando há sessão persistida, para não provocar transições
+  // espúrias para 'unauthenticated' em usuários sem login.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const handleOnline = () => {
+      if (!tokenStorage.load()) return
+      void silentRefreshRef.current()
+    }
+    window.addEventListener('online', handleOnline)
+    return () => window.removeEventListener('online', handleOnline)
+  }, [])
 
   useEffect(() => {
     if (bootstrappedRef.current) return
@@ -201,9 +222,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
       try {
         await revokeAccessToken(current)
       } catch {
-        // Falha ao revogar não impede o logout local.
+        // Falha ao revogar (inclusive por falta de rede) não impede o logout local.
       }
     }
+    // A limpeza local sempre ocorre, mesmo offline (sem depender da rede).
     tokenStorage.clear()
     workspaceStorage.clear()
     consentStorage.clear()
@@ -220,6 +242,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
       tokenRef.current = stored.accessToken
       setAccessToken(stored.accessToken)
       return stored.accessToken
+    }
+    // Offline: usa o token armazenado mesmo expirado. As escritas vão para o
+    // outbox e a leitura é do cache — não há chamada à API para autorizar, logo
+    // não faz sentido tentar renovar (nem deslogar) por falta de rede.
+    if (!isOnline()) {
+      if (stored) {
+        tokenRef.current = stored.accessToken
+        setAccessToken(stored.accessToken)
+        return stored.accessToken
+      }
+      return null
     }
     const refreshed = await silentRefresh()
     return refreshed ? tokenRef.current : null

@@ -23,6 +23,11 @@ import type { CategoriaAtivo, Consolidado, Operacao, Provento } from '@/types/do
  * equivalente a `valor atual − valor investido`. Quando não há operações em
  * cache (posição vinda só da aba `Consolidado`), cai-se para
  * `Consolidado.lucroPrejuizo` como lucro flutuante.
+ *
+ * Quando o ticker foi **totalmente vendido** (posição zerada), o `Consolidado`
+ * informa `totalInvestido = 0`; o detalhe então expõe `valorInvestido` como o
+ * **capital aportado** nas compras (`posicaoEncerrada = true`), preservando a
+ * referência histórica do ativo.
  */
 
 /** Detalhe calculado de um ativo (todas as métricas do modal em centavos/%). */
@@ -46,8 +51,20 @@ export interface DetalheAtivo {
   precoMedio: number
   /** Preço atual (cotação) em centavos (vem do `Consolidado`). */
   precoAtual: number
-  /** Total investido em centavos (vem do `Consolidado`). */
+  /** Total investido em centavos (vem do `Consolidado`); `0` com posição zerada. */
   totalInvestido: number
+  /**
+   * Valor exibido como **"Valor investido"** no resumo: o custo da posição atual
+   * ou, quando a posição foi **totalmente vendida**, o **capital aportado** em
+   * compras (`Σ quantidade × preço + taxas`), que permanece como referência
+   * histórica do ticker.
+   */
+  valorInvestido: number
+  /**
+   * `true` quando houve compras mas a posição atual está **zerada** (todas as
+   * ações vendidas). Nesse caso a "Rentabilidade da posição" não se aplica.
+   */
+  posicaoEncerrada: boolean
   /** Valor atual em centavos (vem do `Consolidado`). */
   valorAtual: number
   /** Proventos recebidos na janela 1ª compra → data de referência, em centavos. */
@@ -242,6 +259,11 @@ export function calcularDetalheAtivo(
   const rentabilidadeTotalPercent =
     capitalAportado === 0 ? 0 : round2((retornoTotal / capitalAportado) * 100)
 
+  // Posição totalmente vendida: o `Consolidado` zera o total investido, mas o
+  // capital aportado em compras segue relevante como referência histórica.
+  const posicaoEncerrada = compras.length > 0 && fluxo.quantidadePosicao <= 0
+  const valorInvestido = posicaoEncerrada ? capitalAportado : totalInvestido
+
   const operacaoRecente = [...doTicker].sort(
     (a, b) => b.data.localeCompare(a.data) || b.id.localeCompare(a.id),
   )[0]
@@ -259,6 +281,8 @@ export function calcularDetalheAtivo(
     precoMedio,
     precoAtual,
     totalInvestido,
+    valorInvestido,
+    posicaoEncerrada,
     valorAtual,
     proventosNoPeriodo,
     retornoPosicao,
@@ -272,15 +296,15 @@ export function calcularDetalheAtivo(
 }
 
 /**
- * Série do waterfall de decomposição do retorno:
- * `Valor investido → + Lucro realizado → + Variação → + Proventos → Patrimônio final`,
- * onde `patrimônioFinal = valor investido + lucro realizado + variação + proventos`
- * (equivale a `valor atual + proventos`).
+ * Série do waterfall de decomposição do retorno.
  *
- * O `valor investido` da série é o **capital líquido aportado**
- * (`valor atual − lucro realizado − lucro flutuante`), não o custo da posição
- * atual — assim a série termina exatamente em `valor atual + proventos` mesmo
- * quando há lucro realizado.
+ * - **Posição aberta**: `Valor investido → + Lucro realizado → + Variação → +
+ *   Proventos → Patrimônio final`, onde o `valor investido` é o **capital
+ *   líquido aportado** (`valor atual − lucro realizado − lucro flutuante`), de
+ *   modo que a série termina exatamente em `valor atual + proventos`.
+ * - **Posição encerrada**: o capital saiu da posição, então a série parte do
+ *   **capital aportado** e termina em `Total recebido` (`capital aportado +
+ *   lucro realizado + proventos`).
  *
  * Cada ponto traz `base` (deslocamento invisível) e `valor` (altura da barra)
  * para o efeito cascata no gráfico.
@@ -295,10 +319,12 @@ export function serieDecomposicaoRetorno(detalhe: DetalheAtivo): PontoDecomposic
     pontos.push({ rotulo, valor, base, acumulado })
   }
 
-  // Capital líquido aportado: garante que a série termine em `valor atual + proventos`.
-  const valorInvestido = round2(
-    detalhe.valorAtual - detalhe.lucroRealizado - detalhe.lucroFlutuante,
-  )
+  // Posição encerrada: parte do capital aportado (referência histórica).
+  // Posição aberta: capital líquido aportado, garantindo que a série termine em
+  // `valor atual + proventos`.
+  const valorInvestido = detalhe.posicaoEncerrada
+    ? detalhe.capitalAportado
+    : round2(detalhe.valorAtual - detalhe.lucroRealizado - detalhe.lucroFlutuante)
 
   adicionar('Valor investido', valorInvestido)
   adicionar('Lucro realizado', detalhe.lucroRealizado)
@@ -307,7 +333,7 @@ export function serieDecomposicaoRetorno(detalhe: DetalheAtivo): PontoDecomposic
 
   const patrimonioFinal = acumulado
   pontos.push({
-    rotulo: 'Patrimônio final',
+    rotulo: detalhe.posicaoEncerrada ? 'Total recebido' : 'Patrimônio final',
     valor: patrimonioFinal,
     base: 0,
     acumulado: patrimonioFinal,

@@ -2,10 +2,36 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '@/app/providers/authContext'
 import { carregarDashboard, lerDashboardDoCache } from '@/services/dashboard'
 import type { DashboardData } from '@/services/dashboard'
+import { persistirESincronizarCotacoesBrapi } from '@/application/brapi'
 import { jaTemSnapshotDeHoje, registrarSnapshot, upsertHistorico } from '@/services/historico'
 import type { RepositoryContext } from '@/services/repositories'
 import { describeSheetsError } from '@/services/sheets'
 import { useOnlineStatus } from '@/hooks/useOnlineStatus'
+
+/** Extrai os preços (centavos) dos tickers cuja cotação veio da Brapi (fallback). */
+function cotacoesBrapiDoDashboard(data: DashboardData): Map<string, number> {
+  const precos = new Map<string, number>()
+  for (const cotacao of data.cotacoes.values()) {
+    if (cotacao.fonte === 'brapi' && !cotacao.usandoFallback) {
+      precos.set(cotacao.ticker, cotacao.precoAtual)
+    }
+  }
+  return precos
+}
+
+/** Persiste (best-effort) as cotações Brapi do dashboard na planilha. */
+async function persistirCotacoesBrapiDoDashboard(
+  context: RepositoryContext,
+  data: DashboardData,
+): Promise<void> {
+  const precos = cotacoesBrapiDoDashboard(data)
+  if (precos.size === 0) return
+  try {
+    await persistirESincronizarCotacoesBrapi(context, precos)
+  } catch {
+    // Best-effort (RNF04): nunca bloqueia o dashboard.
+  }
+}
 
 /** Estado e ações expostas pelo hook do dashboard. */
 export interface UseDashboardResult {
@@ -85,8 +111,12 @@ export function useDashboard(): UseDashboardResult {
           }
           return
         }
-        setData(await carregarDashboard(context, { forceRefresh }))
+        const resultado = await carregarDashboard(context, { forceRefresh })
+        setData(resultado)
         setIsOffline(false)
+        // Persistência best-effort das cotações Brapi usadas como fallback:
+        // grava o preço na planilha (mesmo fluxo da marcação manual).
+        void persistirCotacoesBrapiDoDashboard(context, resultado)
       } catch (loadError) {
         const cache = workspace ? lerDashboardDoCache(workspace.spreadsheetId) : null
         if (cache) {

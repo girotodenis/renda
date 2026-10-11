@@ -1,4 +1,6 @@
 import { useMemo, useState } from 'react'
+import { Pagination } from '@/components/Pagination'
+import { usePagination } from '@/hooks/usePagination'
 import { cn } from '@/lib/cn'
 import {
   agruparProventosPorMes,
@@ -18,6 +20,9 @@ const rotuloModo: Record<Modo, string> = {
   anual: 'Anual',
   mensal: 'Mensal',
 }
+
+/** Registros exibidos por página na lista "Por ticker" do extrato. */
+const TICKER_PAGE_SIZE = 5
 
 interface ExtratoProventosProps {
   proventos: Provento[]
@@ -44,11 +49,7 @@ export function ExtratoProventos({ proventos }: ExtratoProventosProps) {
 
   const filtrados = useMemo(
     () =>
-      modo === 'anual'
-        ? proventosDoAno
-        : mes
-          ? filtrarProventos(proventosDoAno, { mes })
-          : [],
+      modo === 'anual' ? proventosDoAno : mes ? filtrarProventos(proventosDoAno, { mes }) : [],
     [modo, proventosDoAno, mes],
   )
 
@@ -138,15 +139,18 @@ export function ExtratoProventos({ proventos }: ExtratoProventosProps) {
       ) : (
         <div className="mt-4 space-y-4">
           <p className="rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-600">
-            Total no período:{' '}
-            <strong className="text-slate-900">{formatarCentavos(total)}</strong>
+            Total no período: <strong className="text-slate-900">{formatarCentavos(total)}</strong>
           </p>
 
           <div className="grid gap-4 lg:grid-cols-2">
-            <TabelaAgregado titulo="Por ticker" itens={porTicker} vazioRotulo="—" />
+            <TabelaAgregado
+              titulo="Por ticker"
+              itens={porTicker}
+              vazioRotulo="—"
+              pageSize={TICKER_PAGE_SIZE}
+            />
             <TabelaAgregado titulo="Por tipo" itens={porTipo} vazioRotulo="—" />
           </div>
-
           {modo === 'anual' ? (
             <TabelaAgregado titulo="Por mês" itens={meses} vazioRotulo="—" />
           ) : null}
@@ -160,9 +164,14 @@ interface TabelaAgregadoProps {
   titulo: string
   itens: AgregadoProvento[]
   vazioRotulo: string
+  /** Quando definido, exibe a lista paginada em blocos deste tamanho. */
+  pageSize?: number
 }
 
-function TabelaAgregado({ titulo, itens, vazioRotulo }: TabelaAgregadoProps) {
+function TabelaAgregado({ titulo, itens, vazioRotulo, pageSize }: TabelaAgregadoProps) {
+  const { page, pageItems, setPage } = usePagination(itens, pageSize ?? (itens.length || 1), itens)
+  const visiveis = pageSize ? pageItems : itens
+
   return (
     <div className="overflow-hidden rounded-lg border border-slate-200">
       <div className="border-b border-slate-200 bg-slate-50 px-4 py-2">
@@ -174,7 +183,7 @@ function TabelaAgregado({ titulo, itens, vazioRotulo }: TabelaAgregadoProps) {
         <table className="w-full text-left text-sm">
           <caption className="sr-only">{titulo}</caption>
           <tbody>
-            {itens.map((item) => (
+            {visiveis.map((item) => (
               <tr key={item.chave} className="border-t border-slate-100 first:border-t-0">
                 <th scope="row" className="px-4 py-2 text-left font-medium text-slate-700">
                   {item.rotulo}
@@ -187,6 +196,9 @@ function TabelaAgregado({ titulo, itens, vazioRotulo }: TabelaAgregadoProps) {
           </tbody>
         </table>
       )}
+      {pageSize !== undefined && itens.length > pageSize ? (
+        <Pagination page={page} pageSize={pageSize} total={itens.length} onPageChange={setPage} />
+      ) : null}
     </div>
   )
 }
