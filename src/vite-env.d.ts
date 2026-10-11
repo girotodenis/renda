@@ -1,4 +1,5 @@
 /// <reference types="vite/client" />
+/// <reference types="vite-plugin-pwa/client" />
 
 interface ImportMetaEnv {
   /** Client ID do OAuth 2.0 (Google Identity Services). Obrigatório para login. */
