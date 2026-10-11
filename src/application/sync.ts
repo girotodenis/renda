@@ -1,7 +1,7 @@
 import { syncConsolidado } from '@/application/consolidado'
 import type { RepositoryContext } from '@/domain/repositories/ports'
 import type { SheetName } from '@/domain/sheetsSchema'
-import { list, remove } from '@/infrastructure/outbox'
+import { count, list, remove } from '@/infrastructure/outbox'
 import type { Mutation } from '@/infrastructure/outbox'
 import { prefetchAllSheets, rawRepositories, replayMutation } from '@/infrastructure/repositories'
 
@@ -26,6 +26,18 @@ export interface SyncResult {
   pendentes: number
   /** Primeira falha não-recuperável encontrada (403/500/401), se houver. */
   erro?: string
+}
+
+/**
+ * Quantidade de alterações ainda pendentes de sincronização (Fase 4).
+ *
+ * Wrapper de `outbox.count()` exposto pela camada `application` para que a
+ * apresentação (badge de sincronização) possa exibir o contador sem importar
+ * `@/infrastructure/outbox` diretamente, preservando a regra de dependência
+ * `presentation → application`.
+ */
+export function contarPendencias(): number {
+  return count()
 }
 
 /**

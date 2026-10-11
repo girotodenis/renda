@@ -4,8 +4,8 @@
 > offline e, ao reconectar, sincronize as alterações com a planilha do Google.
 >
 > **Data de criação:** 2026-10-10
-> **Última atualização:** 2026-10-11 (Fase 3 concluída)
-> **Estado geral:** `em andamento` — Fases 0, 1, 2 e 3 concluídas; próximas fases pendentes.
+> **Última atualização:** 2026-10-11 (Fase 4 concluída)
+> **Estado geral:** `em andamento` — Fases 0, 1, 2, 3 e 4 concluídas; resta a Fase 5 (opcional).
 
 ---
 
@@ -35,7 +35,7 @@
 | Fase 1 | Repositórios offline (outbox + atualização otimista) | `[x]` concluída | 2026-10-10 |
 | Fase 2 | Sincronização automática (flush + Consolidado) | `[x]` concluída | 2026-10-10 |
 | Fase 3 | Auth resiliente offline | `[x]` concluída | 2026-10-11 |
-| Fase 4 | UX de sincronização (badge/contador/botão) | `[ ]` pendente | — |
+| Fase 4 | UX de sincronização (badge/contador/botão) | `[x]` concluída | 2026-10-11 |
 | Fase 5 | Melhorias opcionais (IndexedDB, Periodic Sync, tabs) | `[ ]` pendente | — |
 
 ---
@@ -652,10 +652,102 @@ npm run preview   # manual: alternar rede e observar o badge
 ```
 
 ### Estado
-- [ ] pendente
+- [x] concluída em 2026-10-11
 
 ### Notas/Desvios
-— (preencher ao executar)
+
+**Arquivos realmente alterados** (`git status`):
+
+- `src/application/sync.ts` — novo wrapper `contarPendencias()` (delega a
+  `outbox.count()`), exportado pela camada `application` para a apresentação.
+- `src/presentation/hooks/useSync.ts` — passa a retornar
+  `SyncController { syncNow, status, ultimoResultado }` (antes `void`) e a expor
+  `status: 'idle' | 'syncing' | 'ok' | 'error'`. Disparadores (montagem,
+  `online`, retry 60s, `inFlightRef`) inalterados.
+- `src/presentation/hooks/useSyncStatus.ts` (novo) — combina
+  `useOnlineStatus()` + `useSync()` + `contarPendencias()`.
+- `src/presentation/components/SyncStatusBadge.tsx` (novo).
+- `src/presentation/app/layout/AppLayout.tsx` — usa `useSyncStatus()` no lugar
+  de `useSync()` e renderiza o badge no cabeçalho, ao lado da marca.
+- `PLANO_PWA.md` — estado e notas.
+
+**Decisões tomadas:**
+
+- **Regra de dependência:** a apresentação **não** importa `infrastructure`; a
+  contagem de pendências vem de `contarPendencias()` (`application/sync.ts`),
+  wrapper de `outbox.count()`. `SyncResult` e `SyncPhase` também são tipos de
+  `application`/`presentation`.
+- **Motor único:** `AppLayout` chama só `useSyncStatus()`, que internamente usa
+  `useSync()`. Assim existe **um único** motor de sync (um listener de `online`,
+  um timer de retry) — evita montar `useSync()` no layout **e** `useSyncStatus()`
+  no badge (dois motores em paralelo).
+- **Posição do badge:** chip compacto no cabeçalho, agrupado com a marca
+  (`<div class="flex flex-wrap items-center gap-3">`), de modo que no mobile a
+  marca+badge ficam na primeira linha e a nav abaixo. **Complementa** o banner
+  "Modo offline" existente (full-width) — não o duplica: o badge é a versão
+  compacta com contador + botão.
+- **Atualização da contagem** (via `contarPendencias`) em: **montagem**
+  (`useState` inicializador + efeito em `online`), **reconexão** (efeito
+  dependente de `online`) e **após cada ciclo de sync** (efeito dependente de
+  `[status, ultimoResultado]`, que também cobre os syncs automáticos do
+  retry/montagem). O `syncNow` exposto recontabiliza imediatamente após o flush
+  manual. A contagem **não** é duplicada dentro de `useSync` — fonte única.
+- **Estados do badge:** offline → `Offline` (`WifiOff`) com contador opcional;
+  online com pendências → `N alterações pendentes` + botão `Sincronizar agora`
+  (`RefreshCw`; `Loader2` girando durante `syncing`, botão desabilitado); erro →
+  `Falha ao sincronizar` (`AlertTriangle`, chip vermelho, com retry), discreto e
+  sem travar a UI; online + 0 pendências → **sem badge**, exceto `Sincronizado`
+  discreto (`CheckCircle2`, verde) quando o último ciclo aplicou algo
+  (`aplicadas > 0`).
+- **Semântica de `status`:** `syncing` durante o flush; `ok` quando a fila zera;
+  `idle` quando ainda há pendências sem erro (ex.: rede caiu no meio do flush —
+  não é erro definitivo); `error` quando `SyncResult.erro` está presente (ou
+  falha inesperada).
+- **Retrocompatibilidade:** `useSync` continua sem argumentos; o retorno passou
+  de `void` para `SyncController`, o que é aditivo (quem ignorava o retorno —
+  como o `AppLayout` anterior — não quebra).
+- **Item 6 (prompt de atualização do SW): NÃO implementado.** O
+  `vite.config.ts` usa `registerType: 'autoUpdate'` (Fase 0): o SW novo assume o
+  controle e recarrega sozinho, e nesse modo `needRefresh`/`onNeedRefresh` do
+  `virtual:pwa-register` **não** é acionado. Um prompt exigiria migrar para
+  `registerType: 'prompt'`, mudando o comportamento validado da Fase 0 — por ser
+  opcional e para não regredir a Fase 0, ficou **para depois**. (O
+  `virtual:pwa-register/react` está disponível e é o caminho quando a Fase 0 for
+  revisitada.)
+
+**Validação executada (2026-10-11):**
+
+- `npm run typecheck` — ok.
+- `npm test -- --run` — **180 testes / 16 arquivos**, todos verdes (nenhum teste
+  novo; nenhum regrediu).
+- `npm run lint` — ok.
+- `npm run build` — ok; PWA `generateSW`, 16 entradas de precache (~1001 KiB),
+  gera `dist/sw.js` + `dist/workbox-98f7a950.js` (o aviso de chunk > 500 kB é
+  pré-existente).
+- `npm run preview` (porta 4173) + verificação no navegador (após remover o SW
+  antigo/cache para servir o build novo):
+  - **online ok / 0 pendências** → **sem badge**;
+  - **pendências** (outbox semeado com 2 mutações) → `2 alterações pendentes` +
+    botão `Sincronizar agora`;
+  - **offline** (`context.setOffline(true)`) → `Offline · 2 alterações pendentes`;
+  - voltando **online** → `2 alterações pendentes` + botão;
+  - clicar em `Sincronizar agora` **não** quebra a UI (sem `ErrorBoundary`).
+
+**Desvios do plano:**
+
+- **Botão "zera as pendências":** a zeragem efetiva não pôde ser validada neste
+  ambiente — não há `VITE_GOOGLE_CLIENT_ID` (sem login Google real), então o
+  `workspace` é `null` e `syncNow()` é no-op (mantém a fila). O comportamento do
+  botão (habilitado, spinner de `syncing`, sem crash) foi validado; o flush real
+  depende de uma sessão Google — mesma limitação já registrada na Fase 3.
+- **Onde mora a contagem:** conforme a fase, a contagem fica em `useSyncStatus`
+  (via `contarPendencias`), e `useSync` expõe apenas o estado do ciclo — evita
+  duas fontes de verdade para o número de pendências.
+- **Sem teste automatizado novo:** o ambiente de testes é `node`
+  (`vitest.config.ts`), sem DOM/`@testing-library/react`; testar o badge/hook
+  exigiria novas dependências e mudança de config, fora do escopo. Validação foi
+  manual no `preview` (acima).
+- Nenhuma fase além da Fase 4 foi tocada.
 
 ---
 
