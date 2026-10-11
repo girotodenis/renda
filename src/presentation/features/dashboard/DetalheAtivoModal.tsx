@@ -550,7 +550,8 @@ export function DetalheAtivoResumo({
             </ul>
             <p>
               Capital aportado é a soma de todas as compras (quantidade × preço + taxas). Sem vendas,
-              ele é igual ao valor investido e a Rentabilidade Total coincide com a da posição.
+              ele é igual ao valor investido e a Rentabilidade Total coincide com a da posição. Após
+              vendas, pode diferir do custo das ações que ainda estão na carteira.
             </p>
             {detalhe.posicaoEncerrada ? (
               <p>
