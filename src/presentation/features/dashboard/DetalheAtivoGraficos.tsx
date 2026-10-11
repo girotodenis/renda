@@ -21,13 +21,13 @@ const ROTULOS_CURTOS: Record<string, string> = {
   'Lucro realizado': '+ Realizado',
   Variação: '+ Variação',
   Proventos: '+ Proventos',
-  'Patrimônio final': 'Patrimônio',
+  'Total acumulado': 'Total',
   'Total recebido': 'Recebido',
 }
 
 function corDecomposicao(ponto: PontoDecomposicao, indice: number): string {
   if (indice === 0) return '#2563eb'
-  if (ponto.rotulo === 'Patrimônio final' || ponto.rotulo === 'Total recebido') return '#1d4ed8'
+  if (ponto.rotulo === 'Total acumulado' || ponto.rotulo === 'Total recebido') return '#1d4ed8'
   if (ponto.rotulo === 'Proventos') return '#0ea5e9'
   return ponto.valor >= 0 ? '#10b981' : '#ef4444'
 }

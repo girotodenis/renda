@@ -332,7 +332,7 @@ describe('calcularDetalheAtivo (posição encerrada)', () => {
     expect(detalhe.valorAtual).toBe(0)
   })
 
-  it('mantém o custo da posição como "Valor investido" enquanto ainda há ações', () => {
+  it('expõe o capital aportado como "Valor investido" enquanto ainda há ações', () => {
     const operacoes = [
       operacao({ ticker: 'PETR4', tipo: OperacaoTipo.Compra, quantidade: 100, precoUnitario: 1000, data: '2026-01-01' }),
       operacao({ ticker: 'PETR4', tipo: OperacaoTipo.Venda, quantidade: 40, precoUnitario: 1500, data: '2026-02-01' }),
@@ -341,7 +341,9 @@ describe('calcularDetalheAtivo (posição encerrada)', () => {
     const detalhe = obterDetalhe('PETR4', operacoes, [], consolidado)
 
     expect(detalhe.posicaoEncerrada).toBe(false)
-    expect(detalhe.valorInvestido).toBe(detalhe.totalInvestido)
+    expect(detalhe.totalInvestido).toBe(60000)
+    expect(detalhe.valorInvestido).toBe(detalhe.capitalAportado)
+    expect(detalhe.valorInvestido).toBe(100000)
   })
 
   it('sem operações (posição só do Consolidado) não é considerada encerrada', () => {
@@ -372,7 +374,7 @@ describe('calcularDetalheAtivo (posição encerrada)', () => {
 })
 
 describe('séries para os gráficos', () => {
-  it('serieDecomposicaoRetorno termina no patrimônio final (valor investido + lucros + proventos)', () => {
+  it('serieDecomposicaoRetorno termina no total acumulado (capital + lucros + proventos)', () => {
     const operacoes = [
       operacao({ ticker: 'PETR4', tipo: OperacaoTipo.Compra, quantidade: 1, precoUnitario: 1000, data: '2026-01-01' }),
       operacao({ ticker: 'PETR4', tipo: OperacaoTipo.Venda, quantidade: 1, precoUnitario: 2000, data: '2026-02-01' }),
@@ -386,10 +388,26 @@ describe('séries para os gráficos', () => {
 
     expect(serie).toHaveLength(5)
     expect(serie[0].rotulo).toBe('Valor investido')
-    expect(final.rotulo).toBe('Patrimônio final')
-    // valor investido (200) + realizado (1000) + flutuante (300) + proventos (0)
-    expect(final.valor).toBe(1500)
-    expect(final.acumulado).toBe(1500)
+    expect(final.rotulo).toBe('Total acumulado')
+    // capital aportado (2200) + realizado (1000) + flutuante (300) + proventos (0)
+    expect(serie[0].valor).toBe(2200)
+    expect(final.valor).toBe(3500)
+    expect(final.acumulado).toBe(3500)
+  })
+
+  it('usa o capital aportado no resumo e na decomposição após uma venda parcial', () => {
+    const operacoes = [
+      operacao({ ticker: 'PETR4', tipo: OperacaoTipo.Compra, quantidade: 100, precoUnitario: 2400, data: '2026-06-14' }),
+      operacao({ ticker: 'PETR4', tipo: OperacaoTipo.Venda, quantidade: 90, precoUnitario: 5000, data: '2026-10-01' }),
+    ]
+    const consolidado = calcularConsolidado(operacoes, new Map([['PETR4', 5600]]))
+    const detalhe = obterDetalhe('PETR4', operacoes, [], consolidado)
+    const serie = serieDecomposicaoRetorno(detalhe)
+
+    expect(detalhe.totalInvestido).toBe(24000)
+    expect(detalhe.valorInvestido).toBe(240000)
+    expect(detalhe.valorAtual).toBe(56000)
+    expect(serie.map((ponto) => ponto.valor)).toEqual([240000, 234000, 32000, 0, 506000])
   })
 
   it('serieProventosPorMes agrupa por mês, restrito ao ticker e à janela', () => {
