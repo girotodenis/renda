@@ -114,6 +114,7 @@ export function TabelaAtivos({
               )}
             >
               {categoriaLabel(grupo.categoria)}
+              {grupoTemOportunidade(grupo, oportunidades) ? <AlertaOportunidade /> : null}
               <ContadorBadge quantidade={grupo.abertos.length} />
             </button>
           )
@@ -236,7 +237,11 @@ function CategoriaPanel({
           aria-labelledby={`${idBase}-tab-vendidos`}
         >
           {temEncerrados ? (
-            <TabelaEncerrados encerrados={grupo.encerrados} onSelecionarAtivo={onSelecionarAtivo} />
+            <TabelaEncerrados
+              encerrados={grupo.encerrados}
+              oportunidades={oportunidades}
+              onSelecionarAtivo={onSelecionarAtivo}
+            />
           ) : (
             <p className="px-4 py-6 text-sm text-slate-500">
               Nenhum ativo de {rotulo} foi completamente vendido.
@@ -289,6 +294,34 @@ function ContadorBadge({ quantidade }: { quantidade: number }) {
     <span className="inline-flex min-w-5 justify-center rounded-full bg-slate-200 px-1.5 text-xs font-semibold tabular-nums text-slate-700">
       {quantidade}
     </span>
+  )
+}
+
+/** Ícone 🎯 de alerta de oportunidade de compra (acessível). */
+function AlertaOportunidade() {
+  return (
+    <span
+      role="img"
+      aria-label="Oportunidade de compra"
+      title="Oportunidade de compra — cotação atingiu o alvo"
+      className="text-base leading-none"
+    >
+      🎯
+    </span>
+  )
+}
+
+/**
+ * `true` quando a categoria tem ao menos um ticker (posição aberta ou vendida)
+ * com oportunidade de compra — base do alerta exibido na aba da categoria.
+ */
+function grupoTemOportunidade(
+  grupo: GrupoCategoriaTabela,
+  oportunidades?: ReadonlySet<string>,
+): boolean {
+  if (!oportunidades || oportunidades.size === 0) return false
+  return [...grupo.abertos, ...grupo.encerrados].some((ativo) =>
+    oportunidades.has(ativo.ticker.trim().toUpperCase()),
   )
 }
 
@@ -354,14 +387,7 @@ function TabelaPosicoes({
                 <td className="px-4 py-2">
                   <div className="flex items-center gap-1.5">
                     {oportunidades?.has(ativo.ticker.trim().toUpperCase()) ? (
-                      <span
-                        role="img"
-                        aria-label="Oportunidade de compra"
-                        title="Oportunidade de compra — cotação atingiu o alvo"
-                        className="text-base leading-none"
-                      >
-                        🎯
-                      </span>
+                      <AlertaOportunidade />
                     ) : null}
                     <TickerBotao ticker={ativo.ticker} onSelecionarAtivo={onSelecionarAtivo} />
                     {onEditarValorManual && podeMarcarValor ? (
@@ -427,12 +453,15 @@ function TabelaPosicoes({
 /**
  * Aba **Vendidos**: ativos com posição totalmente encerrada (quantidade = 0).
  * O ticker permanece clicável para abrir o histórico e o resultado realizado.
+ * Quando o ticker tem oportunidade de compra, exibe o alerta 🎯.
  */
 function TabelaEncerrados({
   encerrados,
+  oportunidades,
   onSelecionarAtivo,
 }: {
   encerrados: Consolidado[]
+  oportunidades?: ReadonlySet<string>
   onSelecionarAtivo?: (ticker: string) => void
 }) {
   return (
@@ -453,7 +482,12 @@ function TabelaEncerrados({
           {encerrados.map((ativo) => (
             <tr key={ativo.ticker} className="border-t border-slate-100">
               <td className="px-4 py-2">
-                <TickerBotao ticker={ativo.ticker} onSelecionarAtivo={onSelecionarAtivo} />
+                <div className="flex items-center gap-1.5">
+                  {oportunidades?.has(ativo.ticker.trim().toUpperCase()) ? (
+                    <AlertaOportunidade />
+                  ) : null}
+                  <TickerBotao ticker={ativo.ticker} onSelecionarAtivo={onSelecionarAtivo} />
+                </div>
               </td>
               <td className="px-4 py-2 text-right tabular-nums text-slate-500">0</td>
               <td className="px-4 py-2 text-right">
