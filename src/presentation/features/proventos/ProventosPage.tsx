@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '@/presentation/app/providers/authContext'
 import { Alert } from '@/presentation/components/Alert'
+import { Autocomplete } from '@/presentation/components/Autocomplete'
 import { Pagination } from '@/presentation/components/Pagination'
 import { ExtratoProventos } from '@/presentation/features/dashboard/ExtratoProventos'
 import { ProventoForm } from '@/presentation/features/proventos/ProventoForm'
@@ -21,8 +22,9 @@ import type { Provento } from '@/domain/entities'
 /** Estado do formulário: fechado, novo lançamento ou edição de um provento. */
 type FormState = { mode: 'closed' } | { mode: 'create' } | { mode: 'edit'; provento: Provento }
 
-/** Registros exibidos por página na tabela de proventos. */
+/** Tamanho inicial e opções de registros por página da tabela de proventos. */
 const PROVENTOS_PAGE_SIZE = 20
+const PROVENTOS_PAGE_SIZE_OPTIONS = [10, 20, 50, 100] as const
 
 function byMostRecent(a: Provento, b: Provento): number {
   return b.dataPagamento.localeCompare(a.dataPagamento) || a.ticker.localeCompare(b.ticker)
@@ -45,6 +47,7 @@ export function ProventosPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [filtroTicker, setFiltroTicker] = useState('')
+  const [pageSize, setPageSize] = useState<number>(PROVENTOS_PAGE_SIZE)
 
   const resolveContext = useCallback(async (): Promise<RepositoryContext | null> => {
     if (!workspace) {
@@ -159,15 +162,18 @@ export function ProventosPage() {
     return [...unicos].sort((a, b) => a.localeCompare(b))
   }, [proventos])
 
-  const filtrados = useMemo(
-    () =>
-      filtroTicker
-        ? sorted.filter((provento) => provento.ticker.trim().toUpperCase() === filtroTicker)
-        : sorted,
-    [sorted, filtroTicker],
-  )
+  const filtrados = useMemo(() => {
+    const termo = filtroTicker.trim().toUpperCase()
+    return termo
+      ? sorted.filter((provento) => provento.ticker.trim().toUpperCase().includes(termo))
+      : sorted
+  }, [sorted, filtroTicker])
 
-  const { page, pageItems, setPage } = usePagination(filtrados, PROVENTOS_PAGE_SIZE, filtroTicker)
+  const { page, pageItems, setPage } = usePagination(
+    filtrados,
+    pageSize,
+    `${filtroTicker}::${pageSize}`,
+  )
 
   return (
     <section className="space-y-6">
@@ -246,20 +252,20 @@ export function ProventosPage() {
         ) : (
           <>
             <div className="flex flex-wrap items-end justify-between gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3">
-              <label className="flex flex-col gap-1 text-xs font-medium text-slate-500">
+              <label
+                htmlFor="proventos-filtro-ticker"
+                className="flex flex-col gap-1 text-xs font-medium text-slate-500"
+              >
                 Filtrar por ticker
-                <select
+                <Autocomplete
+                  id="proventos-filtro-ticker"
                   value={filtroTicker}
-                  onChange={(event) => setFiltroTicker(event.target.value)}
-                  className="rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-700"
-                >
-                  <option value="">Todos os tickers</option>
-                  {tickers.map((ticker) => (
-                    <option key={ticker} value={ticker}>
-                      {ticker}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setFiltroTicker}
+                  options={tickers}
+                  placeholder="Ex.: PETR4"
+                  clearLabel="Todos os tickers"
+                  className="w-56"
+                />
               </label>
               <p className="text-xs text-slate-500" aria-live="polite">
                 {filtrados.length} de {sorted.length} lançamentos
@@ -268,7 +274,7 @@ export function ProventosPage() {
 
             {filtrados.length === 0 ? (
               <p className="px-4 py-6 text-sm text-slate-500">
-                Nenhum provento para o ticker selecionado.
+                Nenhum provento para o ticker “{filtroTicker.trim()}”.
               </p>
             ) : (
               <>
@@ -351,9 +357,11 @@ export function ProventosPage() {
                 </div>
                 <Pagination
                   page={page}
-                  pageSize={PROVENTOS_PAGE_SIZE}
+                  pageSize={pageSize}
                   total={filtrados.length}
                   onPageChange={setPage}
+                  pageSizeOptions={PROVENTOS_PAGE_SIZE_OPTIONS}
+                  onPageSizeChange={setPageSize}
                 />
               </>
             )}
