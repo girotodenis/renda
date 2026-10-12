@@ -7,13 +7,18 @@ import type { Operacao, Provento } from '@/domain/entities'
  * Análise/classificação dos extratos CSV exportados pela B3 (Área do
  * Investidor) — RF23 (importação por arquivo, Etapa 8).
  *
- * Dois formatos são suportados (detecção pelo cabeçalho):
+ * Três formatos são suportados (detecção pelo cabeçalho):
  * - `movimentacao`: `Entrada/Saída,Data,Movimentação,Produto,Instituição,...`
  * - `proventos`: `Produto,Pagamento,Tipo de Evento,Instituição,...`
+ * - `negociacao`: `Data do Negócio,Tipo de Movimentação,Mercado,Prazo/Vencimento,
+ *   Instituição,Código de Negociação,Quantidade,Preço,Valor`
  *
  * Regras (ver skill `integracao-b3`):
  * - Proventos (Dividendo, JCP, Rendimento) viram `Provento`.
  * - "Transferência - Liquidação" vira `Operacao` (Crédito → Compra, Débito → Venda).
+ * - No extrato de negociação, `Compra`/`Venda` viram `Operacao` direto; o ticker
+ *   vem do `Código de Negociação` e a categoria do `Mercado` (Renda Fixa/Tesouro),
+ *   com fallback pelo sufixo do ticker.
  * - Demais movimentações (transferências, empréstimo, direitos, reembolso) são
  *   **ignoradas** e reportadas (não mapeiam para o modelo atual).
  * - IDs são **determinísticos** (hash do registro) para permitir deduplicação
@@ -22,7 +27,7 @@ import type { Operacao, Provento } from '@/domain/entities'
  * Tudo aqui é **puro** (sem rede/UI) e testável.
  */
 
-export type B3Formato = 'movimentacao' | 'proventos'
+export type B3Formato = 'movimentacao' | 'proventos' | 'negociacao'
 
 /** Linha do extrato que não pôde ser importada, com o motivo. */
 export interface B3LinhaIgnorada {
@@ -69,12 +74,59 @@ export function extrairTicker(produto: string): string | null {
   return null
 }
 
-/** Classifica a categoria pelo sufixo do ticker (BDR/FII/Ação). */
+/**
+ * Classifica a categoria pelo sufixo do ticker (BDR/FII/Ação).
+ *
+ * BDRs usam a faixa `31..39` (ex.: `AAPL34`, `BNDA39`); FIIs o sufixo `11`/`12`;
+ * ações os sufixos `3..8`.
+ */
 export function classificarCategoria(ticker: string): CategoriaAtivo | null {
   const t = ticker.trim().toUpperCase()
-  if (/34$/.test(t)) return CategoriaAtivo.Bdr
+  if (/3[1-9]$/.test(t)) return CategoriaAtivo.Bdr
   if (/11$|12$/.test(t)) return CategoriaAtivo.Fii
   if (/[3-8]$/.test(t)) return CategoriaAtivo.Acao
+  return null
+}
+
+/** Mercados que determinam a categoria independentemente do sufixo do ticker. */
+function categoriaPorMercado(mercado: string): CategoriaAtivo | null {
+  const m = normalizar(mercado)
+  if (m.includes('rendafixa')) return CategoriaAtivo.RendaFixa
+  if (m.includes('tesouro')) return CategoriaAtivo.TesouroDireto
+  return null
+}
+
+/**
+ * Categoria de uma linha do extrato de negociação: o `Mercado` tem prioridade
+ * (Renda Fixa/Tesouro Direto) e, quando genérico (`À Vista`/`Fracionário`), a
+ * categoria sai do sufixo do ticker.
+ */
+export function classificarCategoriaNegociacao(
+  ticker: string,
+  mercado: string,
+): CategoriaAtivo | null {
+  return categoriaPorMercado(mercado) ?? classificarCategoria(ticker)
+}
+
+/**
+ * Normaliza o `Código de Negociação` do extrato de negociação.
+ *
+ * Valida o formato do ticker e remove o sufixo `F` do **mercado fracionário**
+ * (`BBAS3F` → `BBAS3`), para que a operação agregue à posição do lote padrão em
+ * vez de criar uma posição separada. Retorna `null` para códigos inválidos.
+ */
+export function normalizarTickerNegociacao(codigo: string, mercado: string): string | null {
+  const upper = codigo.trim().toUpperCase()
+  if (!/^[A-Z][A-Z0-9]{3,5}$/.test(upper) || !/\d/.test(upper)) return null
+  if (normalizar(mercado).includes('fracionario') && upper.endsWith('F')) return upper.slice(0, -1)
+  return upper
+}
+
+/** Mapeia o `Tipo de Movimentação` do extrato de negociação (Compra/Venda). */
+function mapearTipoOperacao(movimentacao: string): OperacaoTipo | null {
+  const n = normalizar(movimentacao)
+  if (n.startsWith('compra')) return OperacaoTipo.Compra
+  if (n.startsWith('venda')) return OperacaoTipo.Venda
   return null
 }
 
@@ -117,6 +169,7 @@ function idOperacaoB3(
 
 function detectarFormato(cabecalho: readonly string[]): B3Formato | null {
   const normalizado = cabecalho.map(normalizar).join('|')
+  if (normalizado.includes('codigodenegociacao')) return 'negociacao'
   if (normalizado.includes('entradasaida')) return 'movimentacao'
   if (normalizado.includes('tipodeevento')) return 'proventos'
   return null
@@ -248,6 +301,53 @@ function processarLinhaMovimentacao(
   return ignorar(`Movimentação não suportada (${movimentacao || 'vazia'}).`)
 }
 
+function processarLinhaNegociacao(
+  linha: readonly string[],
+  numeroLinha: number,
+  operacoes: Operacao[],
+  ignorados: B3LinhaIgnorada[],
+): void {
+  const codigo = linha[5]?.trim() ?? ''
+  const movimentacao = linha[1]?.trim() ?? ''
+  if (codigo.length === 0) return // rodapé/linha vazia
+
+  const ignorar = (motivo: string): void => {
+    ignorados.push({ linha: numeroLinha, produto: codigo, movimentacao, motivo })
+  }
+
+  const mercado = linha[2] ?? ''
+  const ticker = normalizarTickerNegociacao(codigo, mercado)
+  if (!ticker) return ignorar('Código de negociação inválido.')
+  const categoria = classificarCategoriaNegociacao(ticker, mercado)
+  if (!categoria) return ignorar('Categoria não reconhecida para o ticker.')
+  const tipo = mapearTipoOperacao(movimentacao)
+  if (!tipo) return ignorar(`Tipo de movimentação não suportado (${movimentacao || 'vazio'}).`)
+  const data = dataBRParaISO(linha[0] ?? '')
+  if (!data) return ignorar('Data do negócio inválida.')
+  const quantidade = parseDecimalBR(linha[6] ?? '')
+  const preco = parseDecimalBR(linha[7] ?? '')
+  if (quantidade === null || quantidade <= 0) return ignorar('Quantidade indisponível.')
+  if (preco === null || preco <= 0) return ignorar('Preço unitário indisponível.')
+
+  const precoCentavos = toCentavos(preco)
+  const usaVencimento =
+    categoria === CategoriaAtivo.RendaFixa || categoria === CategoriaAtivo.TesouroDireto
+  operacoes.push({
+    id: idOperacaoB3(ticker, data, tipo, quantidade, precoCentavos),
+    data,
+    tipo,
+    categoria,
+    ticker,
+    quantidade,
+    precoUnitario: precoCentavos,
+    taxas: 0,
+    indexador: null,
+    percentualIndexador: null,
+    vencimento: usaVencimento ? dataBRParaISO(linha[3] ?? '') : null,
+    valorBrutoAtual: null,
+  })
+}
+
 /**
  * Analisa um arquivo CSV da B3 e retorna proventos, operações e linhas
  * ignoradas. Nunca lança: entradas inesperadas geram apenas linhas ignoradas.
@@ -271,6 +371,8 @@ export function analisarExtratoB3(texto: string): B3ParseResult {
 
     if (resultado.formato === 'proventos') {
       processarLinhaProventos(linha, i + 1, resultado.proventos, resultado.ignorados)
+    } else if (resultado.formato === 'negociacao') {
+      processarLinhaNegociacao(linha, i + 1, resultado.operacoes, resultado.ignorados)
     } else if (resultado.formato === 'movimentacao') {
       processarLinhaMovimentacao(
         linha,

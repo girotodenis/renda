@@ -143,7 +143,7 @@ export function ImportarB3Page() {
             Selecione os arquivos CSV da B3
           </span>
           <span className="text-xs text-slate-500">
-            Formatos: extrato de proventos e extrato de movimentação (Área do Investidor).
+            Formatos: extratos de negociação, proventos e movimentação (Área do Investidor).
           </span>
         </label>
         <input

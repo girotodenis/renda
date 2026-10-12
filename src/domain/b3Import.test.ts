@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
   analisarExtratoB3,
   classificarCategoria,
+  classificarCategoriaNegociacao,
   extrairTicker,
   mapearTipoProvento,
+  normalizarTickerNegociacao,
 } from '@/domain/b3Import'
 import { parseCsv } from '@/domain/csv'
 import { CategoriaAtivo, ProventoTipo } from '@/domain/entities'
@@ -49,6 +51,26 @@ describe('classificarCategoria', () => {
     expect(classificarCategoria('KNCR12')).toBe(CategoriaAtivo.Fii)
     expect(classificarCategoria('BBAS3')).toBe(CategoriaAtivo.Acao)
     expect(classificarCategoria('BBDC4')).toBe(CategoriaAtivo.Acao)
+    expect(classificarCategoria('BNDA39')).toBe(CategoriaAtivo.Bdr)
+  })
+})
+
+describe('classificarCategoriaNegociacao', () => {
+  it('usa o mercado para Renda Fixa e o sufixo para os demais', () => {
+    expect(classificarCategoriaNegociacao('LFTB11', 'Renda Fixa')).toBe(CategoriaAtivo.RendaFixa)
+    expect(classificarCategoriaNegociacao('BTLG11', 'Mercado à Vista')).toBe(CategoriaAtivo.Fii)
+    expect(classificarCategoriaNegociacao('PGCO34', 'Mercado à Vista')).toBe(CategoriaAtivo.Bdr)
+    expect(classificarCategoriaNegociacao('MDIA3', 'Mercado Fracionário')).toBe(CategoriaAtivo.Acao)
+    expect(classificarCategoriaNegociacao('XPTO99', 'Mercado à Vista')).toBeNull()
+  })
+})
+
+describe('normalizarTickerNegociacao', () => {
+  it('remove o sufixo F apenas no mercado fracionário', () => {
+    expect(normalizarTickerNegociacao(' MDIA3F ', 'Mercado Fracionário')).toBe('MDIA3')
+    expect(normalizarTickerNegociacao('MDIA3F', 'Mercado à Vista')).toBe('MDIA3F')
+    expect(normalizarTickerNegociacao('btlg11', 'Mercado à Vista')).toBe('BTLG11')
+    expect(normalizarTickerNegociacao('Tesouro Educa+ 2035', 'Mercado à Vista')).toBeNull()
   })
 })
 
@@ -135,6 +157,71 @@ describe('analisarExtratoB3 (proventos)', () => {
       dataPagamento: '2026-09-25',
       valorTotal: 1782,
     })
+  })
+})
+
+const csvNegociacao = [
+  'Data do Negócio,Tipo de Movimentação,Mercado,Prazo/Vencimento,Instituição,Código de Negociação,Quantidade,Preço,Valor',
+  '18/09/2026,Compra,Renda Fixa,-,XP INVESTIMENTOS CCTVM S/A.,LFTB11,2," R$126,92 "," R$253,84 "',
+  '26/08/2026,Compra,Mercado à Vista,-,XP INVESTIMENTOS CCTVM S/A.,BTLG11,2," R$97,94 "," R$195,88 "',
+  '14/08/2026,Compra,Mercado Fracionário,-,XP INVESTIMENTOS CCTVM S/A.,MDIA3F,50," R$17,12 "," R$856,00 "',
+  '14/08/2026,Compra,Mercado à Vista,-,XP INVESTIMENTOS CCTVM S/A.,PGCO34,20," R$54,00 "," R$1.080,00 "',
+  '05/08/2026,Venda,Mercado à Vista,-,SANTANDER INSTITUCIONAL CCVM S/A,AAPL34,10," R$79,55 "," R$795,50 "',
+  '04/02/2026,Compra,Mercado à Vista,-,XP INVESTIMENTOS CCTVM S/A.,BNDA39,8," R$69,90 "," R$559,20 "',
+  '27/03/2026,Compra,Renda Fixa,15/03/2030,XP INVESTIMENTOS CCTVM S/A.,LFTB11,15," R$119,33 "," R$1.789,95 "',
+  '27/03/2026,Compra,Mercado à Vista,-,XP INVESTIMENTOS CCTVM S/A.,XPTO99,10," R$1,00 "," R$10,00 "',
+].join('\n')
+
+describe('analisarExtratoB3 (negociação)', () => {
+  it('importa compras/vendas com ticker, mercado e categoria', () => {
+    const resultado = analisarExtratoB3(csvNegociacao)
+
+    expect(resultado.formato).toBe('negociacao')
+    expect(resultado.proventos).toHaveLength(0)
+    expect(resultado.operacoes).toHaveLength(7)
+    expect(resultado.ignorados).toHaveLength(1)
+    expect(resultado.ignorados[0]).toMatchObject({ produto: 'XPTO99', movimentacao: 'Compra' })
+
+    const rendaFixa = resultado.operacoes.find((o) => o.ticker === 'LFTB11')
+    expect(rendaFixa).toMatchObject({
+      categoria: CategoriaAtivo.RendaFixa,
+      tipo: 'Compra',
+      data: '2026-09-18',
+      quantidade: 2,
+      precoUnitario: 12692,
+    })
+
+    const fracionario = resultado.operacoes.find((o) => o.ticker === 'MDIA3')
+    expect(fracionario).toMatchObject({
+      categoria: CategoriaAtivo.Acao,
+      tipo: 'Compra',
+      quantidade: 50,
+      precoUnitario: 1712,
+    })
+
+    const bdr = resultado.operacoes.find((o) => o.ticker === 'PGCO34')
+    expect(bdr).toMatchObject({ categoria: CategoriaAtivo.Bdr, precoUnitario: 5400 })
+
+    const bdr39 = resultado.operacoes.find((o) => o.ticker === 'BNDA39')
+    expect(bdr39).toMatchObject({ categoria: CategoriaAtivo.Bdr, quantidade: 8 })
+
+    const venda = resultado.operacoes.find((o) => o.tipo === 'Venda')
+    expect(venda).toMatchObject({ ticker: 'AAPL34', categoria: CategoriaAtivo.Bdr, quantidade: 10 })
+  })
+
+  it('preenche o vencimento apenas em Renda Fixa/Tesouro Direto', () => {
+    const resultado = analisarExtratoB3(csvNegociacao)
+    const comVencimento = resultado.operacoes.filter((o) => o.vencimento)
+    expect(comVencimento.map((o) => o.vencimento)).toEqual(['2030-03-15'])
+    const btl = resultado.operacoes.find((o) => o.ticker === 'BTLG11')
+    expect(btl?.vencimento).toBeNull()
+  })
+
+  it('gera IDs determinísticos por registro', () => {
+    const primeiro = analisarExtratoB3(csvNegociacao)
+    const segundo = analisarExtratoB3(csvNegociacao)
+    expect(primeiro.operacoes.map((o) => o.id)).toEqual(segundo.operacoes.map((o) => o.id))
+    expect(primeiro.operacoes[0].id).toMatch(/^b3o-/)
   })
 })
 
