@@ -115,6 +115,10 @@ const ORDEM_CATEGORIAS: readonly CategoriaAtivo[] = [
  * dashboard, separando as posições abertas dos ativos completamente vendidos e
  * calculando o consolidador de cada grupo (somente posições abertas): investido,
  * valor atual, lucro (R$ e %) e participação na carteira.
+ *
+ * Todas as categorias canônicas são devolvidas, inclusive as **sem itens** — o
+ * dashboard exibe uma aba por categoria e a tabela vazia continua visível para
+ * o usuário lançar a primeira operação.
  */
 export function agruparAtivosParaTabela(
   consolidado: readonly Consolidado[],
@@ -123,11 +127,7 @@ export function agruparAtivosParaTabela(
   const encerrados = posicoesEncerradas(consolidado)
   const totalCarteira = round2(abertos.reduce((soma, linha) => soma + linha.valorAtual, 0))
 
-  const categorias = new Set<CategoriaAtivo>()
-  for (const linha of abertos) categorias.add(linha.categoria)
-  for (const linha of encerrados) categorias.add(linha.categoria)
-
-  return ORDEM_CATEGORIAS.filter((categoria) => categorias.has(categoria)).map((categoria) => {
+  return ORDEM_CATEGORIAS.map((categoria) => {
     const doAbertos = abertos
       .filter((linha) => linha.categoria === categoria)
       .sort((a, b) => b.valorAtual - a.valorAtual)

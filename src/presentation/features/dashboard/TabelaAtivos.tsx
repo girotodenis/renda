@@ -34,9 +34,9 @@ interface TabelaAtivosProps {
    */
   onSelecionarAtivo?: (ticker: string) => void
   /**
-   * Callback ao clicar no botão **+** ao lado do nome da categoria (abre o
-   * cadastro de operação com a categoria travada). Quando ausente, o botão não
-   * é exibido.
+   * Callback ao clicar no botão **Adicionar ticker** no alto da aba da categoria
+   * (abre o cadastro de operação com a categoria travada). Quando ausente, o
+   * botão não é exibido.
    */
   onNovaOperacao?: (categoria: CategoriaAtivo) => void
   /**
@@ -48,10 +48,13 @@ interface TabelaAtivosProps {
 }
 
 /**
- * Tabela de ativos da carteira (RF10): uma tabela por categoria, cada uma com
- * um **consolidador** no topo (investido, valor atual, lucro e % da carteira) e
- * duas abas — **Em carteira** (posições com quantidade > 0) e **Vendidos**
- * (ativos já zerados, ou seja, completamente vendidos).
+ * Tabela de ativos da carteira (RF10): **uma aba por categoria** (ordem
+ * canônica). Todas as categorias são exibidas, mesmo as **sem itens**, para o
+ * usuário visualizar/encerrar a tabela vazia e lançar a primeira operação pelo
+ * botão **Adicionar ticker** no alto da aba. Cada aba tem um **consolidador** no
+ * topo (investido, valor atual, lucro e % da carteira) e duas visões —
+ * **Em carteira** (posições com quantidade > 0) e **Vendidos** (ativos já
+ * zerados, ou seja, completamente vendidos).
  */
 export function TabelaAtivos({
   consolidado,
@@ -62,40 +65,89 @@ export function TabelaAtivos({
   onEditarValorManual,
 }: TabelaAtivosProps) {
   const grupos = useMemo(() => agruparAtivosParaTabela(consolidado), [consolidado])
+  const [categoriaSelecionada, setCategoriaSelecionada] = useState<CategoriaAtivo | null>(null)
 
-  if (grupos.length === 0) {
-    return (
-      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-200 px-4 py-3">
-          <h2 className="text-base font-semibold text-slate-900">Meus ativos</h2>
-        </div>
-        <p className="px-4 py-6 text-sm text-slate-500">
-          Lance operações para visualizar seus ativos aqui.
-        </p>
-      </section>
+  // Aba padrão: primeira categoria com itens; sem itens, a primeira da ordem
+  // canônica (a lista nunca é vazia — todas as categorias são devolvidas).
+  const categoriaPadrao = useMemo(() => {
+    const comItens = grupos.find(
+      (grupo) => grupo.abertos.length > 0 || grupo.encerrados.length > 0,
     )
-  }
+    return (comItens ?? grupos[0])?.categoria ?? null
+  }, [grupos])
+
+  const categoriaAtiva = categoriaSelecionada ?? categoriaPadrao
+  const grupoAtivo = grupos.find((grupo) => grupo.categoria === categoriaAtiva) ?? null
+
+  if (!grupoAtivo) return null
+
+  const idBase = 'ativos-categoria'
 
   return (
-    <div className="space-y-4">
-      {grupos.map((grupo) => (
-        <CategoriaAtivos
-          key={grupo.categoria}
-          grupo={grupo}
+    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="border-b border-slate-200 px-4 py-3">
+        <h2 className="text-base font-semibold text-slate-900">Meus ativos</h2>
+      </div>
+
+      <div
+        role="tablist"
+        aria-label="Categorias de ativos"
+        className="flex flex-wrap gap-1 border-b border-slate-200 bg-slate-100 p-2"
+      >
+        {grupos.map((grupo) => {
+          const ativa = grupo.categoria === categoriaAtiva
+          return (
+            <button
+              key={grupo.categoria}
+              type="button"
+              role="tab"
+              id={`${idBase}-tab-${grupo.categoria}`}
+              aria-selected={ativa}
+              aria-controls={`${idBase}-panel-${grupo.categoria}`}
+              tabIndex={ativa ? 0 : -1}
+              onClick={() => setCategoriaSelecionada(grupo.categoria)}
+              className={cn(
+                'inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600',
+                ativa
+                  ? 'bg-white text-brand-700 shadow-sm'
+                  : 'text-slate-600 hover:bg-white/70 hover:text-slate-900',
+              )}
+            >
+              {categoriaLabel(grupo.categoria)}
+              <ContadorBadge quantidade={grupo.abertos.length} />
+            </button>
+          )
+        })}
+      </div>
+
+      <div
+        role="tabpanel"
+        id={`${idBase}-panel-${grupoAtivo.categoria}`}
+        aria-labelledby={`${idBase}-tab-${grupoAtivo.categoria}`}
+      >
+        <CategoriaPanel
+          key={grupoAtivo.categoria}
+          grupo={grupoAtivo}
           cotacoes={cotacoes}
           oportunidades={oportunidades}
           onSelecionarAtivo={onSelecionarAtivo}
           onNovaOperacao={onNovaOperacao}
           onEditarValorManual={onEditarValorManual}
         />
-      ))}
-    </div>
+      </div>
+    </section>
   )
 }
 
 type AbaCategoria = 'posicoes' | 'vendidos'
 
-function CategoriaAtivos({
+/**
+ * Conteúdo da aba de uma categoria: barra com as visões (**Em carteira** /
+ * **Vendidos**) à esquerda e o botão **Adicionar ticker** à direita, acima da
+ * tabela; em seguida o consolidador + a tabela da visão ativa. O consolidador e
+ * as tabelas aparecem mesmo quando não há itens (valores zerados).
+ */
+function CategoriaPanel({
   grupo,
   cotacoes,
   oportunidades,
@@ -120,50 +172,39 @@ function CategoriaAtivos({
   const rotulo = categoriaLabel(grupo.categoria)
 
   return (
-    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-      <header className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-        <div className="flex items-center gap-2">
-          <h2 className="text-base font-semibold text-slate-900">{rotulo}</h2>
-          {onNovaOperacao ? (
-            <button
-              type="button"
-              onClick={() => onNovaOperacao(grupo.categoria)}
-              aria-label={`Nova operação em ${rotulo}`}
-              title={`Nova operação em ${rotulo}`}
-              className="inline-flex h-6 w-6 items-center justify-center rounded-md border border-brand-200 bg-brand-50 text-brand-700 transition-colors hover:bg-brand-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
-            >
-              <Plus className="h-4 w-4" aria-hidden />
-            </button>
-          ) : null}
+    <div>
+      <div className="flex flex-wrap items-end justify-between gap-x-3 gap-y-1 border-b border-slate-200 bg-slate-50 px-3 pt-2">
+        <div role="tablist" aria-label={`Visões de ${rotulo}`} className="flex gap-1">
+          <AbaBotao
+            id={`${idBase}-tab-posicoes`}
+            controls={`${idBase}-panel-posicoes`}
+            ativa={aba === 'posicoes'}
+            onClick={() => setAbaSelecionada('posicoes')}
+          >
+            Em carteira
+            <ContadorBadge quantidade={grupo.abertos.length} />
+          </AbaBotao>
+          <AbaBotao
+            id={`${idBase}-tab-vendidos`}
+            controls={`${idBase}-panel-vendidos`}
+            ativa={aba === 'vendidos'}
+            onClick={() => setAbaSelecionada('vendidos')}
+          >
+            Vendidos
+            <ContadorBadge quantidade={grupo.encerrados.length} />
+          </AbaBotao>
         </div>
-        <span className="text-sm text-slate-500">
-          {grupo.abertos.length} {grupo.abertos.length === 1 ? 'posição' : 'posições'}
-        </span>
-      </header>
 
-      <div
-        role="tablist"
-        aria-label={`Visões de ${rotulo}`}
-        className="flex gap-1 border-b border-slate-200 bg-slate-50 px-2 pt-2"
-      >
-        <AbaBotao
-          id={`${idBase}-tab-posicoes`}
-          controls={`${idBase}-panel-posicoes`}
-          ativa={aba === 'posicoes'}
-          onClick={() => setAbaSelecionada('posicoes')}
-        >
-          Em carteira
-          <ContadorBadge quantidade={grupo.abertos.length} />
-        </AbaBotao>
-        <AbaBotao
-          id={`${idBase}-tab-vendidos`}
-          controls={`${idBase}-panel-vendidos`}
-          ativa={aba === 'vendidos'}
-          onClick={() => setAbaSelecionada('vendidos')}
-        >
-          Vendidos
-          <ContadorBadge quantidade={grupo.encerrados.length} />
-        </AbaBotao>
+        {onNovaOperacao ? (
+          <button
+            type="button"
+            onClick={() => onNovaOperacao(grupo.categoria)}
+            className="inline-flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+          >
+            <Plus className="h-4 w-4" aria-hidden />
+            Adicionar ticker
+          </button>
+        ) : null}
       </div>
 
       {aba === 'posicoes' ? (
@@ -172,18 +213,16 @@ function CategoriaAtivos({
           id={`${idBase}-panel-posicoes`}
           aria-labelledby={`${idBase}-tab-posicoes`}
         >
+          <ConsolidadorCategoria grupo={grupo} />
           {temAbertos ? (
-            <>
-              <ConsolidadorCategoria grupo={grupo} />
-              <TabelaPosicoes
-                categoria={grupo.categoria}
-                ativos={grupo.abertos}
-                cotacoes={cotacoes}
-                oportunidades={oportunidades}
-                onSelecionarAtivo={onSelecionarAtivo}
-                onEditarValorManual={onEditarValorManual}
-              />
-            </>
+            <TabelaPosicoes
+              categoria={grupo.categoria}
+              ativos={grupo.abertos}
+              cotacoes={cotacoes}
+              oportunidades={oportunidades}
+              onSelecionarAtivo={onSelecionarAtivo}
+              onEditarValorManual={onEditarValorManual}
+            />
           ) : (
             <p className="px-4 py-6 text-sm text-slate-500">
               Você não possui posições em carteira em {rotulo}.
@@ -205,7 +244,7 @@ function CategoriaAtivos({
           )}
         </div>
       )}
-    </section>
+    </div>
   )
 }
 

@@ -95,13 +95,23 @@ describe('agruparAtivosParaTabela (abas Em carteira / Vendidos)', () => {
 
     const grupos = agruparAtivosParaTabela(linhas)
 
-    expect(grupos.map((grupo) => grupo.categoria)).toEqual([CategoriaAtivo.Acao, CategoriaAtivo.Fii])
-    expect(grupos[0].abertos.map((ativo) => ativo.ticker)).toEqual(['PETR4'])
-    expect(grupos[0].encerrados.map((ativo) => ativo.ticker)).toEqual(['ITSA4'])
-    expect(grupos[1].abertos.map((ativo) => ativo.ticker)).toEqual(['MXRF11'])
-    expect(grupos[1].encerrados).toEqual([])
+    // Todas as categorias canônicas aparecem, mesmo as sem itens (tabelas vazias).
+    expect(grupos.map((grupo) => grupo.categoria)).toEqual([
+      CategoriaAtivo.Acao,
+      CategoriaAtivo.Bdr,
+      CategoriaAtivo.Etf,
+      CategoriaAtivo.Fii,
+      CategoriaAtivo.TesouroDireto,
+      CategoriaAtivo.RendaFixa,
+    ])
+    const acao = grupos[0]
+    const fii = grupos[3]
+    expect(acao.abertos.map((ativo) => ativo.ticker)).toEqual(['PETR4'])
+    expect(acao.encerrados.map((ativo) => ativo.ticker)).toEqual(['ITSA4'])
+    expect(fii.abertos.map((ativo) => ativo.ticker)).toEqual(['MXRF11'])
+    expect(fii.encerrados).toEqual([])
     // O consolidador considera apenas as posições abertas.
-    expect(grupos[0].valorAtual).toBe(12000)
+    expect(acao.valorAtual).toBe(12000)
   })
 
   it('inclui categoria com apenas ativos vendidos e ordena os encerrados por ticker', () => {
@@ -128,13 +138,30 @@ describe('agruparAtivosParaTabela (abas Em carteira / Vendidos)', () => {
     ]
 
     const grupos = agruparAtivosParaTabela(linhas)
+    const acao = grupos[0]
+    const fii = grupos[3]
 
-    expect(grupos.map((grupo) => grupo.categoria)).toEqual([CategoriaAtivo.Acao, CategoriaAtivo.Fii])
-    expect(grupos[0].encerrados.map((ativo) => ativo.ticker)).toEqual(['ABEV3', 'BBDC4'])
-    // FII só aparece por causa dos ativos vendidos (sem posições abertas).
-    expect(grupos[1].abertos).toEqual([])
-    expect(grupos[1].encerrados.map((ativo) => ativo.ticker)).toEqual(['HGLG11'])
-    expect(grupos[1].valorAtual).toBe(0)
+    expect(acao.encerrados.map((ativo) => ativo.ticker)).toEqual(['ABEV3', 'BBDC4'])
+    // FII aparece por causa dos ativos vendidos (sem posições abertas).
+    expect(fii.abertos).toEqual([])
+    expect(fii.encerrados.map((ativo) => ativo.ticker)).toEqual(['HGLG11'])
+    expect(fii.valorAtual).toBe(0)
+  })
+
+  it('devolve todas as categorias canônicas mesmo sem nenhuma posição', () => {
+    const grupos = agruparAtivosParaTabela([])
+
+    expect(grupos.map((grupo) => grupo.categoria)).toEqual([
+      CategoriaAtivo.Acao,
+      CategoriaAtivo.Bdr,
+      CategoriaAtivo.Etf,
+      CategoriaAtivo.Fii,
+      CategoriaAtivo.TesouroDireto,
+      CategoriaAtivo.RendaFixa,
+    ])
+    expect(
+      grupos.every((grupo) => grupo.abertos.length === 0 && grupo.encerrados.length === 0),
+    ).toBe(true)
   })
 })
 
