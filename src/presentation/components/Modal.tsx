@@ -13,6 +13,8 @@ interface ModalProps {
   children: ReactNode
   /** Classe extra aplicada ao painel (largura etc.). */
   className?: string
+  /** Classe extra aplicada ao corpo do modal (ex.: `flex-1 overflow-y-auto`). */
+  corpoClassName?: string
   /** Ações extras exibidas no lado direito do cabeçalho (antes do botão fechar). */
   acoes?: ReactNode
 }
@@ -24,7 +26,7 @@ interface ModalProps {
  * bloqueia o scroll do body enquanto aberto; move o foco para o painel ao abrir
  * e devolve o foco ao elemento anterior ao fechar.
  */
-export function Modal({ open, onClose, titulo, children, className, acoes }: ModalProps) {
+export function Modal({ open, onClose, titulo, children, className, corpoClassName, acoes }: ModalProps) {
   const tituloId = useId()
   const painelRef = useRef<HTMLDivElement>(null)
   const focoAnteriorRef = useRef<HTMLElement | null>(null)
@@ -75,7 +77,7 @@ export function Modal({ open, onClose, titulo, children, className, acoes }: Mod
           className,
         )}
       >
-        <header className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+        <header className="flex shrink-0 items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
           <h2 id={tituloId} className="text-lg font-semibold text-slate-900">
             {titulo}
           </h2>
@@ -91,7 +93,7 @@ export function Modal({ open, onClose, titulo, children, className, acoes }: Mod
             </button>
           </div>
         </header>
-        <div className="px-5 py-4">{children}</div>
+        <div className={cn('px-5 py-4', corpoClassName)}>{children}</div>
       </div>
     </div>
   )

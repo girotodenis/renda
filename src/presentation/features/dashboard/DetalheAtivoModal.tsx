@@ -11,7 +11,12 @@ import { eventosDeOperacoes, isTipoEventoCorporativo } from '@/domain/eventosCor
 import { alterarCategoriaDoTicker } from '@/application/operacoes'
 import type { ResultadoTrocaCategoria } from '@/application/operacoes'
 import { oportunidadeDeCompra } from '@/domain/valuation'
-import { classeValor, formatarCentavos, formatarPercentual } from '@/presentation/features/dashboard/formatters'
+import {
+  classeValor,
+  formatarCentavos,
+  formatarPercentual,
+  formatarQuantidade,
+} from '@/presentation/features/dashboard/formatters'
 import type { RepositoryContext } from '@/infrastructure/repositories'
 import { describeSheetsError } from '@/infrastructure/sheets/gateway'
 import { CategoriaAtivo } from '@/domain/entities'
@@ -83,9 +88,12 @@ function mensagemTrocaCategoria(
 }
 
 /**
- * Modal de detalhe do ativo (RF10) com abas: **Resumo** (menor/maior compra,
- * preço médio, proventos do período, valor investido, as duas visões de
- * rentabilidade e os gráficos), **Operações**, **Proventos** e **Eventos**.
+ * Modal de detalhe do ativo (RF10) com abas: **Resumo** (menor compra,
+ * quantidade de ações, preço médio, proventos do período, valor investido, as
+ * duas visões de rentabilidade e os gráficos), **Operações**, **Proventos** e
+ * **Eventos**.
+ *
+ * A altura do painel é fixa em **95% da tela**, com o corpo rolável.
  *
  * As três últimas abas listam os lançamentos do ticker e permitem cadastrar,
  * editar e excluir sem sair do dashboard; após cada escrita os dados do
@@ -219,7 +227,8 @@ export function DetalheAtivoModal({
       open={detalhe !== null}
       onClose={onClose}
       titulo={titulo}
-      className="max-w-5xl"
+      className="max-w-5xl flex h-[94vh] flex-col"
+      corpoClassName="min-h-0 flex-1 overflow-y-auto"
       acoes={
         onAnterior && onProximo ? (
           <NavegacaoTickers
@@ -461,7 +470,7 @@ export function DetalheAtivoResumo({
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <Metrica rotulo="Menor compra" valor={formatarCentavosOuTraco(detalhe.menorPrecoCompra)} />
-        <Metrica rotulo="Maior compra" valor={formatarCentavosOuTraco(detalhe.maiorPrecoCompra)} />
+        <Metrica rotulo="Quantidade" valor={formatarQuantidade(detalhe.quantidade)} />
         <Metrica rotulo="Preço médio" valor={formatarCentavos(detalhe.precoMedio)} />
         <Metrica rotulo="Preço atual" valor={formatarCentavos(detalhe.precoAtual)} />
         <Metrica rotulo="Valor investido" valor={formatarCentavos(detalhe.valorInvestido)} />

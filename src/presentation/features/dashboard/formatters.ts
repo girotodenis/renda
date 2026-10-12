@@ -28,6 +28,11 @@ export function formatarPercentual(valor: number): string {
   })}%`
 }
 
+/** Formata uma quantidade (ex.: `150` → `"150"`, `0.5` → `"0,5"`). */
+export function formatarQuantidade(quantidade: number): string {
+  return quantidade.toLocaleString('pt-BR', { maximumFractionDigits: 8 })
+}
+
 /** Classe Tailwind de cor conforme o sinal (positivo/negativo/neutro). */
 export function classeValor(valor: number): string {
   return cn(

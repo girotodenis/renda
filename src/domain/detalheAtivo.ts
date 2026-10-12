@@ -38,6 +38,11 @@ export interface DetalheAtivo {
   menorPrecoCompra: number | null
   /** Maior preço unitário entre as compras (centavos) — `null` se sem compras. */
   maiorPrecoCompra: number | null
+  /**
+   * Quantidade atual da posição (compras − vendas + eventos corporativos);
+   * pode ser fracionária (Tesouro Direto / Renda Fixa) e é `0` com posição zerada.
+   */
+  quantidade: number
   /** Data ISO da primeira compra — `null` se sem compras. */
   primeiraCompra: string | null
   /** Data ISO da última compra — `null` se sem compras. */
@@ -274,6 +279,7 @@ export function calcularDetalheAtivo(
     categoria,
     menorPrecoCompra,
     maiorPrecoCompra,
+    quantidade: linha?.quantidadeAtual ?? fluxo.quantidadePosicao,
     primeiraCompra,
     ultimaCompra,
     dataReferencia,
