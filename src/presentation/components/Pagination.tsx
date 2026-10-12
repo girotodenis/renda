@@ -10,6 +10,10 @@ interface PaginationProps {
   total: number
   /** Notifica a mudança de página. */
   onPageChange: (page: number) => void
+  /** Opções de registros por página; quando informado, exibe o seletor. */
+  pageSizeOptions?: readonly number[]
+  /** Notifica a mudança de registros por página. */
+  onPageSizeChange?: (pageSize: number) => void
   className?: string
 }
 
@@ -35,7 +39,15 @@ function calcularPaginas(current: number, totalPages: number): (number | '...')[
  * Paginador reutilizável: exibe o intervalo visível ("Mostrando X–Y de N") e a
  * navegação entre páginas (anterior/próxima + números), acessível por teclado.
  */
-export function Pagination({ page, pageSize, total, onPageChange, className }: PaginationProps) {
+export function Pagination({
+  page,
+  pageSize,
+  total,
+  onPageChange,
+  pageSizeOptions,
+  onPageSizeChange,
+  className,
+}: PaginationProps) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
   const current = Math.min(Math.max(page, 1), totalPages)
   const from = total === 0 ? 0 : (current - 1) * pageSize + 1
@@ -50,9 +62,28 @@ export function Pagination({ page, pageSize, total, onPageChange, className }: P
         className,
       )}
     >
-      <p className="text-xs text-slate-500" aria-live="polite">
-        {total === 0 ? 'Nenhum registro' : `Mostrando ${from}–${to} de ${total}`}
-      </p>
+      <div className="flex flex-wrap items-center gap-3">
+        <p className="text-xs text-slate-500" aria-live="polite">
+          {total === 0 ? 'Nenhum registro' : `Mostrando ${from}–${to} de ${total}`}
+        </p>
+        {pageSizeOptions && onPageSizeChange ? (
+          <label className="flex items-center gap-1.5 text-xs text-slate-500">
+            Registros por página
+            <select
+              aria-label="Registros por página"
+              value={pageSize}
+              onChange={(event) => onPageSizeChange(Number(event.target.value))}
+              className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs tabular-nums text-slate-700"
+            >
+              {pageSizeOptions.map((opcao) => (
+                <option key={opcao} value={opcao}>
+                  {opcao}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+      </div>
       <div className="flex items-center gap-1">
         <button
           type="button"
