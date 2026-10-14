@@ -53,6 +53,26 @@ export function LoginPage() {
         </div>
       ) : null}
 
+      {isConfigured && status === 'local' ? (
+        <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          {error ? <Alert variant="error">{error}</Alert> : null}
+
+          <Alert variant="info" title="Modo local">
+            Você está vendo os dados salvos neste navegador. Entre novamente com o Google para
+            sincronizar com a sua planilha.
+          </Alert>
+
+          <button
+            type="button"
+            onClick={() => void login()}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-700"
+          >
+            <LogIn className="h-4 w-4" aria-hidden />
+            Entrar com Google
+          </button>
+        </div>
+      ) : null}
+
       {isConfigured && status === 'loading' ? (
         <div className="flex items-center justify-center gap-2 py-6 text-sm text-slate-500">
           <Loader2 className="h-4 w-4 animate-spin text-brand-600" aria-hidden />

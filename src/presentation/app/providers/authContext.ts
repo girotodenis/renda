@@ -15,7 +15,11 @@ export type ResultadoCriacaoPlanilha =
 
 /** Contexto de sessão exposto pelo `AuthProvider`. */
 export interface AuthContextValue {
-  /** Estado da sessão: carregando, não autenticado ou autenticado. */
+  /**
+   * Estado da sessão: `loading` (restaurando), `unauthenticated` (sem sessão),
+   * `authenticated` (token válido) ou `local` (planilha persistida sem token
+   * válido — o app opera com o cache e o login é solicitado sob demanda).
+   */
   status: AuthStatus
   /** Access token OAuth (mantido apenas em memória + LocalStorage). */
   accessToken: string | null

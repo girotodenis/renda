@@ -7,8 +7,7 @@ import type {
   ResultadoCriacaoPlanilha,
 } from '@/presentation/app/providers/authContext'
 import { isOnline } from '@/application/online'
-import { consentStorage, tokenStorage, workspaceStorage } from '@/infrastructure/storage'
-import type { StoredToken } from '@/infrastructure/storage'
+import { tokenStorage, workspaceStorage } from '@/infrastructure/storage'
 import {
   ensureAppFolder,
   findSpreadsheetsByName,
@@ -31,7 +30,6 @@ import {
   isUserCancellation,
   requestAccessToken,
   revokeAccessToken,
-  TOKEN_REFRESH_MARGIN_MS,
   toStoredToken,
 } from '@/infrastructure/googleIdentity'
 import {
@@ -44,9 +42,6 @@ import type { AuthStatus, SpreadsheetWorkspace } from '@/domain/workspace'
 interface AuthProviderProps {
   children: ReactNode
 }
-
-/** Intervalo de nova tentativa quando a renovação silenciosa falha por rede. */
-const TOKEN_REFRESH_RETRY_MS = 60_000
 
 /**
  * Move uma planilha recém-criada para a pasta padrão do app (`minhasacoe_app`),
@@ -94,8 +89,11 @@ function describeError(error: unknown): string {
 }
 
 /**
- * Provider de sessão: gerencia login OAuth (GIS), renovação automática do token
- * e a planilha ativa. Todo o estado sensível fica apenas no navegador (RNF05).
+ * Provider de sessão: gerencia login OAuth (GIS) e a planilha ativa. O token é
+ * renovado **sob demanda** — apenas quando uma operação precisa da rede — sem
+ * renovação em segundo plano (que abria o login do Google periodicamente).
+ * Com planilha persistida, o app abre em modo local (cache) sem acionar o
+ * login. Todo o estado sensível fica apenas no navegador (RNF05).
  */
 export function AuthProvider({ children }: AuthProviderProps) {
   const [status, setStatus] = useState<AuthStatus>(isGoogleConfigured() ? 'loading' : 'unauthenticated')
@@ -105,49 +103,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [isBusy, setIsBusy] = useState(false)
 
   const tokenRef = useRef<string | null>(null)
-  const refreshTimerRef = useRef<number | null>(null)
   const bootstrappedRef = useRef(false)
-  const silentRefreshRef = useRef<() => Promise<boolean>>(async () => false)
 
-  const clearRefreshTimer = useCallback(() => {
-    if (refreshTimerRef.current !== null) {
-      window.clearTimeout(refreshTimerRef.current)
-      refreshTimerRef.current = null
-    }
+  const applyToken = useCallback((response: GoogleTokenResponse) => {
+    const stored = toStoredToken(response)
+    tokenStorage.save(stored)
+    tokenRef.current = stored.accessToken
+    setAccessToken(stored.accessToken)
+    setStatus('authenticated')
   }, [])
 
-  const scheduleRefreshIn = useCallback(
-    (delayMs: number) => {
-      clearRefreshTimer()
-      refreshTimerRef.current = window.setTimeout(
-        () => {
-          void silentRefreshRef.current()
-        },
-        Math.max(delayMs, 0),
-      )
-    },
-    [clearRefreshTimer],
-  )
-
-  const scheduleRefresh = useCallback(
-    (token: StoredToken) => {
-      scheduleRefreshIn(token.expiresAt - Date.now() - TOKEN_REFRESH_MARGIN_MS)
-    },
-    [scheduleRefreshIn],
-  )
-
-  const applyToken = useCallback(
-    (response: GoogleTokenResponse) => {
-      const stored = toStoredToken(response)
-      tokenStorage.save(stored)
-      consentStorage.save()
-      tokenRef.current = stored.accessToken
-      setAccessToken(stored.accessToken)
-      scheduleRefresh(stored)
-    },
-    [scheduleRefresh],
-  )
-
+  /**
+   * Renovação silenciosa **sob demanda** (`prompt: ''`, sem UI): só roda
+   * quando uma operação precisa da rede. Falhas não derrubam a sessão — com
+   * planilha persistida, o app segue em modo local (cache) até o usuário
+   * logar de novo por ação explícita.
+   */
   const silentRefresh = useCallback(async (): Promise<boolean> => {
     const clientId = googleConfig.clientId
     if (!clientId) return false
@@ -155,50 +126,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       const response = await requestAccessToken({ clientId, scopes: GOOGLE_SCOPES, prompt: '' })
       applyToken(response)
-      setStatus('authenticated')
       return true
     } catch {
-      const stored = tokenStorage.load()
-      // Sem rede: mantém a sessão mesmo com o token expirado — as escritas vão
-      // para o outbox e a leitura é do cache, então não é preciso deslogar. A
-      // segunda condição cobre a falha transitória de renovação com o token
-      // ainda válido (dentro da antiga margem de segurança).
-      if (stored && (!isOnline() || isTokenValid(stored, 0))) {
-        tokenRef.current = stored.accessToken
-        setAccessToken(stored.accessToken)
-        setStatus('authenticated')
-        scheduleRefreshIn(TOKEN_REFRESH_RETRY_MS)
-        return true
-      }
-      // Falha real (consentimento revogado, popup fechado, erro do GIS): desloga.
-      clearRefreshTimer()
-      tokenStorage.clear()
-      tokenRef.current = null
-      setAccessToken(null)
-      setStatus('unauthenticated')
+      // Falha real ou transitória (sem sessão Google ativa, cookies de
+      // terceiros bloqueados, consentimento revogado): não desloga — apenas
+      // informa ao chamador que não há token disponível.
+      setStatus(workspaceStorage.load() ? 'local' : 'unauthenticated')
       return false
     }
-  }, [applyToken, clearRefreshTimer, scheduleRefreshIn])
+  }, [applyToken])
 
-  useEffect(() => {
-    silentRefreshRef.current = silentRefresh
-  }, [silentRefresh])
-
-  // Ao reconectar, renova o token antes do próximo flush. A `useSync` reage ao
-  // mesmo evento `online` e dispara a sincronização (chamando
-  // `ensureAccessToken`), logo a renovação aqui já garante um token novo para o
-  // replay. Só tenta quando há sessão persistida, para não provocar transições
-  // espúrias para 'unauthenticated' em usuários sem login.
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    const handleOnline = () => {
-      if (!tokenStorage.load()) return
-      void silentRefreshRef.current()
-    }
-    window.addEventListener('online', handleOnline)
-    return () => window.removeEventListener('online', handleOnline)
-  }, [])
-
+  // Bootstrap da sessão: entra direto, sem chamar o Google, sempre que
+  // possível. Com planilha configurada e token expirado/ausente, abre em modo
+  // local (dados do cache) em vez de forçar o login.
   useEffect(() => {
     if (bootstrappedRef.current) return
     bootstrappedRef.current = true
@@ -212,21 +152,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
     if (stored && isTokenValid(stored)) {
       tokenRef.current = stored.accessToken
       setAccessToken(stored.accessToken)
-      scheduleRefresh(stored)
       setStatus('authenticated')
       return
     }
 
-    if (consentStorage.load()) {
-      setStatus('loading')
-      void silentRefresh()
-      return
-    }
-
-    setStatus('unauthenticated')
-  }, [scheduleRefresh, silentRefresh])
-
-  useEffect(() => clearRefreshTimer, [clearRefreshTimer])
+    setStatus(workspaceStorage.load() ? 'local' : 'unauthenticated')
+  }, [])
 
   const login = useCallback(async () => {
     if (!googleConfig.clientId) {
@@ -246,7 +177,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       applyToken(response)
       setStatus('authenticated')
     } catch (loginError) {
-      setStatus('unauthenticated')
+      setStatus(workspaceStorage.load() ? 'local' : 'unauthenticated')
       if (!isUserCancellation(loginError)) {
         setError(describeError(loginError))
       }
@@ -255,7 +186,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const logout = useCallback(async () => {
     const current = tokenRef.current
-    clearRefreshTimer()
     if (current) {
       try {
         await revokeAccessToken(current)
@@ -266,13 +196,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
     // A limpeza local sempre ocorre, mesmo offline (sem depender da rede).
     tokenStorage.clear()
     workspaceStorage.clear()
-    consentStorage.clear()
     tokenRef.current = null
     setAccessToken(null)
     setWorkspace(null)
     setError(null)
     setStatus('unauthenticated')
-  }, [clearRefreshTimer])
+  }, [])
 
   const ensureAccessToken = useCallback(async (): Promise<string | null> => {
     const stored = tokenStorage.load()
@@ -310,8 +239,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     const token = await ensureAccessToken()
     if (!token) {
+      // Sem token: `ensureAccessToken` já ajustou o status (modo local quando
+      // há planilha persistida); basta avisar o usuário.
       setError('Sessão expirada. Faça login novamente.')
-      setStatus('unauthenticated')
       return
     }
 
@@ -335,7 +265,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const token = await ensureAccessToken()
       if (!token) {
         setError('Sessão expirada. Faça login novamente.')
-        setStatus('unauthenticated')
         return
       }
 
@@ -358,7 +287,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const token = await ensureAccessToken()
       if (!token) {
         setError('Sessão expirada. Faça login novamente.')
-        setStatus('unauthenticated')
         return { status: 'error' }
       }
 

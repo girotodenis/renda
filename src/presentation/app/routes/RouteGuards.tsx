@@ -13,7 +13,11 @@ export function FullPageLoader({ message }: { message: string }) {
   )
 }
 
-/** Protege rotas privadas: sem autenticação, redireciona para `/login`. */
+/**
+ * Protege rotas privadas: só redireciona para `/login` quando não há sessão
+ * alguma. O modo local (`local` — planilha persistida sem token válido) entra
+ * direto e exibe os dados do cache, sem exigir login.
+ */
 export function ProtectedRoute({ children }: { children: ReactNode }) {
   const { status } = useAuth()
   const location = useLocation()
@@ -27,7 +31,11 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
   return <>{children}</>
 }
 
-/** Rota pública: com sessão e planilha prontas, redireciona para `/dashboard`. */
+/**
+ * Rota pública: com sessão Google ativa e planilha pronta, redireciona para
+ * `/dashboard`. Em modo local o usuário permanece — a página oferece o login
+ * para voltar a sincronizar.
+ */
 export function PublicOnlyRoute({ children }: { children: ReactNode }) {
   const { status, workspace } = useAuth()
 

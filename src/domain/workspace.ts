@@ -20,5 +20,14 @@ export interface PlanilhaExistente {
   title: string
 }
 
-/** Estado de autenticação da sessão. */
-export type AuthStatus = 'loading' | 'unauthenticated' | 'authenticated'
+/**
+ * Estado de autenticação da sessão.
+ *
+ * - `loading`: restaurando a sessão;
+ * - `unauthenticated`: sem sessão e sem planilha configurada;
+ * - `authenticated`: com token Google válido;
+ * - `local`: planilha persistida mas sem token válido — o app abre direto com
+ *   os dados do cache e o login só é solicitado quando uma operação precisar
+ *   da rede (salvar, sincronizar, trocar de planilha).
+ */
+export type AuthStatus = 'loading' | 'unauthenticated' | 'authenticated' | 'local'
