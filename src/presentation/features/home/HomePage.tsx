@@ -1,11 +1,52 @@
-import { ArrowRight, LineChart, Wallet } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
+import { ArrowRight, BarChart3, Download, LineChart, Plane, Receipt, Scale, Smartphone, Split, Target, Wallet } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
-const destaques = [
-  'Lançamento de operações e proventos',
-  'Cálculo automático do consolidado da carteira',
-  'Dashboard com alocação e evolução patrimonial',
-  'Rebalanceamento por metas e aporte inteligente',
+const destaques: { icon: LucideIcon; titulo: string; descricao: string }[] = [
+  {
+    icon: Receipt,
+    titulo: 'Operações e proventos',
+    descricao:
+      'Lance compras, vendas e dividendos/JCP em segundos. O histórico completo fica salvo na sua planilha.',
+  },
+  {
+    icon: BarChart3,
+    titulo: 'Dashboard inteligente',
+    descricao:
+      'Preço médio, lucro, alocação por ativo e categoria, e evolução patrimonial calculados automaticamente.',
+  },
+  {
+    icon: Download,
+    titulo: 'Importação da B3',
+    descricao:
+      'Importe extratos da Área do Investidor da B3 (movimentações, negociações e proventos) com poucos cliques.',
+  },
+  {
+    icon: Scale,
+    titulo: 'Rebalanceamento por metas',
+    descricao: 'Defina metas por categoria e descubra onde aportar com o aporte inteligente.',
+  },
+  {
+    icon: Split,
+    titulo: 'Eventos corporativos',
+    descricao: 'Splits, grupamentos e bonificações tratados automaticamente nos seus cálculos.',
+  },
+  {
+    icon: Target,
+    titulo: 'Alertas de valuation',
+    descricao: 'Defina preço teto e margem de segurança — o app sinaliza oportunidades de compra.',
+  },
+  {
+    icon: Smartphone,
+    titulo: 'PWA instalável',
+    descricao: 'Instale no celular ou computador como um app nativo, direto do navegador.',
+  },
+  {
+    icon: Plane,
+    titulo: 'Funciona offline',
+    descricao:
+      'Consulte tudo sem internet. Suas alterações são sincronizadas automaticamente ao reconectar.',
+  },
 ]
 
 export function HomePage() {
@@ -50,10 +91,17 @@ export function HomePage() {
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        {destaques.map((item) => (
-          <div key={item} className="rounded-lg border border-slate-200 bg-white p-4">
-            <p className="text-sm font-medium text-slate-700">{item}</p>
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        {destaques.map(({ icon: Icon, titulo, descricao }) => (
+          <div
+            key={titulo}
+            className="rounded-[18px] border border-slate-200 bg-white p-7 transition-all hover:-translate-y-1.5 hover:border-brand-400"
+          >
+            <span className="mb-4 grid h-12 w-12 place-items-center rounded-xl bg-brand-50 text-brand-600">
+              <Icon className="h-6 w-6" aria-hidden />
+            </span>
+            <h2 className="mb-2 text-lg font-bold text-slate-900">{titulo}</h2>
+            <p className="text-sm text-slate-500">{descricao}</p>
           </div>
         ))}
       </div>

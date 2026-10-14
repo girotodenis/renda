@@ -1,14 +1,18 @@
 import type { SpreadsheetWorkspace } from '@/domain/workspace'
+import { parseLayoutTema } from '@/domain/layout'
+import type { LayoutTema } from '@/domain/layout'
 
 /**
- * Persistência no navegador (RNF05): token OAuth, planilha selecionada e
- * consentimento. Nunca sai do `LocalStorage` — nenhum servidor próprio.
+ * Persistência no navegador (RNF05): token OAuth, planilha selecionada,
+ * consentimento e tema de layout. Nunca sai do `LocalStorage` — nenhum servidor
+ * próprio.
  */
 
 const STORAGE_KEYS = {
   token: 'minhaacoes.oauth.token',
   workspace: 'minhaacoes.workspace',
   consent: 'minhaacoes.oauth.consent',
+  layout: 'minhaacoes.layout',
 } as const
 
 /** Token OAuth com expiração calculada localmente. */
@@ -86,4 +90,9 @@ export const consentStorage = {
   load: (): boolean => readStorageJson<boolean>(STORAGE_KEYS.consent) === true,
   save: (): void => writeStorageJson(STORAGE_KEYS.consent, true),
   clear: (): void => removeStorageKey(STORAGE_KEYS.consent),
+}
+
+export const layoutStorage = {
+  load: (): LayoutTema => parseLayoutTema(readStorageJson<string>(STORAGE_KEYS.layout)),
+  save: (tema: LayoutTema): void => writeStorageJson(STORAGE_KEYS.layout, tema),
 }
