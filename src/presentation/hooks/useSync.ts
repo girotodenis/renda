@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '@/presentation/app/providers/authContext'
-import { sincronizarPendentes } from '@/application/sync'
+import { contarPendencias, sincronizarPendentes } from '@/application/sync'
 import type { SyncResult } from '@/application/sync'
 import { useOnlineStatus } from './useOnlineStatus'
 
@@ -73,6 +73,11 @@ export function useSync(): SyncController {
     if (inFlightRef.current) return null
     const currentWorkspace = workspaceRef.current
     if (!currentWorkspace || !onlineRef.current) return null
+
+    // Sem pendências, não há motivo para falar com o Google — evita renovar o
+    // token (e qualquer interação de login) sem necessidade. A autenticação só
+    // é solicitada quando existe algo salvo localmente para sincronizar.
+    if (contarPendencias() === 0) return null
 
     inFlightRef.current = true
     setStatus('syncing')

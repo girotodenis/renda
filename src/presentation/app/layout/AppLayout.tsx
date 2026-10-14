@@ -14,9 +14,11 @@ export function AppLayout() {
   const { status, logout } = useAuth()
   const online = useOnlineStatus()
   const sync = useSyncStatus()
-  const isAuthenticated = status === 'authenticated'
+  // Modo local (planilha persistida sem token válido) também libera a
+  // navegação completa — as páginas exibem os dados do cache.
+  const hasWorkspaceSession = status === 'authenticated' || status === 'local'
 
-  const navItems = isAuthenticated
+  const navItems = hasWorkspaceSession
     ? ([
         { to: '/', label: 'Início', icon: Wallet, end: true },
         { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, end: false },
@@ -83,7 +85,7 @@ export function AppLayout() {
                 </li>
               ))}
 
-              {isAuthenticated ? (
+              {hasWorkspaceSession ? (
                 <li>
                   <button
                     type="button"
@@ -93,6 +95,15 @@ export function AppLayout() {
                     <LogOut className="h-4 w-4" aria-hidden />
                     Sair
                   </button>
+                </li>
+              ) : null}
+
+              {status === 'local' ? (
+                <li>
+                  <NavLink to="/login" className={ctaClass}>
+                    <LogIn className="h-4 w-4" aria-hidden />
+                    Entrar
+                  </NavLink>
                 </li>
               ) : null}
             </ul>
