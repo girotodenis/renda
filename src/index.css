@@ -14,7 +14,11 @@
   }
 
   body {
-    @apply bg-slate-50 text-slate-900 antialiased;
+    @apply text-slate-900 antialiased;
+    background:
+      radial-gradient(1000px 520px at 85% -10%, rgba(59, 130, 246, 0.09), transparent 60%),
+      radial-gradient(800px 420px at -10% 20%, rgba(37, 99, 235, 0.06), transparent 60%),
+      #f8fafc;
     font-family:
       system-ui,
       -apple-system,
@@ -23,3 +27,98 @@
       sans-serif;
   }
 }
+
+/* ========================================================================
+ * Tema "propaganda" — visual da tela de propaganda (incluindo as cores).
+ * Regras sem `@layer` para sobrescrever as utilities do Tailwind (camadas têm
+ * prioridade menor que CSS fora de camada).
+ * ======================================================================== */
+[data-tema='propaganda'] {
+  color-scheme: dark;
+}
+
+[data-tema='propaganda'] body {
+  background:
+    radial-gradient(1200px 600px at 80% -10%, rgba(34, 197, 94, 0.14), transparent 60%),
+    radial-gradient(900px 500px at -10% 20%, rgba(59, 130, 246, 0.1), transparent 60%),
+    #0b1220;
+  color: #e8eefb;
+}
+
+/* --- Superfícies --- */
+[data-tema='propaganda'] .bg-slate-50 { background-color: #0b1220; }
+[data-tema='propaganda'] .bg-slate-100 { background-color: #111a2e; }
+[data-tema='propaganda'] .bg-slate-200 { background-color: #1c2a45; }
+[data-tema='propaganda'] .bg-white { background-color: #16223c; }
+[data-tema='propaganda'] .bg-white\/75 { background-color: rgba(11, 18, 32, 0.75); }
+[data-tema='propaganda'] .bg-white\/70 { background-color: rgba(11, 18, 32, 0.7); }
+[data-tema='propaganda'] .bg-slate-900\/50 { background-color: rgba(2, 6, 23, 0.6); }
+
+/* --- Acentos (azul → verde) --- */
+[data-tema='propaganda'] .bg-brand-50 { background-color: rgba(34, 197, 94, 0.12); }
+[data-tema='propaganda'] .bg-brand-50\/40 { background-color: rgba(34, 197, 94, 0.1); }
+[data-tema='propaganda'] .bg-brand-100 { background-color: rgba(34, 197, 94, 0.16); }
+[data-tema='propaganda'] .bg-brand-600 { background-color: #16a34a; }
+[data-tema='propaganda'] .bg-brand-700 { background-color: #15803d; }
+
+/* --- Status (tint leves para fundo escuro) --- */
+[data-tema='propaganda'] .bg-emerald-50 { background-color: rgba(16, 185, 129, 0.12); }
+[data-tema='propaganda'] .bg-amber-50 { background-color: rgba(245, 158, 11, 0.12); }
+[data-tema='propaganda'] .bg-red-50 { background-color: rgba(239, 68, 68, 0.12); }
+[data-tema='propaganda'] .bg-sky-50 { background-color: rgba(14, 165, 233, 0.12); }
+
+/* --- Texto --- */
+[data-tema='propaganda'] .text-slate-900 { color: #e8eefb; }
+[data-tema='propaganda'] .text-slate-700 { color: #cbd6ec; }
+[data-tema='propaganda'] .text-slate-600 { color: #b7c6e3; }
+[data-tema='propaganda'] .text-slate-500 { color: #9fb0cf; }
+[data-tema='propaganda'] .text-slate-400 { color: #7e91b5; }
+[data-tema='propaganda'] .text-brand-600 { color: #22c55e; }
+[data-tema='propaganda'] .text-brand-700 { color: #4ade80; }
+[data-tema='propaganda'] .text-emerald-700 { color: #4ade80; }
+[data-tema='propaganda'] .text-emerald-800 { color: #4ade80; }
+[data-tema='propaganda'] .text-amber-600 { color: #fbbf24; }
+[data-tema='propaganda'] .text-amber-700 { color: #fbbf24; }
+[data-tema='propaganda'] .text-amber-800 { color: #fbbf24; }
+[data-tema='propaganda'] .text-red-600 { color: #fca5a5; }
+[data-tema='propaganda'] .text-red-700 { color: #f87171; }
+[data-tema='propaganda'] .text-red-800 { color: #f87171; }
+[data-tema='propaganda'] .text-sky-700 { color: #7dd3fc; }
+
+/* --- Bordas --- */
+[data-tema='propaganda'] .border-slate-100 { border-color: rgba(255, 255, 255, 0.06); }
+[data-tema='propaganda'] .border-slate-200 { border-color: rgba(255, 255, 255, 0.08); }
+[data-tema='propaganda'] .border-slate-200\/70 { border-color: rgba(255, 255, 255, 0.08); }
+[data-tema='propaganda'] .border-slate-300 { border-color: rgba(255, 255, 255, 0.16); }
+[data-tema='propaganda'] .border-brand-100 { border-color: rgba(34, 197, 94, 0.3); }
+[data-tema='propaganda'] .border-emerald-200 { border-color: rgba(16, 185, 129, 0.3); }
+[data-tema='propaganda'] .border-amber-200 { border-color: rgba(245, 158, 11, 0.3); }
+[data-tema='propaganda'] .border-red-200 { border-color: rgba(239, 68, 68, 0.3); }
+[data-tema='propaganda'] .border-sky-200 { border-color: rgba(14, 165, 233, 0.3); }
+
+/* --- Gradientes dos botões/logo --- */
+[data-tema='propaganda'] .from-brand-500 {
+  --tw-gradient-from: #22c55e var(--tw-gradient-from-position);
+  --tw-gradient-to: rgb(34 197 94 / 0) var(--tw-gradient-to-position);
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+}
+[data-tema='propaganda'] .to-brand-700 {
+  --tw-gradient-to: #15803d var(--tw-gradient-to-position);
+}
+
+/* --- Ring/focus --- */
+[data-tema='propaganda'] .ring-brand-500\/30 { --tw-ring-color: rgba(34, 197, 94, 0.3); }
+[data-tema='propaganda'] .focus\:border-brand-500:focus { border-color: #22c55e; }
+[data-tema='propaganda'] .focus\:ring-brand-500\/30:focus { --tw-ring-color: rgba(34, 197, 94, 0.3); }
+[data-tema='propaganda'] .focus\:ring-brand-500\/40:focus { --tw-ring-color: rgba(34, 197, 94, 0.4); }
+[data-tema='propaganda'] .placeholder\:text-slate-400::placeholder { color: #7e91b5; }
+
+/* --- Hover (estados mais usados) --- */
+[data-tema='propaganda'] .hover\:bg-slate-100:hover { background-color: #111a2e; }
+[data-tema='propaganda'] .hover\:bg-brand-700:hover { background-color: #15803d; }
+[data-tema='propaganda'] .hover\:bg-white\/70:hover { background-color: rgba(255, 255, 255, 0.08); }
+[data-tema='propaganda'] .hover\:text-slate-900:hover { color: #e8eefb; }
+[data-tema='propaganda'] .hover\:text-slate-700:hover { color: #cbd6ec; }
+[data-tema='propaganda'] .hover\:border-brand-300:hover { border-color: rgba(34, 197, 94, 0.4); }
+[data-tema='propaganda'] .hover\:border-brand-400:hover { border-color: rgba(34, 197, 94, 0.5); }
+[data-tema='propaganda'] .hover\:bg-brand-50\/40:hover { background-color: rgba(34, 197, 94, 0.12); }

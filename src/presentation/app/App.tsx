@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AppLayout } from '@/presentation/app/layout/AppLayout'
 import { AuthProvider } from '@/presentation/app/providers/AuthProvider'
+import { LayoutProvider } from '@/presentation/app/providers/LayoutProvider'
 import { ProtectedRoute, PublicOnlyRoute } from '@/presentation/app/routes/RouteGuards'
 import { ErrorBoundary } from '@/presentation/components/ErrorBoundary'
 import { LoginPage } from '@/presentation/features/auth/LoginPage'
@@ -20,10 +21,11 @@ export function App() {
       basename={import.meta.env.BASE_URL.replace(/\/$/, '')}
       future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
     >
-      <AuthProvider>
-        <ErrorBoundary title="Algo deu errado">
-          <Routes>
-            <Route element={<AppLayout />}>
+      <LayoutProvider>
+        <AuthProvider>
+          <ErrorBoundary title="Algo deu errado">
+            <Routes>
+              <Route element={<AppLayout />}>
               <Route path="/" element={<HomePage />} />
               <Route
                 path="/login"
@@ -101,7 +103,8 @@ export function App() {
             </Route>
           </Routes>
         </ErrorBoundary>
-      </AuthProvider>
+        </AuthProvider>
+      </LayoutProvider>
     </BrowserRouter>
   )
 }

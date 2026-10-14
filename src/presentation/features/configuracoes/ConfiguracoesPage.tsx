@@ -1,7 +1,10 @@
-import { CheckCircle2, Eye, EyeOff, KeyRound, Loader2, Save, Settings } from 'lucide-react'
+import { Check, CheckCircle2, Eye, EyeOff, KeyRound, Loader2, Palette, Save, Settings } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '@/presentation/app/providers/authContext'
+import { useLayout } from '@/presentation/app/providers/layoutContext'
+import { LAYOUT_TEMA_LABELS, LAYOUT_TEMAS, LayoutTema } from '@/domain/layout'
+import { cn } from '@/presentation/cn'
 import { Alert } from '@/presentation/components/Alert'
 import { FormField, inputClassName } from '@/presentation/components/FormField'
 import { carregarConfiguracoes, salvarConfiguracoes } from '@/application/configuracoes'
@@ -18,6 +21,7 @@ import { describeSheetsError } from '@/infrastructure/sheets/gateway'
  */
 export function ConfiguracoesPage() {
   const { workspace, ensureAccessToken } = useAuth()
+  const { tema, setTema } = useLayout()
   const [brapiToken, setBrapiToken] = useState('')
   const [mostrarToken, setMostrarToken] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -129,6 +133,49 @@ export function ConfiguracoesPage() {
       <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex items-start gap-3">
           <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
+            <Palette className="h-4 w-4" aria-hidden />
+          </span>
+          <div className="space-y-1">
+            <h2 className="text-sm font-semibold text-slate-900">Layout do app</h2>
+            <p className="text-xs text-slate-500">
+              Escolha a aparência do aplicativo. A preferência fica salva neste navegador.
+            </p>
+          </div>
+        </div>
+
+        <div role="radiogroup" aria-label="Layout do app" className="grid gap-3 sm:grid-cols-2">
+          {LAYOUT_TEMAS.map((opcao) => {
+            const ativa = tema === opcao
+            return (
+              <button
+                key={opcao}
+                type="button"
+                role="radio"
+                aria-checked={ativa}
+                onClick={() => setTema(opcao)}
+                className={cn(
+                  'rounded-lg border p-3 text-left transition-colors',
+                  ativa
+                    ? 'border-brand-500 ring-2 ring-brand-500/30'
+                    : 'border-slate-200 hover:border-brand-300',
+                )}
+              >
+                <span className="mb-2 flex items-center justify-between gap-2">
+                  <span className="text-sm font-semibold text-slate-900">
+                    {LAYOUT_TEMA_LABELS[opcao]}
+                  </span>
+                  {ativa ? <Check className="h-4 w-4 text-brand-600" aria-hidden /> : null}
+                </span>
+                <PreviewLayout tema={opcao} />
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex items-start gap-3">
+          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
             <KeyRound className="h-4 w-4" aria-hidden />
           </span>
           <div className="space-y-1">
@@ -204,5 +251,23 @@ export function ConfiguracoesPage() {
         </button>
       </div>
     </section>
+  )
+}
+
+/** Miniatura visual do tema, exibida no seletor de layout. */
+function PreviewLayout({ tema }: { tema: LayoutTema }) {
+  if (tema === LayoutTema.Propaganda) {
+    return (
+      <div className="overflow-hidden rounded-md border border-white/10 bg-[#0b1220] p-2">
+        <div className="h-2 w-2/3 rounded-full bg-gradient-to-r from-[#22c55e] to-[#16a34a]" />
+        <div className="mt-1.5 h-5 rounded-sm bg-[#16223c]" />
+      </div>
+    )
+  }
+  return (
+    <div className="overflow-hidden rounded-md border border-slate-200 bg-slate-50 p-2">
+      <div className="h-2 w-2/3 rounded-full bg-gradient-to-r from-[#60a5fa] to-[#2563eb]" />
+      <div className="mt-1.5 h-5 rounded-sm bg-white shadow-sm" />
+    </div>
   )
 }

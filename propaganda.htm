@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Minhas Ações — Sua carteira de investimentos, seus dados</title>
+  <meta name="description" content="Acompanhe sua carteira de investimentos direto do navegador, usando sua planilha do Google Sheets como base de dados. Funciona offline, é instalável e gratuito." />
+  <meta name="google-site-verification" content="Xvi4z-VtqEzi1cqZX8edum_vtV38ZFTEVG4LF88SoVQ" />
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-0XPK9ZT0QJ"></script>
+<script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-0XPK9ZT0QJ');
+</script>
+  <style>
+    :root {
+      --bg: #0b1220;
+      --bg-soft: #111a2e;
+      --card: #16223c;
+      --accent: #22c55e;
+      --accent-2: #16a34a;
+      --gold: #fbbf24;
+      --text: #e8eefb;
+      --muted: #9fb0cf;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background:
+        radial-gradient(1200px 600px at 80% -10%, rgba(34, 197, 94, .18), transparent 60%),
+        radial-gradient(900px 500px at -10% 20%, rgba(59, 130, 246, .12), transparent 60%),
+        var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    /* ---------- Top bar ---------- */
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 28px;
+      background: rgba(11, 18, 32, .75);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(255, 255, 255, .06);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 800;
+      font-size: 1.15rem;
+      letter-spacing: .3px;
+    }
+
+    .brand .logo {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      font-size: 1.1rem;
+      box-shadow: 0 4px 18px rgba(34, 197, 94, .35);
+    }
+
+    .cta-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: #06210f;
+      font-weight: 800;
+      font-size: 1rem;
+      padding: 12px 26px;
+      border-radius: 999px;
+      text-decoration: none;
+      box-shadow: 0 6px 24px rgba(34, 197, 94, .4);
+      transition: transform .15s ease, box-shadow .15s ease;
+      animation: pulse 2.4s infinite;
+    }
+
+    .cta-btn:hover {
+      transform: translateY(-2px) scale(1.03);
+      box-shadow: 0 10px 32px rgba(34, 197, 94, .55);
+    }
+
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 6px 24px rgba(34, 197, 94, .4); }
+      50% { box-shadow: 0 6px 36px rgba(34, 197, 94, .65); }
+    }
+
+    /* ---------- Hero ---------- */
+    .hero {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 90px 28px 60px;
+      text-align: center;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 6px 16px;
+      border-radius: 999px;
+      background: rgba(34, 197, 94, .12);
+      border: 1px solid rgba(34, 197, 94, .35);
+      color: var(--accent);
+      font-weight: 700;
+      font-size: .85rem;
+      margin-bottom: 24px;
+    }
+
+    .hero h1 {
+      font-size: clamp(2.2rem, 5.5vw, 3.8rem);
+      font-weight: 900;
+      line-height: 1.15;
+      letter-spacing: -1px;
+    }
+
+    .hero h1 span {
+      background: linear-gradient(90deg, var(--accent), var(--gold));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .hero p {
+      max-width: 720px;
+      margin: 22px auto 36px;
+      font-size: 1.15rem;
+      color: var(--muted);
+    }
+
+    .hero .cta-btn { font-size: 1.1rem; padding: 16px 38px; }
+
+    .trust {
+      margin-top: 18px;
+      font-size: .9rem;
+      color: var(--muted);
+    }
+
+    /* ---------- Features ---------- */
+    .features {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 40px 28px 90px;
+    }
+
+    .features h2 {
+      text-align: center;
+      font-size: clamp(1.6rem, 3.5vw, 2.4rem);
+      font-weight: 800;
+      margin-bottom: 8px;
+    }
+
+    .features .subtitle {
+      text-align: center;
+      color: var(--muted);
+      margin-bottom: 48px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 22px;
+    }
+
+    .card {
+      background: linear-gradient(160deg, var(--card), var(--bg-soft));
+      border: 1px solid rgba(255, 255, 255, .07);
+      border-radius: 18px;
+      padding: 28px;
+      transition: transform .2s ease, border-color .2s ease;
+    }
+
+    .card:hover {
+      transform: translateY(-6px);
+      border-color: rgba(34, 197, 94, .4);
+    }
+
+    .card .icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      font-size: 1.5rem;
+      background: rgba(34, 197, 94, .12);
+      margin-bottom: 16px;
+    }
+
+    .card h3 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .card p { color: var(--muted); font-size: .95rem; }
+
+    /* ---------- Privacy strip ---------- */
+    .privacy {
+      max-width: 1100px;
+      margin: 0 auto 90px;
+      padding: 40px 28px;
+    }
+
+    .privacy-box {
+      display: flex;
+      gap: 20px;
+      align-items: center;
+      background: linear-gradient(135deg, rgba(34, 197, 94, .1), rgba(251, 191, 36, .06));
+      border: 1px solid rgba(34, 197, 94, .3);
+      border-radius: 20px;
+      padding: 30px 34px;
+    }
+
+    .privacy-box .lock { font-size: 2.6rem; }
+    .privacy-box h3 { font-size: 1.25rem; font-weight: 800; margin-bottom: 6px; }
+    .privacy-box p { color: var(--muted); }
+
+    /* ---------- Final CTA ---------- */
+    .final-cta {
+      text-align: center;
+      padding: 40px 28px 100px;
+    }
+
+    .final-cta h2 {
+      font-size: clamp(1.8rem, 4vw, 2.6rem);
+      font-weight: 900;
+      margin-bottom: 12px;
+    }
+
+    .final-cta p { color: var(--muted); margin-bottom: 30px; }
+
+    footer {
+      text-align: center;
+      padding: 28px;
+      color: var(--muted);
+      font-size: .85rem;
+      border-top: 1px solid rgba(255, 255, 255, .06);
+    }
+
+    @media (max-width: 600px) {
+      .topbar { padding: 12px 16px; }
+      .cta-btn { padding: 10px 18px; font-size: .9rem; }
+      .privacy-box { flex-direction: column; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Barra superior com botão de destaque -->
+  <nav class="topbar">
+    <div class="brand">
+      <div class="logo">📈</div>
+      <span>Minhas Ações</span>
+    </div>
+    <a class="cta-btn" href="http://girotodenis.github.io/renda/">
+      🚀 Abrir o app
+    </a>
+  </nav>
+
+  <!-- Hero -->
+  <header class="hero">
+    <div class="badge">100% gratuito • Sem servidor • Seus dados ficam com você</div>
+    <h1>Controle sua carteira de investimentos <span>sem abrir mão da sua privacidade</span></h1>
+    <p>
+      O Minhas Ações usa a <strong>sua planilha do Google Sheets</strong> como banco de dados.
+      Acompanhe rentabilidade, dividendos e evolução patrimonial direto do navegador —
+      instalável como app e funciona até <strong>offline</strong>.
+    </p>
+    <a class="cta-btn" href="http://girotodenis.github.io/renda/">
+      📊 Começar agora — é grátis
+    </a>
+    <p class="trust">Nenhum cadastro extra. Basta sua conta Google.</p>
+  </header>
+
+  <!-- Funcionalidades -->
+  <section class="features">
+    <h2>Tudo o que você precisa em um só lugar</h2>
+    <p class="subtitle">Do lançamento da primeira operação ao rebalanceamento da carteira.</p>
+
+    <div class="grid">
+      <div class="card">
+        <div class="icon">🧾</div>
+        <h3>Operações e proventos</h3>
+        <p>Lance compras, vendas e dividendos/JCP em segundos. O histórico completo fica salvo na sua planilha.</p>
+      </div>
+
+      <div class="card">
+        <div class="icon">📊</div>
+        <h3>Dashboard inteligente</h3>
+        <p>Preço médio, lucro, alocação por ativo e categoria, e evolução patrimonial calculados automaticamente.</p>
+      </div>
+
+      <div class="card">
+        <div class="icon">📥</div>
+        <h3>Importação da B3</h3>
+        <p>Importe extratos da Área do Investidor da B3 (movimentações, negociações e proventos) com poucos cliques.</p>
+      </div>
+
+      <div class="card">
+        <div class="icon">⚖️</div>
+        <h3>Rebalanceamento por metas</h3>
+        <p>Defina metas por categoria e descubra onde aportar com o aporte inteligente.</p>
+      </div>
+
+      <div class="card">
+        <div class="icon">🔀</div>
+        <h3>Eventos corporativos</h3>
+        <p>Splits, grupamentos e bonificações tratados automaticamente nos seus cálculos.</p>
+      </div>
+
+      <div class="card">
+        <div class="icon">🎯</div>
+        <h3>Alertas de valuation</h3>
+        <p>Defina preço teto e margem de segurança — o app sinaliza oportunidades de compra.</p>
+      </div>
+
+      <div class="card">
+        <div class="icon">📱</div>
+        <h3>PWA instalável</h3>
+        <p>Instale no celular ou computador como um app nativo, direto do navegador.</p>
+      </div>
+
+      <div class="card">
+        <div class="icon">✈️</div>
+        <h3>Funciona offline</h3>
+        <p>Consulte tudo sem internet. Suas alterações são sincronizadas automaticamente ao reconectar.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Privacidade -->
+  <section class="privacy">
+    <div class="privacy-box">
+      <div class="lock">🔒</div>
+      <div>
+        <h3>Privacidade de verdade</h3>
+        <p>
+          O app não tem servidor próprio: ele é apenas uma "tela" sobre a <strong>sua</strong> planilha.
+          Tudo é salvo na sua conta Google, e a única cópia local fica no seu navegador
+          para o funcionamento offline. Ninguém mais vê seus dados.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA final -->
+  <section class="final-cta">
+    <h2>Pronto para assumir o controle da sua carteira?</h2>
+    <p>Abra o app agora e conecte sua planilha em menos de um minuto.</p>
+    <a class="cta-btn" href="http://girotodenis.github.io/renda/">
+      🚀 Acessar o Minhas Ações
+    </a>
+  </section>
+
+  <footer>
+    Minhas Ações — seus investimentos, seus dados. &copy; 2026
+  </footer>
+
+</body>
+</html>
