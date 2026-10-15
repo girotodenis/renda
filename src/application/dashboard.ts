@@ -20,6 +20,7 @@ import type { RepositoryContext } from '@/infrastructure/repositories'
 import { registrarSnapshot } from '@/application/historico'
 import { buscarCotacoesBrapi, lerCotacaoCache as lerCotacaoCacheBrapi } from '@/infrastructure/brapi'
 import { carregarConfiguracoes } from '@/application/configuracoes'
+import { isModoLocal } from '@/infrastructure/modoArmazenamento'
 import type { Consolidado, Operacao, Provento, Snapshot, Valuation } from '@/domain/entities'
 
 /**
@@ -68,14 +69,20 @@ function temCacheCompleto(spreadsheetId: string): boolean {
 }
 
 /** Extrai `ticker → preço atual` (em centavos) da aba `Consolidado`. */
-function precosDoConsolidado(linhas: readonly Consolidado[]): Map<string, number> {
+function precosDoConsolidado(
+  linhas: readonly Consolidado[],
+  modoLocal = false,
+): Map<string, number> {
   const precos = new Map<string, number>()
   for (const linha of linhas) {
     const ticker = linha.ticker.trim()
     if (ticker.length === 0) continue
     // Ignora cotações inválidas: o GOOGLEFINANCE devolve ~R$ 0,11 para tickers
     // não encontrados — abaixo de R$ 0,20 tratamos como erro e acionamos a Brapi.
-    if (precoMercadoValido(linha.precoAtual, linha.categoria)) {
+    const precoValido = modoLocal
+      ? Number.isFinite(linha.precoAtual) && linha.precoAtual > 0
+      : precoMercadoValido(linha.precoAtual, linha.categoria)
+    if (precoValido) {
       precos.set(ticker, linha.precoAtual)
     }
   }
@@ -123,10 +130,20 @@ interface MontarConsulta {
   valuation: readonly Valuation[]
   /** Preços de mercado B3 via Brapi (centavos), fallback do `GOOGLEFINANCE`. */
   cotacoesBrapi: ReadonlyMap<string, number>
+  /** No modo local, `Consolidado` contém valores estáticos, não cotações GoogleFinance. */
+  modoLocal?: boolean
 }
 
 function montarDashboard(consulta: MontarConsulta): DashboardData {
-  const { operacoes, linhasConsolidado, proventos, historico, valuation, cotacoesBrapi } = consulta
+  const {
+    operacoes,
+    linhasConsolidado,
+    proventos,
+    historico,
+    valuation,
+    cotacoesBrapi,
+    modoLocal = false,
+  } = consulta
 
   const base: Omit<DashboardData, 'consolidado' | 'resumo' | 'cotacoes'> = {
     operacoes: [...operacoes],
@@ -148,11 +165,17 @@ function montarDashboard(consulta: MontarConsulta): DashboardData {
   }
 
   const posicoes = calcularPosicoes(operacoes)
-  const precoMercado = precosDoConsolidado(linhasConsolidado)
+  const precoConsolidado = precosDoConsolidado(linhasConsolidado, modoLocal)
+  const precoMercado = modoLocal ? new Map<string, number>() : precoConsolidado
   const precoManual = precosManuaisDeOperacoes(operacoes)
+  const precoBrapi = new Map<string, number>()
+  if (modoLocal) {
+    for (const [ticker, preco] of precoConsolidado) precoBrapi.set(ticker, preco)
+  }
+  for (const [ticker, preco] of cotacoesBrapi) precoBrapi.set(ticker, preco)
 
   const cotacoes = resolverCotacoes(
-    montarEntradas(posicoes, precoMercado, precoManual, cotacoesBrapi),
+    montarEntradas(posicoes, precoMercado, precoManual, precoBrapi),
   )
   const consolidado = aplicarPrecosAtuais(posicoes, precosDeCotacoes(cotacoes))
 
@@ -177,11 +200,13 @@ export async function carregarDashboard(
   const historico = historicoRepo.readCache(spreadsheetId) ?? []
   const valuation = await carregarValuations(context, options.offline === true)
   const config = await carregarConfiguracoes(context, options.offline === true)
+  const modoLocal = isModoLocal()
   const cotacoesBrapi = await resolverCotacoesBrapi(
     operacoes,
     linhasConsolidado,
     options.offline === true,
     config.brapiToken,
+    modoLocal,
   )
 
   return montarDashboard({
@@ -191,6 +216,7 @@ export async function carregarDashboard(
     historico,
     valuation,
     cotacoesBrapi,
+    modoLocal,
   })
 }
 
@@ -211,17 +237,18 @@ async function carregarValuations(
   }
 }
 
-/** Posições B3 (Ação/FII/BDR/ETF) abertas sem preço no `GOOGLEFINANCE` da planilha. */
+/** Posições B3 abertas sem preço GoogleFinance (ou todas no modo local). */
 function tickersBrapi(
   posicoes: readonly PosicaoConsolidada[],
   precoPlanilha: ReadonlyMap<string, number>,
+  atualizarMesmoComPreco: boolean,
 ): string[] {
   return posicoes
     .filter(
       (posicao) =>
         usaGoogFinance(posicao.categoria) &&
         posicao.quantidadeAtual > 0 &&
-        !precoPlanilha.has(posicao.ticker),
+        (atualizarMesmoComPreco || !precoPlanilha.has(posicao.ticker)),
     )
     .map((posicao) => posicao.ticker)
 }
@@ -230,8 +257,13 @@ function tickersBrapi(
 function cotacoesBrapiDoCache(
   operacoes: readonly Operacao[],
   linhasConsolidado: readonly Consolidado[],
+  atualizarMesmoComPreco: boolean,
 ): Map<string, number> {
-  const tickers = tickersBrapi(calcularPosicoes(operacoes), precosDoConsolidado(linhasConsolidado))
+  const tickers = tickersBrapi(
+    calcularPosicoes(operacoes),
+    precosDoConsolidado(linhasConsolidado, atualizarMesmoComPreco),
+    atualizarMesmoComPreco,
+  )
   const cotacoes = new Map<string, number>()
   for (const ticker of tickers) {
     const cache = lerCotacaoCacheBrapi(ticker)
@@ -241,8 +273,9 @@ function cotacoesBrapiDoCache(
 }
 
 /**
- * Obtém cotações B3 via Brapi (centavos) para posições de Ação/FII/BDR/ETF cujo
- * `GOOGLEFINANCE` da planilha não trouxe preço. No modo offline usa apenas o
+ * Obtém cotações B3 via Brapi (centavos) para posições de Ação/FII/BDR/ETF sem
+ * preço do `GOOGLEFINANCE`. No modo local, consulta todas as posições abertas,
+ * pois o `Consolidado` contém valores estáticos. No modo offline usa apenas o
  * cache local (RNF08); caso contrário, cache-first com fallback.
  */
 async function resolverCotacoesBrapi(
@@ -250,11 +283,18 @@ async function resolverCotacoesBrapi(
   linhasConsolidado: readonly Consolidado[],
   offline: boolean,
   token: string,
+  atualizarMesmoComPreco: boolean,
 ): Promise<Map<string, number>> {
-  const tickers = tickersBrapi(calcularPosicoes(operacoes), precosDoConsolidado(linhasConsolidado))
+  const tickers = tickersBrapi(
+    calcularPosicoes(operacoes),
+    precosDoConsolidado(linhasConsolidado, atualizarMesmoComPreco),
+    atualizarMesmoComPreco,
+  )
   if (tickers.length === 0) return new Map()
 
-  if (offline) return cotacoesBrapiDoCache(operacoes, linhasConsolidado)
+  if (offline) {
+    return cotacoesBrapiDoCache(operacoes, linhasConsolidado, atualizarMesmoComPreco)
+  }
 
   const cotacoes = new Map<string, number>()
   const resolvidas = await buscarCotacoesBrapi(tickers, { token })
@@ -271,7 +311,12 @@ export function lerDashboardDoCache(spreadsheetId: string): DashboardData | null
   const linhasConsolidado = consolidadoRepo.readCache(spreadsheetId)
   if (operacoes === null && linhasConsolidado === null) return null
 
-  const cotacoesBrapi = cotacoesBrapiDoCache(operacoes ?? [], linhasConsolidado ?? [])
+  const modoLocal = isModoLocal()
+  const cotacoesBrapi = cotacoesBrapiDoCache(
+    operacoes ?? [],
+    linhasConsolidado ?? [],
+    modoLocal,
+  )
 
   return montarDashboard({
     operacoes: operacoes ?? [],
@@ -280,6 +325,7 @@ export function lerDashboardDoCache(spreadsheetId: string): DashboardData | null
     historico: historicoRepo.readCache(spreadsheetId) ?? [],
     valuation: valuationRepo.readCache(spreadsheetId) ?? [],
     cotacoesBrapi,
+    modoLocal,
   })
 }
 
