@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '@/presentation/app/providers/authContext'
 import { contarPendencias, sincronizarPendentes } from '@/application/sync'
 import type { SyncResult } from '@/application/sync'
+import { isModoLocal } from '@/infrastructure/modoArmazenamento'
 import { useOnlineStatus } from './useOnlineStatus'
 
 /**
@@ -73,6 +74,10 @@ export function useSync(): SyncController {
     if (inFlightRef.current) return null
     const currentWorkspace = workspaceRef.current
     if (!currentWorkspace || !onlineRef.current) return null
+
+    // Modo local: a "planilha" já é o banco do navegador — não existe fila a
+    // enviar (mutações pendentes do Google nunca são reaplicadas aqui).
+    if (isModoLocal()) return null
 
     // Sem pendências, não há motivo para falar com o Google — evita renovar o
     // token (e qualquer interação de login) sem necessidade. A autenticação só

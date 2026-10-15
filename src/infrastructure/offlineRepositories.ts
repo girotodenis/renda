@@ -1,5 +1,6 @@
 import type { CrudRepository, Repository, RepositoryContext } from '@/domain/repositories/ports'
 import { readSheetCache, writeSheetCache } from '@/infrastructure/cache'
+import { isModoLocal } from '@/infrastructure/modoArmazenamento'
 import { enqueue, isOnline } from '@/infrastructure/outbox'
 import type { MutationDraft } from '@/infrastructure/outbox'
 
@@ -14,6 +15,8 @@ import type { MutationDraft } from '@/infrastructure/outbox'
  *   no outbox — sem tocar na API.
  * - **Online**: tenta a escrita direta; se ela falhar por **rede/quota**
  *   (`SheetsApiError` com `status` 0 ou 429), cai para o mesmo caminho offline.
+ * - **Modo local** (sem Google): o outbox é irrelevante — a "planilha" já é o
+ *   banco local, então as escritas vão direto ao repositório, sem fila.
  *
  * Leitura (`list`/`readCache`/`refresh`) e `invalidateCache` apenas delegam —
  * a leitura cache-first continua igual. Os contratos de domínio
@@ -116,7 +119,7 @@ export function withOfflineOutbox<T>(
     direct: () => Promise<TResult>,
     optimisticResult: () => TResult,
   ): Promise<TResult> {
-    if (!outboxEnabled) return direct()
+    if (!outboxEnabled || isModoLocal()) return direct()
 
     return (async () => {
       if (isOnline()) {

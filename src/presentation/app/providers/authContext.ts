@@ -1,4 +1,5 @@
 import { createContext, useContext } from 'react'
+import type { ModoArmazenamento } from '@/domain/armazenamento'
 import type { AuthStatus, PlanilhaExistente, SpreadsheetWorkspace } from '@/domain/workspace'
 
 /** Opções de criação da planilha padrão. */
@@ -21,6 +22,13 @@ export interface AuthContextValue {
    * válido — o app opera com o cache e o login é solicitado sob demanda).
    */
   status: AuthStatus
+  /**
+   * Origem de dados ativa: `google` (planilha do Google Sheets, com login) ou
+   * `local` (banco de dados do navegador, sem login e exportável para `.ods`).
+   */
+  modo: ModoArmazenamento
+  /** Atalho para `modo === 'local'`. */
+  isModoLocal: boolean
   /** Access token OAuth (mantido apenas em memória + LocalStorage). */
   accessToken: string | null
   /** Planilha selecionada/criada e persistida no navegador. */
@@ -35,8 +43,13 @@ export interface AuthContextValue {
   isBusy: boolean
   /** Inicia o login OAuth 2.0 pelo Google Identity Services. */
   login: () => Promise<void>
-  /** Revoga o token e limpa a sessão/planilha persistida. */
+  /** Revoga o token e limpa a sessão/planilha persistida (também sai do modo local). */
   logout: () => Promise<void>
+  /**
+   * Ativa o modo local (sem Google): cria/abre o banco de dados do navegador e
+   * o define como workspace ativo. Não exige login e preserva dados existentes.
+   */
+  usarModoLocal: () => Promise<void>
   /** Abre o Google Picker e carrega a planilha selecionada. */
   selecionarPlanilha: () => Promise<void>
   /**

@@ -62,15 +62,17 @@ export function HomePage() {
               Controle de Investimentos
             </h1>
             <p className="text-sm text-slate-500">
-              Sua carteira, na sua planilha do Google Sheets.
+              Sua carteira, na sua planilha do Google Sheets — ou só neste navegador.
             </p>
           </div>
         </div>
 
         <p className="mt-4 max-w-3xl text-slate-600">
           Entre com sua conta Google e use sua própria planilha do Google Sheets como base de
-          dados. Nada fica guardado com a gente: o app é só uma tela para a sua planilha — tudo
-          o que você lança fica salvo na sua conta, sob seu controle.
+          dados. Nada fica guardado com a gente: o app é só uma tela para a sua planilha — tudo o
+          que você lança fica salvo na sua conta, sob seu controle. Prefere não usar o Google?
+          Dá para usar com o banco de dados do próprio navegador e exportar/importar a carteira
+          em <code className="rounded bg-slate-100 px-1">.ods</code>.
         </p>
 
         <div className="mt-6 flex flex-wrap gap-3">

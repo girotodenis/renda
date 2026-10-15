@@ -1,11 +1,14 @@
 import { aplicarPrecosAtuais, calcularPosicoes } from '@/domain/consolidado'
 import type { PrecosAtuais } from '@/domain/consolidado'
 import { precosManuaisDeOperacoes, precosPersistidosDeOperacoes } from '@/domain/cotacoes'
-import { buildConsolidadoRows, formulaSeparatorForLocale } from '@/infrastructure/sheets/sheetFormulas'
+import { buildConsolidadoRows, buildConsolidadoRowsEstaticas, formulaSeparatorForLocale } from '@/infrastructure/sheets/sheetFormulas'
 import { SHEET_HEADERS } from '@/domain/sheetsSchema'
 import { consolidadoRepo, operacoesRepo } from '@/infrastructure/repositories'
 import type { RepositoryContext } from '@/infrastructure/repositories'
-import { clearValues, columnLetter, getSpreadsheetLocale, updateValues } from '@/infrastructure/sheets/gateway'
+import { isModoLocal } from '@/infrastructure/modoArmazenamento'
+import { clearValues, columnLetter, getSpreadsheetLocale, updateValues } from '@/infrastructure/sheets/gatewayRouter'
+import type { ValueInputOption } from '@/infrastructure/sheets/gatewayRouter'
+import type { CellValue } from '@/infrastructure/sheets/sheetCells'
 import type { Consolidado, Operacao } from '@/domain/entities'
 
 /**
@@ -51,9 +54,22 @@ export async function writeConsolidado(
   const posicoes = calcularPosicoes(operacoes)
   const consolidado = aplicarPrecosAtuais(posicoes, precosAtuais)
 
-  const locale = await getSpreadsheetLocale(context.accessToken, context.spreadsheetId)
-  const separator = formulaSeparatorForLocale(locale)
-  const rows = buildConsolidadoRows({ posicoes, precosAtuais, separator })
+  // Modo Google: a planilha é a superfície de cálculo (`GOOGLEFINANCE`), então as
+  // colunas dependentes de cotação vão como fórmula.
+  // Modo local: não existe superfície de cálculo no arquivo — a aba recebe os
+  // valores já calculados pelo app, prontos para o `.ods` exportado.
+  let rows: CellValue[][]
+  let inputOption: ValueInputOption
+
+  if (isModoLocal()) {
+    rows = buildConsolidadoRowsEstaticas(consolidado)
+    inputOption = 'RAW'
+  } else {
+    const locale = await getSpreadsheetLocale(context.accessToken, context.spreadsheetId)
+    const separator = formulaSeparatorForLocale(locale)
+    rows = buildConsolidadoRows({ posicoes, precosAtuais, separator })
+    inputOption = 'USER_ENTERED'
+  }
 
   const range = consolidadoDataRange()
   await clearValues(context.accessToken, context.spreadsheetId, range)
@@ -63,7 +79,7 @@ export async function writeConsolidado(
       context.spreadsheetId,
       `${range}${rows.length + 1}`,
       rows,
-      'USER_ENTERED',
+      inputOption,
     )
   }
 

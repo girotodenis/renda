@@ -1,5 +1,6 @@
-import { ExternalLink, Files, LayoutDashboard, Loader2, RefreshCw, Save } from 'lucide-react'
+import { ExternalLink, Files, HardDrive, LayoutDashboard, Loader2, RefreshCw, Save } from 'lucide-react'
 import { lazy, Suspense, useCallback, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '@/presentation/app/providers/authContext'
 import { Alert } from '@/presentation/components/Alert'
 import { ErrorBoundary } from '@/presentation/components/ErrorBoundary'
@@ -62,7 +63,7 @@ export function DashboardPage() {
 }
 
 function DashboardContent() {
-  const { workspace } = useAuth()
+  const { workspace, isModoLocal } = useAuth()
   const {
     data,
     isLoading,
@@ -158,23 +159,35 @@ function DashboardContent() {
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <a
-            href={sheetUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100"
-          >
-            <ExternalLink className="h-4 w-4" aria-hidden />
-            Abrir no Google Sheets
-          </a>
-          <button
-            type="button"
-            onClick={() => setTrocarPlanilhaAberto(true)}
-            className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100"
-          >
-            <Files className="h-4 w-4" aria-hidden />
-            Trocar planilha
-          </button>
+          {isModoLocal ? null : (
+            <a
+              href={sheetUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100"
+            >
+              <ExternalLink className="h-4 w-4" aria-hidden />
+              Abrir no Google Sheets
+            </a>
+          )}
+          {isModoLocal ? (
+            <Link
+              to="/configuracoes"
+              className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100"
+            >
+              <HardDrive className="h-4 w-4" aria-hidden />
+              Exportar / importar .ods
+            </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setTrocarPlanilhaAberto(true)}
+              className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100"
+            >
+              <Files className="h-4 w-4" aria-hidden />
+              Trocar planilha
+            </button>
+          )}
           <button
             type="button"
             onClick={() => void refresh()}

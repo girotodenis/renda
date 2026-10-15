@@ -1,7 +1,9 @@
 import { usaGoogFinance } from '@/domain/categoria'
 import type { PosicaoConsolidada, PrecosAtuais } from '@/domain/consolidado'
+import type { Consolidado } from '@/domain/entities'
 import { fromCentavos } from '@/domain/money'
 import type { CellValue } from '@/infrastructure/sheets/sheetCells'
+import { consolidadoCodec } from '@/infrastructure/sheets/sheetCodecs'
 import { SHEET_HEADERS } from '@/domain/sheetsSchema'
 
 /**
@@ -97,6 +99,27 @@ export function buildConsolidadoRows(input: ConsolidadoSheetInput): CellValue[][
     ]
 
     // Garante que nenhuma coluna seja adicionada/removida sem atualizar o schema.
+    if (cells.length !== CONSOLIDADO_COLUMN_COUNT) {
+      throw new Error('Número de colunas do Consolidado divergente do esquema.')
+    }
+
+    return cells
+  })
+}
+
+/**
+ * Linhas da aba `Consolidado` com **valores estáticos** (sem fórmulas).
+ *
+ * Usado pelo modo sem Google: como não há superfície de cálculo, a aba recebe o
+ * resultado já calculado pelo app (`aplicarPrecosAtuais`). Reutiliza o codec da
+ * aba para não duplicar a conversão de centavos/colunas.
+ */
+export function buildConsolidadoRowsEstaticas(
+  consolidado: readonly Consolidado[],
+): CellValue[][] {
+  return consolidado.map((linha) => {
+    const cells = consolidadoCodec.toRow(linha)
+
     if (cells.length !== CONSOLIDADO_COLUMN_COUNT) {
       throw new Error('Número de colunas do Consolidado divergente do esquema.')
     }

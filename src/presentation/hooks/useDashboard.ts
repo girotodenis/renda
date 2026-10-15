@@ -5,6 +5,7 @@ import type { DashboardData } from '@/application/dashboard'
 import { persistirESincronizarCotacoesBrapi } from '@/application/brapi'
 import { jaTemSnapshotDeHoje, registrarSnapshot, upsertHistorico } from '@/application/historico'
 import type { RepositoryContext } from '@/infrastructure/repositories'
+import { isModoLocal } from '@/infrastructure/modoArmazenamento'
 import { describeSheetsError } from '@/infrastructure/sheets/gateway'
 import { useOnlineStatus } from '@/presentation/hooks/useOnlineStatus'
 
@@ -92,9 +93,10 @@ export function useDashboard(): UseDashboardResult {
           setError('Configure uma planilha para visualizar o dashboard.')
           return
         }
-        // Sem cache local não há o que exibir offline (RNF08).
+        // Sem cache local não há o que exibir offline (RNF08). No modo local a
+        // origem é o próprio navegador: "offline" não impede a leitura.
         const cache = lerDashboardDoCache(workspace.spreadsheetId)
-        if (!online) {
+        if (!online && !isModoLocal()) {
           if (cache) {
             setData(cache)
             setIsOffline(true)

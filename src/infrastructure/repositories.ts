@@ -21,7 +21,7 @@ import {
   columnLetter,
   getValues,
   updateValues,
-} from '@/infrastructure/sheets/gateway'
+} from '@/infrastructure/sheets/gatewayRouter'
 import type { Configuracao, Consolidado, MetaRebalanceamento, Operacao, Provento, Snapshot, Valuation } from '@/domain/entities'
 
 /**
