@@ -123,6 +123,16 @@ export function ensureRequiredSheets(accessToken: string, spreadsheetId: string)
   return google.ensureRequiredSheets(accessToken, spreadsheetId)
 }
 
+/**
+ * Garante os cabeçalhos do schema nas abas já existentes (migração de colunas
+ * novas em planilhas antigas). No modo local apenas completa a matriz do
+ * IndexedDB, sem rede.
+ */
+export function ensureSheetHeaders(accessToken: string, spreadsheetId: string): Promise<number> {
+  if (isModoLocal()) return local.localEnsureSheetHeaders()
+  return google.ensureSheetHeaders(accessToken, spreadsheetId)
+}
+
 /** Cria o workspace inicial da origem ativa (7 abas + cabeçalhos, RF02). */
 export function criarWorkspace(
   accessToken: string,

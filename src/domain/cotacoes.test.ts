@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  calcularVariacaoDiaPercent,
   precosDeCotacoes,
   precosManuaisDeOperacoes,
   precosPersistidosDeOperacoes,
@@ -111,6 +112,61 @@ describe('precoMercadoValido', () => {
     expect(precoMercadoValido(2500, CategoriaAtivo.Acao)).toBe(true)
     expect(precoMercadoValido(11, CategoriaAtivo.TesouroDireto)).toBe(true)
     expect(precoMercadoValido(null, CategoriaAtivo.Acao)).toBe(false)
+  })
+})
+
+describe('calcularVariacaoDiaPercent', () => {
+  it('calcula a variação entre o preço atual e a abertura', () => {
+    expect(calcularVariacaoDiaPercent(1200, 1000)).toBe(20)
+    expect(calcularVariacaoDiaPercent(900, 1000)).toBe(-10)
+    expect(calcularVariacaoDiaPercent(1000, 1000)).toBe(0)
+  })
+
+  it('retorna null quando não há abertura válida (evita divisão por zero)', () => {
+    expect(calcularVariacaoDiaPercent(1200, null)).toBeNull()
+    expect(calcularVariacaoDiaPercent(1200, 0)).toBeNull()
+    expect(calcularVariacaoDiaPercent(null, 1000)).toBeNull()
+  })
+})
+
+describe('resolverCotacao — variação do dia', () => {
+  it('usa a abertura do GOOGLEFINANCE no mesmo par do preço atual', () => {
+    const cotacao = resolverCotacao({
+      ticker: 'PETR4',
+      categoria: CategoriaAtivo.Acao,
+      ...base,
+      precoMercado: 1200,
+      precoAbertura: 1000,
+    })
+    expect(cotacao).toMatchObject({
+      precoAtual: 1200,
+      precoAbertura: 1000,
+      variacaoDiaPercent: 20,
+      fonte: 'googlefinance',
+    })
+  })
+
+  it('não calcula variação sem abertura (ou quando cai na Brapi)', () => {
+    const semAbertura = resolverCotacao({
+      ticker: 'PETR4',
+      categoria: CategoriaAtivo.Acao,
+      ...base,
+      precoMercado: 1200,
+    })
+    expect(semAbertura.precoAbertura).toBeNull()
+    expect(semAbertura.variacaoDiaPercent).toBeNull()
+
+    const brapi = resolverCotacao({
+      ticker: 'PETR4',
+      categoria: CategoriaAtivo.Acao,
+      ...base,
+      precoMercado: null,
+      precoBrapi: 1200,
+      precoAbertura: 1000,
+    })
+    expect(brapi.fonte).toBe('brapi')
+    expect(brapi.precoAbertura).toBeNull()
+    expect(brapi.variacaoDiaPercent).toBeNull()
   })
 })
 

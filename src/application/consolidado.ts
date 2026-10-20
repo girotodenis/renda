@@ -6,7 +6,7 @@ import { SHEET_HEADERS } from '@/domain/sheetsSchema'
 import { consolidadoRepo, operacoesRepo } from '@/infrastructure/repositories'
 import type { RepositoryContext } from '@/infrastructure/repositories'
 import { isModoLocal } from '@/infrastructure/modoArmazenamento'
-import { clearValues, columnLetter, getSpreadsheetLocale, updateValues } from '@/infrastructure/sheets/gatewayRouter'
+import { clearValues, columnLetter, ensureSheetHeaders, getSpreadsheetLocale, updateValues } from '@/infrastructure/sheets/gatewayRouter'
 import type { ValueInputOption } from '@/infrastructure/sheets/gatewayRouter'
 import type { CellValue } from '@/infrastructure/sheets/sheetCells'
 import type { Consolidado, Operacao } from '@/domain/entities'
@@ -25,6 +25,32 @@ import type { Consolidado, Operacao } from '@/domain/entities'
  */
 
 const CONSOLIDADO_SHEET = 'Consolidado' as const
+
+/**
+ * Planilhas cujo cabeçalho já foi verificado nesta sessão. Evita um `batchGet`
+ * de cabeçalhos a cada sincronização; se a verificação falhar (rede/quota), a
+ * planilha é removida do conjunto para tentar de novo no próximo ciclo.
+ */
+const planilhasComCabecalhosVerificados = new Set<string>()
+
+/**
+ * Garante as colunas novas do `Consolidado` (`Preço Abertura` e
+ * `Variação Dia (%)`) em planilhas criadas antes desta versão.
+ *
+ * Retorna `true` quando o cabeçalho foi estendido — nesse caso a aba precisa
+ * ser reescrita para que as fórmulas das novas colunas sejam preenchidas.
+ * Best-effort: falhas de rede/quota não bloqueiam a sincronização.
+ */
+export async function garantirColunasConsolidado(context: RepositoryContext): Promise<boolean> {
+  if (isModoLocal() || planilhasComCabecalhosVerificados.has(context.spreadsheetId)) return false
+  planilhasComCabecalhosVerificados.add(context.spreadsheetId)
+  try {
+    return (await ensureSheetHeaders(context.accessToken, context.spreadsheetId)) > 0
+  } catch {
+    planilhasComCabecalhosVerificados.delete(context.spreadsheetId)
+    return false
+  }
+}
 
 export interface SyncConsolidadoOptions {
   /** Ignora o cache e relê as operações da API (refresh explícito). */
@@ -51,6 +77,10 @@ export async function writeConsolidado(
   operacoes: readonly Operacao[],
   precosAtuais: PrecosAtuais = new Map(),
 ): Promise<Consolidado[]> {
+  // Planilhas antigas não têm as colunas de abertura/variação: garante o
+  // cabeçalho antes de reescrever a região de dados (idempotente).
+  await garantirColunasConsolidado(context)
+
   const posicoes = calcularPosicoes(operacoes)
   const consolidado = aplicarPrecosAtuais(posicoes, precosAtuais)
 

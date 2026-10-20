@@ -71,17 +71,39 @@ export function clearLocalSheets(): string[] {
 }
 
 /**
- * Cria as abas ausentes com a linha de cabeçalho do schema (idempotente).
- * Devolve quantas abas foram criadas.
+ * Cria as abas ausentes com a linha de cabeçalho do schema e completa os
+ * cabeçalhos que faltam em abas já existentes (migração de colunas novas).
+ * Devolve quantas abas foram criadas ou atualizadas.
  */
 export function ensureLocalSheetsWithHeaders(): number {
-  let created = 0
+  let atualizadas = 0
   for (const name of SHEET_NAMES) {
-    if (readLocalSheet(name).length > 0) continue
-    writeLocalSheet(name, [[...SHEET_HEADERS[name]]])
-    created += 1
+    const headers = SHEET_HEADERS[name]
+    const rows = readLocalSheet(name)
+
+    if (rows.length === 0) {
+      writeLocalSheet(name, [[...headers]])
+      atualizadas += 1
+      continue
+    }
+
+    const atual = rows[0] ?? []
+    let ultimoPreenchido = -1
+    for (let column = 0; column < atual.length; column += 1) {
+      if (!isEmptyCell(atual[column])) ultimoPreenchido = column
+    }
+    if (ultimoPreenchido + 1 >= headers.length) continue
+
+    const next = copyMatrix(rows)
+    const cabecalho = next[0] ?? []
+    for (let column = ultimoPreenchido + 1; column < headers.length; column += 1) {
+      cabecalho[column] = headers[column]
+    }
+    next[0] = cabecalho
+    writeLocalSheet(name, next)
+    atualizadas += 1
   }
-  return created
+  return atualizadas
 }
 
 /** Recorta o intervalo pedido da matriz (linhas e colunas, sem padding). */

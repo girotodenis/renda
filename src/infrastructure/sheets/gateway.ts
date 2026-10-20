@@ -1,4 +1,5 @@
 import type { CellValue } from '@/infrastructure/sheets/sheetCells'
+import { cellToText } from '@/infrastructure/sheets/sheetCells'
 import { SHEET_HEADERS, SHEET_NAMES } from '@/domain/sheetsSchema'
 import type { SheetName } from '@/domain/sheetsSchema'
 import type { SheetIdMap, SpreadsheetWorkspace } from '@/domain/workspace'
@@ -381,6 +382,53 @@ async function formatHeaderRows(
     method: 'POST',
     body: JSON.stringify({ requests }),
   })
+}
+
+/**
+ * Garante os cabeçalhos do schema nas abas **já existentes** (planilhas criadas
+ * antes de uma coluna nova entrar no schema).
+ *
+ * Estratégia conservadora: escreve apenas o **sufixo** de cabeçalhos que ainda
+ * não existe (a partir da última célula preenchida da linha 1), preservando
+ * nomes editados pelo usuário e eventuais colunas próprias no fim da aba.
+ * Idempotente: quando tudo já está no lugar, não faz nenhuma escrita.
+ *
+ * Retorna quantas abas tiveram o cabeçalho estendido.
+ */
+export async function ensureSheetHeaders(
+  accessToken: string,
+  spreadsheetId: string,
+): Promise<number> {
+  const ranges = SHEET_NAMES.map(
+    (name) => `'${name}'!A1:${columnLetter(SHEET_HEADERS[name].length)}1`,
+  )
+  const valueRanges = await batchGetValues(accessToken, spreadsheetId, ranges)
+  const data: ValueRange[] = []
+
+  valueRanges.forEach((valueRange, index) => {
+    const name = SHEET_NAMES[index]
+    if (!name) return
+
+    const expected = SHEET_HEADERS[name]
+    const atual = (valueRange.values?.[0] ?? []).map((cell) => cellToText(cell))
+
+    let ultimoPreenchido = -1
+    for (let column = 0; column < atual.length; column += 1) {
+      if (atual[column].length > 0) ultimoPreenchido = column
+    }
+
+    if (ultimoPreenchido + 1 >= expected.length) return
+
+    const inicio = ultimoPreenchido + 1
+    data.push({
+      range: `'${name}'!${columnLetter(inicio + 1)}1:${columnLetter(expected.length)}1`,
+      majorDimension: 'ROWS',
+      values: [expected.slice(inicio)],
+    })
+  })
+
+  await batchUpdateValues(accessToken, spreadsheetId, data, 'RAW')
+  return data.length
 }
 
 /**

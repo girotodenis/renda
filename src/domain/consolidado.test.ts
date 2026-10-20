@@ -5,7 +5,7 @@ import {
   calcularPosicoes,
   calcularResumo,
 } from '@/domain/consolidado'
-import { buildConsolidadoRows, buildGoogFinanceFormula, formulaSeparatorForLocale } from '@/infrastructure/sheets/sheetFormulas'
+import { buildConsolidadoRows, buildGoogFinanceFormula, buildGoogFinanceOpenFormula, buildVariacaoDiaFormula, formulaSeparatorForLocale } from '@/infrastructure/sheets/sheetFormulas'
 import { CategoriaAtivo, OperacaoTipo } from '@/domain/entities'
 import type { Operacao } from '@/domain/entities'
 
@@ -250,7 +250,16 @@ describe('sheetFormulas', () => {
     expect(buildGoogFinanceFormula('$A2', ',')).toBe('=GOOGLEFINANCE("BVMF:"&$A2,"price")')
   })
 
-  it('gera as 10 colunas, usando fórmula de cotação para Ação e valor para Renda Fixa', () => {
+  it('monta a fórmula de abertura e da variação do dia', () => {
+    expect(buildGoogFinanceOpenFormula('$A2', ';')).toBe(
+      '=GOOGLEFINANCE("BVMF:"&$A2;"priceopen")',
+    )
+    expect(buildVariacaoDiaFormula(2, ';')).toBe(
+      '=IF(OR($K2<=0;$E2<=0);"";($E2-$K2)/$K2*100)',
+    )
+  })
+
+  it('gera as 12 colunas, usando fórmula de cotação/abertura para Ação e valor para Renda Fixa', () => {
     const posicoes = calcularPosicoes([
       operacao({ ticker: 'PETR4', quantidade: 100, precoUnitario: 1000, tipo: OperacaoTipo.Compra }),
       operacao({
@@ -269,19 +278,24 @@ describe('sheetFormulas', () => {
     const porTicker = new Map(rows.map((row) => [String(row[0]), row]))
     const petr4 = porTicker.get('PETR4')
     const cdb = porTicker.get('CDB2029')
-    expect(petr4).toHaveLength(10)
-    expect(cdb).toHaveLength(10)
+    expect(petr4).toHaveLength(12)
+    expect(cdb).toHaveLength(12)
 
-    // Ação: coluna E é a fórmula do GOOGLEFINANCE.
+    // Ação: coluna E é a fórmula do GOOGLEFINANCE; K é a abertura do dia.
     expect(petr4?.[4]).toBe('=GOOGLEFINANCE("BVMF:"&$A3;"price")')
-    // Renda Fixa: coluna E é um valor (sem GOOGLEFINANCE).
+    expect(petr4?.[10]).toBe('=GOOGLEFINANCE("BVMF:"&$A3;"priceopen")')
+    // Renda Fixa: colunas E/K são valores (sem GOOGLEFINANCE) e L fica vazia.
     expect(cdb?.[4]).toBe(100)
+    expect(cdb?.[10]).toBe('')
+    expect(cdb?.[11]).toBe('')
     // Colunas calculadas F–J são fórmulas que referenciam a própria linha.
     expect(petr4?.[5]).toBe('=$C3*$D3')
     expect(petr4?.[6]).toBe('=$C3*$E3')
     expect(petr4?.[7]).toBe('=$G3-$F3')
     expect(String(petr4?.[8])).toContain('$H3/$F3*100')
     expect(String(petr4?.[9])).toContain('SUM($G$2:$G$3)')
+    // L é a variação do dia calculada a partir de E (atual) e K (abertura).
+    expect(petr4?.[11]).toBe('=IF(OR($K3<=0;$E3<=0);"";($E3-$K3)/$K3*100)')
   })
 
   it('grava valor estático (não fórmula) quando há cotação persistida para Ação (fallback Brapi)', () => {
@@ -296,5 +310,8 @@ describe('sheetFormulas', () => {
     })
     expect(rows).toHaveLength(1)
     expect(rows[0]?.[4]).toBe(25)
+    // Sem abertura (preço persistido pela Brapi), as colunas K/L ficam vazias.
+    expect(rows[0]?.[10]).toBe('')
+    expect(rows[0]?.[11]).toBe('')
   })
 })

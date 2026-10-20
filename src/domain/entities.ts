@@ -125,6 +125,13 @@ export interface Consolidado {
   precoMedio: number
   /** Preço atual (cotação) em **centavos**. */
   precoAtual: number
+  /**
+   * Preço de abertura do dia em **centavos** (`null`/ausente quando a
+   * categoria não tem abertura de mercado ou a cotação não está disponível).
+   */
+  precoAbertura?: number | null
+  /** Variação do dia (%) entre o preço atual e a abertura. */
+  variacaoDiaPercent?: number | null
   /** Total investido em **centavos**. */
   totalInvestido: number
   /** Valor atual em **centavos**. */

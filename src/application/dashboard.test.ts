@@ -30,6 +30,11 @@ vi.mock('@/application/configuracoes', () => ({
   carregarConfiguracoes: mocks.carregarConfiguracoes,
 }))
 
+vi.mock('@/application/consolidado', () => ({
+  garantirColunasConsolidado: vi.fn().mockResolvedValue(false),
+  syncConsolidado: vi.fn(),
+}))
+
 vi.mock('@/infrastructure/repositories', () => ({
   consolidadoRepo: { readCache: mocks.consolidadoReadCache },
   historicoRepo: { readCache: mocks.historicoReadCache },

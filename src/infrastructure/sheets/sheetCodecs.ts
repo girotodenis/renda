@@ -141,6 +141,8 @@ export const consolidadoCodec: SheetCodec<Consolidado> = {
     centavosToCell(linha.lucroPrejuizo),
     linha.lucroPrejuizoPercent,
     linha.percentualCarteira,
+    optionalCentavosToCell(linha.precoAbertura ?? null),
+    linha.variacaoDiaPercent ?? '',
   ],
   fromRow: (row) => ({
     ticker: cellToText(at(row, 0)),
@@ -148,6 +150,8 @@ export const consolidadoCodec: SheetCodec<Consolidado> = {
     quantidadeAtual: cellToNumber(at(row, 2)),
     precoMedio: cellToCentavos(at(row, 3)),
     precoAtual: cellToCentavos(at(row, 4)),
+    precoAbertura: cellToOptionalCentavos(at(row, 10)),
+    variacaoDiaPercent: cellToOptionalNumber(at(row, 11)),
     totalInvestido: cellToCentavos(at(row, 5)),
     valorAtual: cellToCentavos(at(row, 6)),
     lucroPrejuizo: cellToCentavos(at(row, 7)),

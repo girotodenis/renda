@@ -17,6 +17,7 @@ import {
   valuationRepo,
 } from '@/infrastructure/repositories'
 import type { RepositoryContext } from '@/infrastructure/repositories'
+import { garantirColunasConsolidado, syncConsolidado } from '@/application/consolidado'
 import { registrarSnapshot } from '@/application/historico'
 import { buscarCotacoesBrapi, lerCotacaoCache as lerCotacaoCacheBrapi } from '@/infrastructure/brapi'
 import { carregarConfiguracoes } from '@/application/configuracoes'
@@ -89,8 +90,27 @@ function precosDoConsolidado(
   return precos
 }
 
+/**
+ * Extrai `ticker → preço de abertura do dia` (em centavos) da aba
+ * `Consolidado`. Linhas sem abertura (planilhas antigas, Renda Fixa/Tesouro)
+ * ficam de fora; o resolvedor devolve variação `null` para elas.
+ */
+function aberturasDoConsolidado(linhas: readonly Consolidado[]): Map<string, number> {
+  const aberturas = new Map<string, number>()
+  for (const linha of linhas) {
+    const ticker = linha.ticker.trim()
+    if (ticker.length === 0) continue
+    const abertura = linha.precoAbertura ?? null
+    if (precoMercadoValido(abertura, linha.categoria)) aberturas.set(ticker, abertura)
+  }
+  return aberturas
+}
+
 /** Cotações resolvidas a partir das linhas já materializadas do `Consolidado`. */
-function cotacoesDoConsolidado(linhas: readonly Consolidado[]): Map<string, CotacaoResolvida> {
+function cotacoesDoConsolidado(
+  linhas: readonly Consolidado[],
+  modoLocal = false,
+): Map<string, CotacaoResolvida> {
   const entradas: EntradaCotacao[] = linhas
     .filter((linha) => linha.ticker.trim().length > 0)
     .map((linha) => ({
@@ -100,6 +120,7 @@ function cotacoesDoConsolidado(linhas: readonly Consolidado[]): Map<string, Cota
       precoMercado: precoMercadoValido(linha.precoAtual, linha.categoria)
         ? linha.precoAtual
         : null,
+      precoAbertura: modoLocal ? null : (linha.precoAbertura ?? null),
       precoManual: null,
     }))
   return resolverCotacoes(entradas)
@@ -109,6 +130,7 @@ function cotacoesDoConsolidado(linhas: readonly Consolidado[]): Map<string, Cota
 function montarEntradas(
   posicoes: readonly PosicaoConsolidada[],
   precoMercado: ReadonlyMap<string, number>,
+  precoAberturaMercado: ReadonlyMap<string, number>,
   precoManual: ReadonlyMap<string, number>,
   precoBrapi: ReadonlyMap<string, number>,
 ): EntradaCotacao[] {
@@ -117,6 +139,7 @@ function montarEntradas(
     categoria: posicao.categoria,
     precoMedio: posicao.precoMedio,
     precoMercado: precoMercado.get(posicao.ticker) ?? null,
+    precoAbertura: precoAberturaMercado.get(posicao.ticker) ?? null,
     precoManual: precoManual.get(posicao.ticker) ?? null,
     precoBrapi: precoBrapi.get(posicao.ticker) ?? null,
   }))
@@ -160,13 +183,14 @@ function montarDashboard(consulta: MontarConsulta): DashboardData {
       ...base,
       consolidado,
       resumo: calcularResumo(consolidado),
-      cotacoes: cotacoesDoConsolidado(consolidado),
+      cotacoes: cotacoesDoConsolidado(consolidado, modoLocal),
     }
   }
 
   const posicoes = calcularPosicoes(operacoes)
   const precoConsolidado = precosDoConsolidado(linhasConsolidado, modoLocal)
   const precoMercado = modoLocal ? new Map<string, number>() : precoConsolidado
+  const precoAbertura = modoLocal ? new Map<string, number>() : aberturasDoConsolidado(linhasConsolidado)
   const precoManual = precosManuaisDeOperacoes(operacoes)
   const precoBrapi = new Map<string, number>()
   if (modoLocal) {
@@ -175,11 +199,32 @@ function montarDashboard(consulta: MontarConsulta): DashboardData {
   for (const [ticker, preco] of cotacoesBrapi) precoBrapi.set(ticker, preco)
 
   const cotacoes = resolverCotacoes(
-    montarEntradas(posicoes, precoMercado, precoManual, precoBrapi),
+    montarEntradas(posicoes, precoMercado, precoAbertura, precoManual, precoBrapi),
   )
   const consolidado = aplicarPrecosAtuais(posicoes, precosDeCotacoes(cotacoes))
 
   return { ...base, consolidado, resumo: calcularResumo(consolidado), cotacoes }
+}
+
+/**
+ * Migração idempotente da planilha (uma vez por planilha/sessão): garante as
+ * colunas `Preço Abertura` e `Variação Dia (%)` em planilhas criadas antes
+ * desta versão e recalcula o `Consolidado` para preencher as fórmulas.
+ *
+ * Best-effort: falhas de rede/quota não impedem a leitura do dashboard — a
+ * migração é tentada novamente no próximo carregamento.
+ */
+async function migrarColunasConsolidado(context: RepositoryContext): Promise<void> {
+  if (isModoLocal()) return
+  try {
+    const atualizado = await garantirColunasConsolidado(context)
+    if (!atualizado) return
+    await syncConsolidado(context)
+    await prefetchAllSheets(context)
+  } catch {
+    // A próxima abertura tenta de novo (garantirColunasConsolidado não marca
+    // a planilha como verificada quando a chamada falha).
+  }
 }
 
 /** Carrega consolidado, resumo, proventos, histórico e cotações (cache-first). */
@@ -188,6 +233,9 @@ export async function carregarDashboard(
   options: CarregarDashboardOptions = {},
 ): Promise<DashboardData> {
   const { spreadsheetId } = context
+
+  if (!options.offline) await migrarColunasConsolidado(context)
+
   const cacheCompleto = temCacheCompleto(spreadsheetId)
 
   if (!options.offline && (options.forceRefresh || !cacheCompleto)) {

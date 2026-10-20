@@ -1,5 +1,6 @@
 import { permiteMarcacaoManual, usaGoogFinance } from '@/domain/categoria'
 import type { CategoriaAtivo, Operacao } from '@/domain/entities'
+import { round2 } from '@/domain/money'
 
 /**
  * Resolução de **cotações** por ativo (RF10, RF19, RNF04).
@@ -27,6 +28,8 @@ export interface EntradaCotacao {
   precoMedio: number
   /** Preço de mercado em **centavos** (GOOGLEFINANCE ou último preço conhecido); `null` se ausente. */
   precoMercado: number | null
+  /** Preço de abertura do dia em **centavos**; `null` se ausente (mesma fonte de `precoMercado`). */
+  precoAbertura?: number | null
   /** Preço de mercado em **centavos** (Brapi); `null` se ausente (fallback do GOOGLEFINANCE). */
   precoBrapi?: number | null
   /** Marcação a mercado manual em **centavos** (`Valor Bruto Atual`); `null` se ausente. */
@@ -41,6 +44,10 @@ export interface CotacaoResolvida {
   categoria: CategoriaAtivo
   /** Preço atual usado nos cálculos, em **centavos**. */
   precoAtual: number
+  /** Preço de abertura do dia em **centavos**; `null` quando indisponível. */
+  precoAbertura: number | null
+  /** Variação do dia (%) entre `precoAtual` e `precoAbertura`; `null` quando indisponível. */
+  variacaoDiaPercent: number | null
   fonte: FonteCotacao
   status: StatusCotacao
   /** `true` quando não há cotação e o preço médio foi usado como fallback. */
@@ -51,6 +58,19 @@ export interface CotacaoResolvida {
 /** `true` para preços válidos e positivos. */
 function precoValido(preco: number | null | undefined): preco is number {
   return typeof preco === 'number' && Number.isFinite(preco) && preco > 0
+}
+
+/**
+ * Calcula a variação do dia (%) entre o preço atual e a abertura.
+ * Retorna `null` quando algum preço é inválido ou a abertura é zero — evitando
+ * divisão por zero e o falso preço (~R$ 0,11) de ticker não encontrado.
+ */
+export function calcularVariacaoDiaPercent(
+  precoAtual: number | null | undefined,
+  precoAbertura: number | null | undefined,
+): number | null {
+  if (!precoValido(precoAtual) || !precoValido(precoAbertura)) return null
+  return round2(((precoAtual - precoAbertura) / precoAbertura) * 100)
 }
 
 /**
@@ -83,15 +103,26 @@ export const STATUS_COTACAO_LABELS: Record<StatusCotacao, string> = {
 
 /** Resolve a cotação de um ativo conforme a categoria e os preços disponíveis. */
 export function resolverCotacao(entrada: EntradaCotacao): CotacaoResolvida {
-  const { ticker, categoria, precoMedio, precoManual, precoBrapi = null, atualizadoEm = null } = entrada
+  const {
+    ticker,
+    categoria,
+    precoMedio,
+    precoManual,
+    precoBrapi = null,
+    precoAbertura = null,
+    atualizadoEm = null,
+  } = entrada
   const mercado = entrada.precoMercado
 
   if (usaGoogFinance(categoria)) {
     if (precoMercadoValido(mercado, categoria)) {
+      const abertura = precoMercadoValido(precoAbertura, categoria) ? precoAbertura : null
       return {
         ticker,
         categoria,
         precoAtual: mercado,
+        precoAbertura: abertura,
+        variacaoDiaPercent: calcularVariacaoDiaPercent(mercado, abertura),
         fonte: 'googlefinance',
         status: 'disponivel',
         usandoFallback: false,
@@ -103,6 +134,8 @@ export function resolverCotacao(entrada: EntradaCotacao): CotacaoResolvida {
         ticker,
         categoria,
         precoAtual: precoBrapi,
+        precoAbertura: null,
+        variacaoDiaPercent: null,
         fonte: 'brapi',
         status: 'disponivel',
         usandoFallback: false,
@@ -118,6 +151,8 @@ export function resolverCotacao(entrada: EntradaCotacao): CotacaoResolvida {
         ticker,
         categoria,
         precoAtual: precoManual,
+        precoAbertura: null,
+        variacaoDiaPercent: null,
         fonte: 'manual',
         status: 'manual',
         usandoFallback: false,
@@ -129,6 +164,8 @@ export function resolverCotacao(entrada: EntradaCotacao): CotacaoResolvida {
         ticker,
         categoria,
         precoAtual: mercado,
+        precoAbertura: null,
+        variacaoDiaPercent: null,
         fonte: 'estimada',
         status: 'estimada',
         usandoFallback: false,
@@ -142,6 +179,8 @@ export function resolverCotacao(entrada: EntradaCotacao): CotacaoResolvida {
     ticker,
     categoria,
     precoAtual: precoMedio,
+    precoAbertura: null,
+    variacaoDiaPercent: null,
     fonte: 'manual',
     status: 'indisponivel',
     usandoFallback: true,

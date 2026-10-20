@@ -71,6 +71,14 @@ export async function localClearValues(range: string): Promise<void> {
 }
 
 /**
+ * Garante os cabeçalhos do schema nas abas locais já existentes (idempotente).
+ * Equivalente local de `ensureSheetHeaders` (Google).
+ */
+export async function localEnsureSheetHeaders(): Promise<number> {
+  return ensureLocalSheetsWithHeaders()
+}
+
+/**
  * Garante que todas as abas do schema existam no banco local (idempotente).
  * Devolve quantas abas foram criadas — mesmo contrato de
  * `ensureRequiredSheets` (Google).

@@ -51,6 +51,8 @@ export const SHEET_HEADERS: Record<SheetName, readonly string[]> = {
     'Lucro/Prejuízo (R$)',
     'Lucro/Prejuízo (%)',
     '% da Carteira',
+    'Preço Abertura',
+    'Variação Dia (%)',
   ],
   Metas_Rebalanceamento: [
     'Ticker',
