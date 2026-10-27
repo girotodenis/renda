@@ -18,6 +18,13 @@ function valuation(partial: Partial<Valuation> & { ticker: string }): Valuation 
     precoTeto: partial.precoTeto ?? null,
     margemSeguranca: partial.margemSeguranca ?? null,
     anotacoes: partial.anotacoes ?? '',
+    fclAtual: partial.fclAtual ?? null,
+    dividaLiquida: partial.dividaLiquida ?? null,
+    acoesMilhoes: partial.acoesMilhoes ?? null,
+    crescimentoAno: partial.crescimentoAno ?? null,
+    taxaDesconto: partial.taxaDesconto ?? null,
+    anosProjecao: partial.anosProjecao ?? null,
+    crescimentoPerpetuidade: partial.crescimentoPerpetuidade ?? null,
     ...partial,
   }
 }

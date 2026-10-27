@@ -16,7 +16,14 @@ export function valuationVazia(valuation: Valuation): boolean {
   return (
     valuation.precoTeto === null &&
     valuation.margemSeguranca === null &&
-    valuation.anotacoes.trim().length === 0
+    valuation.anotacoes.trim().length === 0 &&
+    valuation.fclAtual === null &&
+    valuation.dividaLiquida === null &&
+    valuation.acoesMilhoes === null &&
+    valuation.crescimentoAno === null &&
+    valuation.taxaDesconto === null &&
+    valuation.anosProjecao === null &&
+    valuation.crescimentoPerpetuidade === null
   )
 }
 

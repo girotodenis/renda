@@ -212,6 +212,13 @@ export const valuationCodec: SheetCodec<Valuation> = {
     optionalCentavosToCell(valuation.precoTeto),
     valuation.margemSeguranca ?? '',
     valuation.anotacoes,
+    optionalCentavosToCell(valuation.fclAtual),
+    optionalCentavosToCell(valuation.dividaLiquida),
+    valuation.acoesMilhoes ?? '',
+    valuation.crescimentoAno ?? '',
+    valuation.taxaDesconto ?? '',
+    valuation.anosProjecao ?? '',
+    valuation.crescimentoPerpetuidade ?? '',
   ],
   fromRow: (row) => ({
     ticker: cellToText(at(row, 0)),
@@ -219,6 +226,13 @@ export const valuationCodec: SheetCodec<Valuation> = {
     precoTeto: cellToOptionalCentavos(at(row, 2)),
     margemSeguranca: cellToOptionalNumber(at(row, 3)),
     anotacoes: cellToText(at(row, 4)),
+    fclAtual: cellToOptionalCentavos(at(row, 5)),
+    dividaLiquida: cellToOptionalCentavos(at(row, 6)),
+    acoesMilhoes: cellToOptionalNumber(at(row, 7)),
+    crescimentoAno: cellToOptionalNumber(at(row, 8)),
+    taxaDesconto: cellToOptionalNumber(at(row, 9)),
+    anosProjecao: cellToOptionalNumber(at(row, 10)),
+    crescimentoPerpetuidade: cellToOptionalNumber(at(row, 11)),
   }),
 }
 

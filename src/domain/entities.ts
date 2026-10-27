@@ -181,6 +181,24 @@ export interface Valuation {
   margemSeguranca: number | null
   /** Anotações livres da tese de investimento. */
   anotacoes: string
+  /**
+   * Premissas do Fluxo de Caixa Descontado (FCD) — todas opcionais.
+   * Dinheiro em **centavos**; taxas em pontos percentuais (ex.: `12` = 12%).
+   */
+  /** Fluxo de caixa livre atual (últimos 12 meses), em centavos. */
+  fclAtual: number | null
+  /** Dívida líquida (dívida − caixa), em centavos; negativa = caixa líquido. */
+  dividaLiquida: number | null
+  /** Quantidade de ações em circulação, em milhões. */
+  acoesMilhoes: number | null
+  /** Crescimento anual do FCL no período de projeção (%). */
+  crescimentoAno: number | null
+  /** Taxa de desconto anual — WACC (%). */
+  taxaDesconto: number | null
+  /** Período de projeção em anos. */
+  anosProjecao: number | null
+  /** Crescimento anual na perpetuidade (%). */
+  crescimentoPerpetuidade: number | null
 }
 
 /** Snapshot de patrimônio — aba `Historico` (RF18). */

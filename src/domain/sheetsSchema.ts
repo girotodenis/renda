@@ -73,6 +73,13 @@ export const SHEET_HEADERS: Record<SheetName, readonly string[]> = {
     'Preço Teto',
     'Margem de Segurança (%)',
     'Anotações da Análise',
+    'FCL Atual (R$)',
+    'Dívida Líquida (R$)',
+    'Ações (milhões)',
+    'Crescimento FCL (% a.a.)',
+    'Taxa de Desconto (% a.a.)',
+    'Anos de Projeção',
+    'Crescimento Perpetuidade (% a.a.)',
   ],
   Configuracoes: ['Chave', 'Valor'],
 }
