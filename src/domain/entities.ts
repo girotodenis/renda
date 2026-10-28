@@ -199,6 +199,14 @@ export interface Valuation {
   anosProjecao: number | null
   /** Crescimento anual na perpetuidade (%). */
   crescimentoPerpetuidade: number | null
+  /**
+   * Premissas do Preço Justo de Graham (Graham Number) — opcionais.
+   * Dinheiro em **centavos**.
+   */
+  /** Lucro por ação (LPA), em centavos. */
+  lpa: number | null
+  /** Valor patrimonial por ação (VPA), em centavos. */
+  vpa: number | null
 }
 
 /** Snapshot de patrimônio — aba `Historico` (RF18). */

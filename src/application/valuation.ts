@@ -23,7 +23,9 @@ export function valuationVazia(valuation: Valuation): boolean {
     valuation.crescimentoAno === null &&
     valuation.taxaDesconto === null &&
     valuation.anosProjecao === null &&
-    valuation.crescimentoPerpetuidade === null
+    valuation.crescimentoPerpetuidade === null &&
+    valuation.lpa === null &&
+    valuation.vpa === null
   )
 }
 

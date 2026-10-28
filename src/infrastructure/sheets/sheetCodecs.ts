@@ -219,6 +219,8 @@ export const valuationCodec: SheetCodec<Valuation> = {
     valuation.taxaDesconto ?? '',
     valuation.anosProjecao ?? '',
     valuation.crescimentoPerpetuidade ?? '',
+    optionalCentavosToCell(valuation.lpa),
+    optionalCentavosToCell(valuation.vpa),
   ],
   fromRow: (row) => ({
     ticker: cellToText(at(row, 0)),
@@ -233,6 +235,8 @@ export const valuationCodec: SheetCodec<Valuation> = {
     taxaDesconto: cellToOptionalNumber(at(row, 9)),
     anosProjecao: cellToOptionalNumber(at(row, 10)),
     crescimentoPerpetuidade: cellToOptionalNumber(at(row, 11)),
+    lpa: cellToOptionalCentavos(at(row, 12)),
+    vpa: cellToOptionalCentavos(at(row, 13)),
   }),
 }
 

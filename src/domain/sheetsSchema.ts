@@ -80,6 +80,8 @@ export const SHEET_HEADERS: Record<SheetName, readonly string[]> = {
     'Taxa de Desconto (% a.a.)',
     'Anos de Projeção',
     'Crescimento Perpetuidade (% a.a.)',
+    'LPA (R$)',
+    'VPA (R$)',
   ],
   Configuracoes: ['Chave', 'Valor'],
 }

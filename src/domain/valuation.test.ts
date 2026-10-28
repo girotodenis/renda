@@ -25,6 +25,8 @@ function valuation(partial: Partial<Valuation> & { ticker: string }): Valuation 
     taxaDesconto: partial.taxaDesconto ?? null,
     anosProjecao: partial.anosProjecao ?? null,
     crescimentoPerpetuidade: partial.crescimentoPerpetuidade ?? null,
+    lpa: partial.lpa ?? null,
+    vpa: partial.vpa ?? null,
     ...partial,
   }
 }
