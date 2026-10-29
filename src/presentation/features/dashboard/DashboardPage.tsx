@@ -19,6 +19,7 @@ import { toISO } from '@/domain/dates'
 import { calcularDetalheAtivo } from '@/domain/detalheAtivo'
 import { tickersComOportunidade } from '@/domain/valuation'
 import type { CategoriaAtivo } from '@/domain/entities'
+import { isJsonBackend } from '@/infrastructure/googleConfig'
 
 /**
  * Gráficos carregados sob demanda (lazy) para não inflar o bundle inicial com
@@ -140,7 +141,9 @@ function DashboardContent() {
 
   const sheetUrl = workspace
     ? (workspace.spreadsheetUrl ??
-      `https://docs.google.com/spreadsheets/d/${workspace.spreadsheetId}/edit`)
+      (isJsonBackend()
+        ? `https://drive.google.com/file/d/${workspace.spreadsheetId}/view`
+        : `https://docs.google.com/spreadsheets/d/${workspace.spreadsheetId}/edit`))
     : '#'
 
   return (
@@ -167,7 +170,7 @@ function DashboardContent() {
               className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100"
             >
               <ExternalLink className="h-4 w-4" aria-hidden />
-              Abrir no Google Sheets
+              {isJsonBackend() ? 'Abrir no Google Drive' : 'Abrir no Google Sheets'}
             </a>
           )}
           {isModoLocal ? (
@@ -185,7 +188,7 @@ function DashboardContent() {
               className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100"
             >
               <Files className="h-4 w-4" aria-hidden />
-              Trocar planilha
+              Trocar banco
             </button>
           )}
           <button

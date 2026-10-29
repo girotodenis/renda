@@ -1,6 +1,6 @@
 # Plano de implementação — Remover Google Sheets e usar banco JSON no Google Drive
 
-> Status: proposta de arquitetura (ainda não implementada).
+> Status: **implementado** (fases 0–5 e 7 da seção 8; ver "Estado atual").
 > Objetivo: substituir a planilha do Google Sheets por **um único arquivo JSON
 > compactado (gzip) no Google Drive**, usando apenas o escopo **`drive.file`**
 > (não sensível). Com isso o app **deixa de precisar de verificação OAuth e do
@@ -38,18 +38,32 @@ eliminando a verificação.
   `ods/zipReader.ts`; `ods/binary.ts` tem `toArrayBuffer`.
 - `drive.ts` já tem `ensureAppFolder`/`moveFileToFolder` sob `drive.file`.
 
-**O que NÃO existe ainda (nada deste plano foi implementado):**
+**Estado atual (implementado nesta rodada):**
 
-- `src/infrastructure/compression.ts`
-- `src/infrastructure/driveFile/{format,api,gateway}.ts`
-- O flag `VITE_GOOGLE_BACKEND` e as alterações em `gatewayRouter`/`AuthProvider`.
+- `compression.ts` (`gzip`/`gunzip`/`isGzip`, nativo com fallback) + testes.
+- `driveFile/format.ts` (codec `{ version, sheets }` + normalização) + testes.
+- `driveFile/api.ts` (criar/ler/escrever/listar, timeout, `If-Match`) + testes.
+- `driveFile/gateway.ts` (mesma superfície do Sheets, cache por sessão, lote por
+  `executarEmLote`, etag + 412 com releitura/reaplicação) + testes.
+- Flag `VITE_GOOGLE_BACKEND` (`googleConfig.ts`, `vite-env.d.ts`,
+  `.env.example`) e roteamento em `sheets/gatewayRouter.ts`.
+- `sync.ts` executa o flush inteiro em `executarEmLote` e só limpa o outbox
+  depois que o lote é gravado (`sheets`/`local` seguem como pass-through).
+- `AuthProvider`/`authContext`/`WorkspaceSetup`/`DashboardPage`: fluxo
+  `criarBanco`/`abrirBanco`/`abrirBancoPorId`, abertura por listagem no backend
+  JSON, link do Drive e mensagens neutras. `diagnostics.ts` usa os contadores do
+  backend ativo.
+- Docs: `README.md`, `ARCHITECTURE.md` e `.env.example`.
 
-**Próximos passos (ordem):**
+**Pendências conhecidas:**
 
-1. Fase 0 — `compression.ts` + testes (autocontida).
-2. Fase 0.5 — esqueleto do flag `VITE_GOOGLE_BACKEND` (seção 4.1), padrão
-   `sheets` (não quebra nada).
-3. Fases 1–7 da seção 8.
+- Fase 6 (remoção de `sheets/gateway.ts` e do Picker) ficou **não aplicável**
+  enquanto os dois backends coexistirem: o backend `sheets` continua sendo o
+  padrão e depende de `sheets/gateway.ts`, `pickSpreadsheet` e
+  `findSpreadsheetsByName`. Isso pode ser removido quando `json` virar padrão.
+- Seção 6.2 (cotações sem `GOOGLEFINANCE`) continua como evolução futura.
+- O `etag` depende do header `ETag` estar exposto por CORS; quando ausente, a
+  escrita funciona sem `If-Match` (degrada a proteção contra concorrência).
 
 ---
 
@@ -193,7 +207,7 @@ Implementa a **mesma assinatura** de `sheets/gateway.ts`:
 | `src/presentation/features/dashboard/DashboardPage.tsx` | Trocar o link `docs.google.com/spreadsheets/d/...` por `drive.google.com/file/d/...` (ou remover). |
 | `src/infrastructure/drive.ts` | Manter `ensureAppFolder`/`moveFileToFolder`; **remover** `pickSpreadsheet`/`findSpreadsheetsByName` (Picker). |
 | `src/infrastructure/googleConfig.ts` + `.env.example` + README | Remover `VITE_GOOGLE_PICKER_API_KEY`/`PROJECT_NUMBER`; manter `VITE_GOOGLE_CLIENT_ID`. |
-| `src/infrastructure/sheets/gateway.ts` | Desativar/apagar ao final (após nenhuma referência restante). |
+| `src/infrastructure/sheets/gateway.ts` | Mantido: é o adaptador do backend `sheets` (padrão). Só apagar quando `json` virar padrão. |
 
 ---
 

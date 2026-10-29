@@ -2,14 +2,14 @@ import { createContext, useContext } from 'react'
 import type { ModoArmazenamento } from '@/domain/armazenamento'
 import type { AuthStatus, PlanilhaExistente, SpreadsheetWorkspace } from '@/domain/workspace'
 
-/** Opções de criação da planilha padrão. */
-export interface OpcoesCriarPlanilha {
-  /** Ignora a verificação de título duplicado e cria uma planilha nova. */
+/** Opções de criação do banco padrão. */
+export interface OpcoesCriarBanco {
+  /** Ignora a verificação de nome duplicado e cria um banco novo. */
   force?: boolean
 }
 
-/** Resultado de uma tentativa de criação da planilha padrão. */
-export type ResultadoCriacaoPlanilha =
+/** Resultado de uma tentativa de criação do banco padrão. */
+export type ResultadoCriacaoBanco =
   | { status: 'created' }
   | { status: 'duplicate'; existente: PlanilhaExistente }
   | { status: 'error' }
@@ -23,22 +23,27 @@ export interface AuthContextValue {
    */
   status: AuthStatus
   /**
-   * Origem de dados ativa: `google` (planilha do Google Sheets, com login) ou
-   * `local` (banco de dados do navegador, sem login e exportável para `.ods`).
+   * Origem de dados ativa: `google` (nuvem, com login — planilha do Sheets ou
+   * arquivo JSON no Drive, conforme `VITE_GOOGLE_BACKEND`) ou `local` (banco de
+   * dados do navegador, sem login e exportável para `.ods`).
    */
   modo: ModoArmazenamento
   /** Atalho para `modo === 'local'`. */
   isModoLocal: boolean
   /** Access token OAuth (mantido apenas em memória + LocalStorage). */
   accessToken: string | null
-  /** Planilha selecionada/criada e persistida no navegador. */
+  /** Banco selecionado/criado e persistido no navegador. */
   workspace: SpreadsheetWorkspace | null
   /** Mensagem de erro amigável (pt-BR) da última operação, se houver. */
   error: string | null
   /** `true` quando `VITE_GOOGLE_CLIENT_ID` está definido. */
   isConfigured: boolean
-  /** `true` quando o Google Picker está disponível (`VITE_GOOGLE_PICKER_API_KEY`). */
-  isPickerConfigured: boolean
+  /**
+   * `true` quando é possível abrir um banco já existente: no backend `json`
+   * basta o login (os arquivos do app são listados no Drive); no backend
+   * `sheets` é preciso o Google Picker (`VITE_GOOGLE_PICKER_API_KEY`).
+   */
+  canOpenExisting: boolean
   /** `true` enquanto uma ação (criar/selecionar planilha) está em andamento. */
   isBusy: boolean
   /** Inicia o login OAuth 2.0 pelo Google Identity Services. */
@@ -50,21 +55,27 @@ export interface AuthContextValue {
    * o define como workspace ativo. Não exige login e preserva dados existentes.
    */
   usarModoLocal: () => Promise<void>
-  /** Abre o Google Picker e carrega a planilha selecionada. */
-  selecionarPlanilha: () => Promise<void>
   /**
-   * Cria uma planilha padrão com as 5 abas e a define como workspace.
+   * Abre um banco já existente: no backend `json` abre o arquivo mais recente
+   * criado pelo app no Drive; no backend `sheets` abre o Google Picker.
+   */
+  abrirBanco: () => Promise<void>
+  /**
+   * Cria o banco padrão (as 7 abas do schema) e o define como workspace.
    *
-   * Antes de criar, verifica se já existe uma planilha com o mesmo título.
-   * Quando existe (e `options.force` não está ligado), devolve
+   * Antes de criar, verifica se já existe um banco com o mesmo nome. Quando
+   * existe (e `options.force` não está ligado), devolve
    * `{ status: 'duplicate' }` sem criar nada, para que a UI pergunte ao usuário.
    */
-  criarPlanilha: (
+  criarBanco: (
     title?: string,
-    options?: OpcoesCriarPlanilha,
-  ) => Promise<ResultadoCriacaoPlanilha>
-  /** Torna ativa uma planilha existente pelo `spreadsheetId` (garantindo as abas). */
-  abrirPlanilha: (spreadsheetId: string) => Promise<void>
+    options?: OpcoesCriarBanco,
+  ) => Promise<ResultadoCriacaoBanco>
+  /**
+   * Torna ativo um banco existente pelo id (planilha no Sheets ou arquivo no
+   * Drive, conforme o backend), garantindo as abas do schema.
+   */
+  abrirBancoPorId: (spreadsheetId: string) => Promise<void>
   /**
    * Garante um access token válido (renova silenciosamente se necessário).
    * Retorna `null` quando não foi possível obter um token.

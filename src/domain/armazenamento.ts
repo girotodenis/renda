@@ -7,7 +7,9 @@ import type { SpreadsheetWorkspace } from '@/domain/workspace'
  *
  * O app aceita **duas origens de dados** com o mesmo modelo de domínio:
  *
- * - `google`: planilha do Google Sheets (exige login OAuth);
+ * - `google`: banco na nuvem (exige login OAuth) — planilha do Google Sheets ou
+ *   um arquivo JSON compactado no Google Drive, conforme o backend de build
+ *   `VITE_GOOGLE_BACKEND`;
  * - `local`: banco de dados local do navegador (IndexedDB), **sem login** —
  *   a carteira vive só no dispositivo e pode ser exportada para `.ods`.
  *
@@ -29,7 +31,7 @@ export const MODO_ARMAZENAMENTO_PADRAO: ModoArmazenamento = MODO_GOOGLE
 /**
  * Identificador sintético do "workspace" local.
  *
- * O modo local não tem planilha remota, mas reutiliza `SpreadsheetWorkspace`
+ * O modo local não tem banco remoto, mas reutiliza `SpreadsheetWorkspace`
  * para que o cache de abas (chaveado por `spreadsheetId`) e todos os casos de
  * uso existentes funcionem sem alteração.
  */

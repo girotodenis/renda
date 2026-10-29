@@ -1,41 +1,101 @@
 import type { SheetName } from '@/domain/sheetsSchema'
 import { SHEET_HEADERS, SHEET_NAMES } from '@/domain/sheetsSchema'
+import type { PlanilhaExistente, SpreadsheetWorkspace } from '@/domain/workspace'
 import type { RepositoryContext } from '@/domain/repositories/ports'
-import type { SpreadsheetWorkspace } from '@/domain/workspace'
+import * as driveFile from '@/infrastructure/driveFile/gateway'
+import { isJsonBackend } from '@/infrastructure/googleConfig'
 import { isModoLocal } from '@/infrastructure/modoArmazenamento'
-import * as google from '@/infrastructure/sheets/gateway'
+import * as sheets from '@/infrastructure/sheets/gateway'
 import type { ValueInputOption, ValueRange, ValueRenderOption } from '@/infrastructure/sheets/gateway'
 import * as local from '@/infrastructure/sheets/localGateway'
 import type { CellValue } from '@/infrastructure/sheets/sheetCells'
 
 /**
- * Roteador de origem de dados (RF01/RF02) — a única decisão "google vs. local"
+ * Roteador de origem de dados (RF01/RF02) — a única decisão "nuvem vs. local"
  * do app.
  *
- * Expõe **a mesma superfície** do gateway do Google Sheets e escolhe o
- * adaptador pelo modo ativo. Assim, repositórios e casos de uso permanecem
- * agnósticos à origem: nenhum deles conhece `isModoLocal()`.
+ * Expõe **a mesma superfície** do gateway de células e escolhe o adaptador pelo
+ * modo ativo (`local` ou `google`) e, no modo Google, pelo backend de build
+ * (`VITE_GOOGLE_BACKEND`): planilha do Google Sheets ou um arquivo JSON
+ * compactado no Drive. Assim, repositórios e casos de uso permanecem agnósticos
+ * à origem: nenhum deles conhece `isModoLocal()` nem o backend.
  *
- * Erros e utilitários puros continuam sendo reexportados do gateway remoto
- * (não há equivalente local: o IndexedDB não falha por rede/quota).
+ * Erros e utilitários puros continuam sendo reexportados do gateway do Sheets
+ * (não há equivalente local: o IndexedDB não falha por rede/quota). O gateway
+ * JSON lança o mesmo `SheetsApiError` (com `status`), então `isQuotaError`,
+ * `describeSheetsError` e o fallback automático para o outbox funcionam igual.
  *
  * Os adaptadores são importados por **namespace** para que as funções deste
  * módulo possam ter os mesmos nomes das originais sem recursão acidental.
  */
 
-export {
-  columnLetter,
-  describeSheetsError,
-  getSheetsRequestCount,
-  isQuotaError,
-  resetSheetsRequestCount,
-  SheetsApiError,
-} from '@/infrastructure/sheets/gateway'
+export { columnLetter, describeSheetsError, isQuotaError, SheetsApiError } from '@/infrastructure/sheets/gateway'
 export type {
   ValueInputOption,
   ValueRange,
   ValueRenderOption,
 } from '@/infrastructure/sheets/gateway'
+
+/** Adaptador do modo Google, escolhido em tempo de build pelo backend. */
+const google = isJsonBackend() ? driveFile : sheets
+
+/** Quantas requisições de rede foram feitas ao backend Google (diagnóstico). */
+export function getSheetsRequestCount(): number {
+  return google.getSheetsRequestCount()
+}
+
+/** Zera o contador de requisições (uso no diagnóstico de cache). */
+export function resetSheetsRequestCount(): void {
+  google.resetSheetsRequestCount()
+}
+
+/** Nome do arquivo do banco no Drive (no backend Sheets, o próprio título). */
+export function nomeArquivoBanco(title: string): string {
+  return isJsonBackend() ? driveFile.databaseFileName(title) : title
+}
+
+/**
+ * Lista os bancos já existentes no Drive com o nome derivado do título.
+ *
+ * Só o backend `json` lista arquivos (no backend `sheets` a planilha existente é
+ * escolhida pelo Google Picker), por isso devolve `[]` fora dele.
+ */
+export async function listarBancosExistentes(
+  accessToken: string,
+  title: string,
+): Promise<PlanilhaExistente[]> {
+  if (isModoLocal() || !isJsonBackend()) return []
+  return driveFile.listDatabaseWorkspaces(accessToken, title)
+}
+
+/**
+ * Lista todos os bancos do Drive criados pelo app (mais recente primeiro).
+ *
+ * Devolve `[]` fora do backend `json`: no backend `sheets` a planilha existente
+ * é escolhida pelo Google Picker, sem listagem.
+ */
+export async function listarBancosDisponiveis(
+  accessToken: string,
+): Promise<PlanilhaExistente[]> {
+  if (isModoLocal() || !isJsonBackend()) return []
+  return driveFile.listAllDatabaseWorkspaces(accessToken)
+}
+
+/**
+ * Agrupa várias escritas em uma única ida à nuvem.
+ *
+ * No backend `json` as mutações ficam em memória e são gravadas juntas (1
+ * download + 1 upload para toda a fila offline); nos demais adaptadores é um
+ * pass-through. É o caminho usado pelo flush do `sync.ts`.
+ */
+export function executarEmLote<T>(
+  accessToken: string,
+  spreadsheetId: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  if (isModoLocal()) return fn()
+  return google.executarEmLote(accessToken, spreadsheetId, fn)
+}
 
 /** Lê um intervalo de uma aba na origem ativa. */
 export function getValues(

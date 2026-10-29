@@ -59,10 +59,17 @@ cabeçalhos, valores tipados) nunca vaze para o domínio:
 - `sheetCells.ts` — células ↔ valores tipados (datas serial, centavos, pt-BR).
 - `sheetFormulas.ts` — fórmulas `GOOGLEFINANCE`/soma da aba `Consolidado`
   (legado Sheets; com o banco JSON o `Consolidado` é 100% calculado no cliente).
-- `sheets/gateway.ts` — porta de rede legada da API do Google Sheets.
-- `driveFile/gateway.ts` — porta de rede do banco JSON no Drive (substitui o
-  Sheets): mesma superfície de células, sobre um arquivo `minhasacoes.json.gz`
-  compactado com gzip e lido/escrito via `drive.file`.
+- `sheets/gateway.ts` — porta de rede legada da API do Google Sheets (usada com
+  `VITE_GOOGLE_BACKEND=sheets`).
+- `driveFile/gateway.ts` — porta de rede do banco JSON no Drive: mesma
+  superfície de células, sobre um arquivo `minhasacoes.json.gz` compactado com
+  gzip e lido/escrito via `drive.file`.
+- `driveFile/format.ts` — codec do arquivo (`{ version, sheets }` com uma matriz
+  `CellValue[][]` por aba) + normalização idempotente de abas/cabeçalhos.
+- `driveFile/api.ts` — primitivas HTTP do arquivo (criar/ler/escrever/listar),
+  com timeout obrigatório e controle de concorrência por `etag` + `If-Match`.
+- `sheets/gatewayRouter.ts` — único ponto de decisão da origem: modo `local` ou
+  `google` e, no modo Google, o backend de build (`sheets` ↔ `json`).
 
 ## Princípios SOLID
 
@@ -83,12 +90,15 @@ cabeçalhos, valores tipados) nunca vaze para o domínio:
 - `application/b3Import.ts` — importar extrato B3 com deduplicação (RF23).
 - `application/diagnostics.ts` — diagnóstico da camada de dados.
 - `application/sync.ts` — sincronização da fila offline (FIFO), recálculo do
-  `Consolidado` ao final do flush e `contarPendencias()` para a UX.
+  `Consolidado` ao final do flush e `contarPendencias()` para a UX. O flush
+  inteiro roda em `executarEmLote` (no backend JSON: 1 download + 1 upload) e a
+  fila só é limpa depois que o lote é gravado.
 
 ## Adaptadores (infrastructure)
 
-- `driveFile/gateway.ts` — banco JSON no Google Drive via `drive.file`
-  (RF01–RF06): operações de células sobre um único arquivo compactado.
+- `driveFile/*` — banco JSON no Google Drive via `drive.file` (RF01–RF06):
+  operações de células sobre um único arquivo compactado, cache do banco
+  decodificado por sessão e flush em lote.
 - `drive.ts`, `googleIdentity.ts`, `googleConfig.ts` — OAuth 2.0 e organização
   no Drive. `drive.ts` garante a pasta padrão `minhasacoe_app`
   (`ensureAppFolder`) e move para ela o arquivo criado (`moveFileToFolder`) —

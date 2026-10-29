@@ -8,34 +8,34 @@ import { Modal } from '@/presentation/components/Modal'
 const DEFAULT_TITLE = 'Minhas Ações — Carteira'
 
 /**
- * Etapa pós-login: o usuário cria a planilha padrão (5 abas) ou seleciona uma
- * planilha existente no Drive via Google Picker (RF02).
+ * Etapa pós-login: o usuário cria o banco padrão (7 abas) ou abre um banco já
+ * existente — arquivo JSON no Drive (backend `json`) ou planilha escolhida pelo
+ * Google Picker (backend `sheets`) (RF02).
  *
- * Ao criar com um título já existente, pergunta se o usuário quer editar a
- * planilha existente (Sim) ou criar uma nova mesmo assim (Não).
+ * Ao criar com um nome já existente, pergunta se o usuário quer editar o banco
+ * existente (Sim) ou criar um novo mesmo assim (Não).
  */
 export function WorkspaceSetup() {
-  const { criarPlanilha, abrirPlanilha, selecionarPlanilha, isBusy, isPickerConfigured, error } =
-    useAuth()
+  const { criarBanco, abrirBancoPorId, abrirBanco, isBusy, canOpenExisting, error } = useAuth()
   const [title, setTitle] = useState(DEFAULT_TITLE)
   const [duplicada, setDuplicada] = useState<PlanilhaExistente | null>(null)
 
   const canCreate = !isBusy && title.trim().length > 0
 
   async function handleCriar() {
-    const resultado = await criarPlanilha(title)
+    const resultado = await criarBanco(title)
     if (resultado.status === 'duplicate') setDuplicada(resultado.existente)
   }
 
   async function editarExistente() {
     const alvo = duplicada
     setDuplicada(null)
-    if (alvo) await abrirPlanilha(alvo.spreadsheetId)
+    if (alvo) await abrirBancoPorId(alvo.spreadsheetId)
   }
 
   async function criarNova() {
     setDuplicada(null)
-    await criarPlanilha(title, { force: true })
+    await criarBanco(title, { force: true })
   }
 
   return (
@@ -48,7 +48,7 @@ export function WorkspaceSetup() {
 
       <div className="space-y-1">
         <label htmlFor="spreadsheet-title" className="block text-sm font-medium text-slate-700">
-          Nome da nova planilha
+          Nome do novo banco de dados
         </label>
         <input
           id="spreadsheet-title"
@@ -72,14 +72,14 @@ export function WorkspaceSetup() {
           ) : (
             <FilePlus2 className="h-4 w-4" aria-hidden />
           )}
-          Criar planilha padrão
+          Criar banco de dados
         </button>
 
         <button
           type="button"
-          onClick={() => void selecionarPlanilha()}
-          disabled={isBusy || !isPickerConfigured}
-          title={isPickerConfigured ? undefined : 'Requer VITE_GOOGLE_PICKER_API_KEY'}
+          onClick={() => void abrirBanco()}
+          disabled={isBusy || !canOpenExisting}
+          title={canOpenExisting ? undefined : 'Requer VITE_GOOGLE_PICKER_API_KEY'}
           className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isBusy ? (
@@ -87,27 +87,27 @@ export function WorkspaceSetup() {
           ) : (
             <Search className="h-4 w-4" aria-hidden />
           )}
-          Selecionar planilha existente
+          Abrir banco existente
         </button>
       </div>
 
-      {!isPickerConfigured ? (
-        <Alert variant="info" title="Seleção de planilha indisponível">
+      {canOpenExisting ? null : (
+        <Alert variant="info" title="Abertura de banco existente indisponível">
           Defina <code>VITE_GOOGLE_PICKER_API_KEY</code> no arquivo <code>.env</code> para escolher
-          uma planilha existente. A criação de uma planilha nova já está disponível.
+          uma planilha existente. A criação de um banco novo já está disponível.
         </Alert>
-      ) : null}
+      )}
 
       <Modal
         open={duplicada !== null}
         onClose={() => setDuplicada(null)}
-        titulo="Já existe uma planilha com esse nome"
+        titulo="Já existe um banco com esse nome"
         className="max-w-lg"
       >
         <p className="text-sm text-slate-600">
-          Você já tem uma planilha chamada{' '}
+          Você já tem um banco chamado{' '}
           <strong className="font-semibold text-slate-900">{duplicada?.title}</strong> no seu Drive.
-          Deseja editar a planilha que já existe ou criar uma nova com esse mesmo nome?
+          Deseja abrir o banco que já existe ou criar um novo com esse mesmo nome?
         </p>
         <div className="mt-5 flex flex-wrap justify-end gap-3">
           <button
@@ -129,7 +129,7 @@ export function WorkspaceSetup() {
             ) : (
               <FilePlus2 className="h-4 w-4" aria-hidden />
             )}
-            Sim, editar a existente
+            Sim, abrir o existente
           </button>
         </div>
       </Modal>

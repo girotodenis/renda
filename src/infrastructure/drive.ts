@@ -9,6 +9,14 @@ import { googleConfig, MISSING_PICKER_KEY_MESSAGE } from '@/infrastructure/googl
  * O Picker usa o access token OAuth do usuário diretamente e exige uma chave de
  * API (`VITE_GOOGLE_PICKER_API_KEY`). Sob o escopo `drive.file`, o Picker é a
  * forma correta de conceder acesso a um arquivo existente.
+ *
+ * Escopo: as funções de Picker/listagem por título (`pickSpreadsheet`,
+ * `findSpreadsheetsByName`) só são usadas com o backend de planilha
+ * (`VITE_GOOGLE_BACKEND=sheets`). No backend de arquivo JSON
+ * (`VITE_GOOGLE_BACKEND=json`) a abertura de um banco existente usa
+ * `driveFile/api.ts` (listagem dos arquivos criados pelo app) e nada aqui é
+ * exibido ao usuário. O que os dois backends compartilham é a organização na
+ * pasta `minhasacoe_app` (`ensureAppFolder`/`moveFileToFolder`).
  */
 
 const GAPI_SCRIPT_SRC = 'https://apis.google.com/js/api.js'
