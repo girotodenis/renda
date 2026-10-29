@@ -25,6 +25,8 @@ export interface SpreadsheetWorkspace {
 export interface PlanilhaExistente {
   spreadsheetId: string
   title: string
+  /** ISO do último modificado, quando a listagem informa (usado na lista de bancos). */
+  modificadaEm?: string | null
 }
 
 /**

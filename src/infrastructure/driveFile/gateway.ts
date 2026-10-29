@@ -772,6 +772,7 @@ export async function listDatabaseWorkspaces(
   return files.map((file) => ({
     spreadsheetId: file.fileId,
     title: titleFromFileName(file.name),
+    modificadaEm: file.modifiedTime ?? null,
   }))
 }
 
@@ -789,5 +790,6 @@ export async function listAllDatabaseWorkspaces(
   return files.map((file) => ({
     spreadsheetId: file.fileId,
     title: titleFromFileName(file.name),
+    modificadaEm: file.modifiedTime ?? null,
   }))
 }

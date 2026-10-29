@@ -1,11 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SHEET_HEADERS, SHEET_NAMES } from '@/domain/sheetsSchema'
 import { gunzip, gzip } from '@/infrastructure/compression'
-import {
-  DATABASE_MIME_TYPE,
-  DRIVE_FILES_ENDPOINT,
-  DRIVE_UPLOAD_ENDPOINT,
-} from '@/infrastructure/driveFile/api'
+import { DRIVE_FILES_ENDPOINT, DRIVE_UPLOAD_ENDPOINT } from '@/infrastructure/driveFile/api'
 import { emptyDatabase } from '@/infrastructure/driveFile/format'
 import type { CellValue } from '@/infrastructure/sheets/sheetCells'
 
@@ -541,23 +537,21 @@ describe('workspace e utilitários', () => {
 
     expect(drive.chamadas).toHaveLength(1)
     const url = new URL(String(drive.chamadas[0]?.url))
-    expect(url.searchParams.get('q')).toBe(
-      `name = 'Minha Carteira${SUFIXO}' and mimeType = '${DATABASE_MIME_TYPE}' and trashed = false`,
-    )
-    expect(lista).toEqual([{ spreadsheetId: drive.id, title: 'Minha Carteira' }])
+    expect(url.searchParams.get('q')).toBe(`name = 'Minha Carteira${SUFIXO}' and trashed = false`)
+    expect(lista).toEqual([
+      { spreadsheetId: drive.id, title: 'Minha Carteira', modificadaEm: null },
+    ])
   })
 
-  it('listAllDatabaseWorkspaces lista pelo MIME (sem filtrar por nome)', async () => {
+  it('listAllDatabaseWorkspaces lista pelo sufixo do nome (sem depender do MIME)', async () => {
     const drive = criarDriveFalso({ nome: `Outro Banco${SUFIXO}` })
 
     const lista = await gateway.listAllDatabaseWorkspaces('token')
 
     expect(drive.chamadas).toHaveLength(1)
     const url = new URL(String(drive.chamadas[0]?.url))
-    expect(url.searchParams.get('q')).toBe(
-      `mimeType = '${DATABASE_MIME_TYPE}' and trashed = false`,
-    )
-    expect(lista).toEqual([{ spreadsheetId: drive.id, title: 'Outro Banco' }])
+    expect(url.searchParams.get('q')).toBe("trashed = false and name contains '.json.gz'")
+    expect(lista).toEqual([{ spreadsheetId: drive.id, title: 'Outro Banco', modificadaEm: null }])
   })
 
   it('getSheetsRequestCount acompanha as requisições e resetSheetsRequestCount zera', async () => {

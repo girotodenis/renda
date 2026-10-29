@@ -132,7 +132,9 @@ describe('gatewayRouter', () => {
     expect(texto).toContain('PETR4')
   })
 
-  it('sem o flag continua usando a API do Google Sheets', async () => {
+  it('sem o flag (ou com valor desconhecido) continua usando a API do Google Sheets', async () => {
+    // `''` representa "flag ausente" sem depender do `.env` de quem roda os testes.
+    vi.stubEnv('VITE_GOOGLE_BACKEND', '')
     const sheets = stubSheets()
     const router: Router = await import('@/infrastructure/sheets/gatewayRouter')
 

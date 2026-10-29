@@ -37,6 +37,8 @@ export interface DriveDatabaseFile {
   fileId: string
   name: string
   etag: string | null
+  /** ISO do último modificado (preenchido pelas listagens). */
+  modifiedTime?: string | null
 }
 
 export interface ReadDatabaseFileResult {
@@ -57,7 +59,7 @@ interface DriveFileMetadata {
 }
 
 interface DriveFileListResponse {
-  files?: { id?: unknown; name?: unknown }[]
+  files?: { id?: unknown; name?: unknown; modifiedTime?: unknown }[]
 }
 
 let requestCount = 0
@@ -271,7 +273,71 @@ export async function writeDatabaseFile(
   return { etag: readEtag(response) }
 }
 
-/** Lista os arquivos do banco com exatamente `name` (abrir banco existente). */
+/** Sufixo do arquivo do banco usado nas consultas de listagem. */
+const DATABASE_NAME_FILTER = '.json.gz'
+
+/** Máximo de bancos devolvidos pelas listagens (o app cria poucos). */
+const MAX_LISTED_FILES = 50
+
+/** Converte a resposta de `files.list` no tipo público (ignora itens inválidos). */
+function parseFileList(body: DriveFileListResponse): DriveDatabaseFile[] {
+  const found: DriveDatabaseFile[] = []
+  for (const file of body.files ?? []) {
+    if (typeof file.id === 'string' && typeof file.name === 'string') {
+      found.push({
+        fileId: file.id,
+        name: file.name,
+        etag: null,
+        modifiedTime: typeof file.modifiedTime === 'string' ? file.modifiedTime : null,
+      })
+    }
+  }
+  return found
+}
+
+/** Ordena do mais recente para o mais antigo (a API nem sempre ordena). */
+function sortByRecency(files: DriveDatabaseFile[]): DriveDatabaseFile[] {
+  return files.slice().sort((a, b) => {
+    const da = Date.parse(a.modifiedTime ?? '')
+    const db = Date.parse(b.modifiedTime ?? '')
+    if (Number.isNaN(da) && Number.isNaN(db)) return 0
+    if (Number.isNaN(da)) return 1
+    if (Number.isNaN(db)) return -1
+    return db - da
+  })
+}
+
+/**
+ * Executa `files.list` com os parâmetros informados.
+ *
+ * A listagem filtra **pelo nome** (`*.json.gz`) em vez de `mimeType`: o Drive
+ * pode reclassificar o arquivo enviado por `uploadType=media` (o MIME não é
+ * garantido), e o escopo `drive.file` já limita a listagem aos arquivos que o
+ * app criou. `orderBy` é evitado porque nem toda combinação de `q` + `orderBy` é
+ * aceita; a ordenação é feita no cliente.
+ */
+async function listFiles(
+  accessToken: string,
+  query: string,
+  pageSize: number,
+  options?: DriveFileRequestOptions,
+): Promise<DriveDatabaseFile[]> {
+  const params = new URLSearchParams({
+    q: query,
+    fields: 'files(id,name,modifiedTime)',
+    pageSize: String(pageSize),
+  })
+
+  const response = await driveRequest(
+    `${DRIVE_FILES_ENDPOINT}?${params.toString()}`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+    options,
+  )
+
+  return sortByRecency(parseFileList((await response.json()) as DriveFileListResponse))
+}
+
+/** Lista os arquivos do banco com exatamente `name` (detecção de duplicidade). */
 export async function listDatabaseFiles(
   accessToken: string,
   name: string,
@@ -280,64 +346,18 @@ export async function listDatabaseFiles(
   const trimmed = name.trim()
   if (trimmed.length === 0) return []
 
-  const query = [
-    `name = '${escapeDriveQueryValue(trimmed)}'`,
-    `mimeType = '${DATABASE_MIME_TYPE}'`,
-    'trashed = false',
-  ].join(' and ')
-
-  const params = new URLSearchParams({
-    q: query,
-    fields: 'files(id,name)',
-    orderBy: 'modifiedTime desc',
-    pageSize: '10',
-  })
-
-  const response = await driveRequest(
-    `${DRIVE_FILES_ENDPOINT}?${params.toString()}`,
-    { headers: { Authorization: `Bearer ${accessToken}` } },
-    options,
-  )
-  const body = (await response.json()) as DriveFileListResponse
-
-  const found: DriveDatabaseFile[] = []
-  for (const file of body.files ?? []) {
-    if (typeof file.id === 'string' && typeof file.name === 'string') {
-      found.push({ fileId: file.id, name: file.name, etag: null })
-    }
-  }
-  return found
+  const query = [`name = '${escapeDriveQueryValue(trimmed)}'`, 'trashed = false'].join(' and ')
+  return listFiles(accessToken, query, 10, options)
 }
 
 /**
  * Lista todos os bancos que o app já criou no Drive, do mais recente para o mais
- * antigo — usado no "abrir banco existente", que não depende de um título.
+ * antigo — usado na lista de "abrir banco existente".
  */
 export async function listAllDatabaseFiles(
   accessToken: string,
   options?: DriveFileRequestOptions,
 ): Promise<DriveDatabaseFile[]> {
-  const query = [`mimeType = '${DATABASE_MIME_TYPE}'`, 'trashed = false'].join(' and ')
-
-  const params = new URLSearchParams({
-    q: query,
-    fields: 'files(id,name)',
-    orderBy: 'modifiedTime desc',
-    pageSize: '10',
-  })
-
-  const response = await driveRequest(
-    `${DRIVE_FILES_ENDPOINT}?${params.toString()}`,
-    { headers: { Authorization: `Bearer ${accessToken}` } },
-    options,
-  )
-  const body = (await response.json()) as DriveFileListResponse
-
-  const found: DriveDatabaseFile[] = []
-  for (const file of body.files ?? []) {
-    if (typeof file.id === 'string' && typeof file.name === 'string') {
-      found.push({ fileId: file.id, name: file.name, etag: null })
-    }
-  }
-  return found
+  const query = [`trashed = false`, `name contains '${DATABASE_NAME_FILTER}'`].join(' and ')
+  return listFiles(accessToken, query, MAX_LISTED_FILES, options)
 }

@@ -65,10 +65,11 @@ O modo com login Google tem **dois backends**, escolhidos em tempo de **build** 
 
 | Backend | Escopos OAuth | Onde os dados ficam | Criar | Abrir existente | Link |
 | --- | --- | --- | --- | --- | --- |
-| `sheets` (padrão) | `spreadsheets` + `drive.file` | planilha do Google Sheets | planilha nova (7 abas) | Google Picker | `docs.google.com/spreadsheets/d/…` |
+| `sheets` (padrão) | `spreadsheets` + `drive.file` | planilha do Google Sheets | planilha nova (7 abas) | lista as planilhas visíveis (Picker opcional) | `docs.google.com/spreadsheets/d/…` |
 | `json` | **`drive.file`** | um arquivo `*.json.gz` no Drive (pasta `minhasacoe_app`) | arquivo novo com as 7 abas vazias | lista os bancos criados pelo app | `drive.google.com/file/d/…` |
 
 - O backend `json` usa apenas o escopo **`drive.file`**, que **não é sensível**: dispensa a verificação OAuth do Google (e o vídeo de demonstração) para publicar o app.
+- Em **Abrir banco existente** aparece a lista dos bancos já existentes (nome + última modificação); basta escolher um para carregar. No backend `sheets`, o Google Picker continua disponível como ação secundária para abrir uma planilha que o app ainda não conhece.
 - O arquivo é um JSON `{ version, sheets }` com uma matriz de células por aba, compactado com gzip (`CompressionStream` nativo) — o mesmo modelo do modo local e do `.ods`.
 - Cada escrita faz *read-modify-write* com **etag + `If-Match`**; um conflito (HTTP 412) relê o arquivo e reaplica a alteração.
 - No flush da fila offline, todas as mutações pendentes são aplicadas numa única leitura + uma única escrita.

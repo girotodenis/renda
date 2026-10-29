@@ -79,7 +79,7 @@ export function isSpreadsheetSelectionAvailable(): boolean {
 }
 
 interface DriveFileListResponse {
-  files?: { id?: string; name?: string }[]
+  files?: { id?: string; name?: string; modifiedTime?: string }[]
 }
 
 interface DriveFileResponse {
@@ -131,6 +131,47 @@ export async function findSpreadsheetsByName(
   for (const file of body.files ?? []) {
     if (typeof file.id === 'string' && typeof file.name === 'string') {
       found.push({ spreadsheetId: file.id, title: file.name })
+    }
+  }
+  return found
+}
+
+/**
+ * Lista as planilhas visíveis para o app (escopo `drive.file`), da mais recente
+ * para a mais antiga — alimenta a lista de "abrir banco existente" no backend
+ * `sheets`.
+ *
+ * Lança `GoogleDriveError` em falha da API; o chamador exibe a mensagem.
+ */
+export async function listAppSpreadsheets(
+  accessToken: string,
+): Promise<DriveSpreadsheetSelection[]> {
+  const query = [
+    "mimeType = 'application/vnd.google-apps.spreadsheet'",
+    'trashed = false',
+  ].join(' and ')
+
+  const params = new URLSearchParams({
+    q: query,
+    fields: 'files(id,name,modifiedTime)',
+    orderBy: 'modifiedTime desc',
+    pageSize: '50',
+  })
+
+  const response = await fetch(`${DRIVE_FILES_ENDPOINT}?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (!response.ok) throw toDriveError(response)
+
+  const body = (await response.json()) as DriveFileListResponse
+  const found: DriveSpreadsheetSelection[] = []
+  for (const file of body.files ?? []) {
+    if (typeof file.id === 'string' && typeof file.name === 'string') {
+      found.push({
+        spreadsheetId: file.id,
+        title: file.name,
+        modificadaEm: file.modifiedTime ?? null,
+      })
     }
   }
   return found

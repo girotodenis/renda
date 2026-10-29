@@ -39,11 +39,11 @@ export interface AuthContextValue {
   /** `true` quando `VITE_GOOGLE_CLIENT_ID` está definido. */
   isConfigured: boolean
   /**
-   * `true` quando é possível abrir um banco já existente: no backend `json`
-   * basta o login (os arquivos do app são listados no Drive); no backend
-   * `sheets` é preciso o Google Picker (`VITE_GOOGLE_PICKER_API_KEY`).
+   * `true` quando o Google Picker está disponível (`VITE_GOOGLE_PICKER_API_KEY`).
+   * A lista de bancos do Drive funciona sem ele; o Picker é apenas a forma de
+   * abrir uma planilha que o app ainda não conhece.
    */
-  canOpenExisting: boolean
+  isPickerConfigured: boolean
   /** `true` enquanto uma ação (criar/selecionar planilha) está em andamento. */
   isBusy: boolean
   /** Inicia o login OAuth 2.0 pelo Google Identity Services. */
@@ -56,10 +56,16 @@ export interface AuthContextValue {
    */
   usarModoLocal: () => Promise<void>
   /**
-   * Abre um banco já existente: no backend `json` abre o arquivo mais recente
-   * criado pelo app no Drive; no backend `sheets` abre o Google Picker.
+   * Lista os bancos já existentes na origem ativa (arquivos JSON no Drive ou
+   * planilhas visíveis para o app), do mais recente para o mais antigo.
+   * Devolve `[]` e preenche `error` quando não é possível listar.
    */
-  abrirBanco: () => Promise<void>
+  listarBancos: () => Promise<PlanilhaExistente[]>
+  /**
+   * Abre o Google Picker para escolher uma planilha que o app ainda não conhece
+   * (backend `sheets`, quando `VITE_GOOGLE_PICKER_API_KEY` está definido).
+   */
+  abrirPlanilhaNoPicker: () => Promise<void>
   /**
    * Cria o banco padrão (as 7 abas do schema) e o define como workspace.
    *

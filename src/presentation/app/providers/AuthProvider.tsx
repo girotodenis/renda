@@ -25,6 +25,7 @@ import {
   findSpreadsheetsByName,
   GoogleDriveError,
   GooglePickerError,
+  listAppSpreadsheets,
   moveFileToFolder,
   pickSpreadsheet,
 } from '@/infrastructure/drive'
@@ -53,7 +54,7 @@ import {
   prepararWorkspaceLocal,
   SheetsApiError,
 } from '@/infrastructure/sheets/gatewayRouter'
-import type { AuthStatus, SpreadsheetWorkspace } from '@/domain/workspace'
+import type { AuthStatus, PlanilhaExistente, SpreadsheetWorkspace } from '@/domain/workspace'
 
 interface AuthProviderProps {
   children: ReactNode
@@ -260,16 +261,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
       setStatus('authenticated')
 
-      // Backend JSON: se ainda não há banco ativo neste navegador, abre o
-      // arquivo mais recente que o app já criou no Drive ("o banco já existe?").
-      // Best-effort: sem arquivo (ou em falha) o usuário segue para a tela de
-      // criação/abertura.
+      // Backend JSON: se ainda não há banco ativo neste navegador e existe
+      // exatamente um banco no Drive, abre-o automaticamente. Com 0 ou 2+,
+      // o usuário escolhe na tela de criação/abertura (lista de bancos).
       const token = tokenRef.current
       if (isJsonBackend() && token && !workspaceStorage.load()) {
         try {
-          const [banco] = await listarBancosDisponiveis(token)
-          if (banco) {
-            const carregado = await abrirWorkspace(token, banco.spreadsheetId)
+          const bancos = await listarBancosDisponiveis(token)
+          const unico = bancos.length === 1 ? bancos[0] : undefined
+          if (unico) {
+            const carregado = await abrirWorkspace(token, unico.spreadsheetId)
             workspaceStorage.save(carregado)
             setWorkspace(carregado)
           }
@@ -342,19 +343,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setWorkspace(loaded)
   }, [])
 
-  const abrirBanco = useCallback(async () => {
+  const listarBancos = useCallback(async (): Promise<PlanilhaExistente[]> => {
     setError(null)
     if (isModoLocal()) {
       setError(
         'Você está no modo local (sem Google). Saia do modo local para usar um banco de dados no Google.',
       )
-      return
-    }
-    // No backend JSON a abertura usa a listagem do Drive (só exige login); no
-    // backend Sheets ela depende do Google Picker.
-    if (!isJsonBackend() && !isSpreadsheetPickerConfigured()) {
-      setError(MISSING_PICKER_KEY_MESSAGE)
-      return
+      return []
     }
 
     const token = await ensureAccessToken()
@@ -362,22 +357,43 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Sem token: `ensureAccessToken` já ajustou o status (modo local quando
       // há banco persistido); basta avisar o usuário.
       setError('Sessão expirada. Faça login novamente.')
+      return []
+    }
+
+    setIsBusy(true)
+    try {
+      return isJsonBackend()
+        ? await listarBancosDisponiveis(token)
+        : await listAppSpreadsheets(token)
+    } catch (listError) {
+      setError(describeError(listError))
+      return []
+    } finally {
+      setIsBusy(false)
+    }
+  }, [ensureAccessToken])
+
+  const abrirPlanilhaNoPicker = useCallback(async () => {
+    setError(null)
+    if (isModoLocal()) {
+      setError(
+        'Você está no modo local (sem Google). Saia do modo local para usar um banco de dados no Google.',
+      )
+      return
+    }
+    if (!isSpreadsheetPickerConfigured()) {
+      setError(MISSING_PICKER_KEY_MESSAGE)
+      return
+    }
+
+    const token = await ensureAccessToken()
+    if (!token) {
+      setError('Sessão expirada. Faça login novamente.')
       return
     }
 
     setIsBusy(true)
     try {
-      if (isJsonBackend()) {
-        const [banco] = await listarBancosDisponiveis(token)
-        if (!banco) {
-          setError('Nenhum banco de dados encontrado no seu Google Drive. Crie um novo para começar.')
-          return
-        }
-        const loaded = await abrirWorkspace(token, banco.spreadsheetId)
-        salvarWorkspace(loaded)
-        return
-      }
-
       const folderId = await garantirPastaDoApp(token)
       const picked = await pickSpreadsheet(token, { folderId })
       if (!picked) return
@@ -474,26 +490,28 @@ export function AuthProvider({ children }: AuthProviderProps) {
       workspace,
       error,
       isConfigured: isGoogleConfigured(),
-      canOpenExisting: isJsonBackend() ? isGoogleConfigured() : isSpreadsheetPickerConfigured(),
+      isPickerConfigured: isSpreadsheetPickerConfigured(),
       isBusy,
       login,
       logout,
       usarModoLocal,
-      abrirBanco,
+      listarBancos,
+      abrirPlanilhaNoPicker,
       criarBanco,
       abrirBancoPorId,
       ensureAccessToken,
       clearError,
     }),
     [
-      abrirBanco,
       abrirBancoPorId,
+      abrirPlanilhaNoPicker,
       accessToken,
       clearError,
       criarBanco,
       ensureAccessToken,
       error,
       isBusy,
+      listarBancos,
       login,
       logout,
       modo,

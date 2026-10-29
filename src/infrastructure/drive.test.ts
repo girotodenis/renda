@@ -3,6 +3,7 @@ import {
   ensureAppFolder,
   findAppFolder,
   findSpreadsheetsByName,
+  listAppSpreadsheets,
   GoogleDriveError,
   moveFileToFolder,
 } from '@/infrastructure/drive'
@@ -108,6 +109,38 @@ describe('findSpreadsheetsByName', () => {
     stubFetch(200, {})
 
     expect(await findSpreadsheetsByName('token', 'Carteira')).toEqual([])
+  })
+})
+
+describe('listAppSpreadsheets', () => {
+  it('lista as planilhas visíveis para o app, com a data de modificação', async () => {
+    const { spy, chamadas } = stubFetch(200, {
+      files: [
+        { id: 'abc', name: 'Carteira A', modifiedTime: '2026-02-01T10:00:00Z' },
+        { id: 42, name: 'inválido' },
+      ],
+    })
+
+    const planilhas = await listAppSpreadsheets('token')
+
+    expect(spy).toHaveBeenCalledTimes(1)
+    expect(planilhas).toEqual([
+      { spreadsheetId: 'abc', title: 'Carteira A', modificadaEm: '2026-02-01T10:00:00Z' },
+    ])
+
+    const url = new URL(chamadas[0] ?? '')
+    expect(url.searchParams.get('q')).toBe(
+      "mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false",
+    )
+    expect(url.searchParams.get('fields')).toBe('files(id,name,modifiedTime)')
+  })
+
+  it('lança GoogleDriveError em resposta de erro', async () => {
+    stubFetch(403, {})
+
+    const erro = await listAppSpreadsheets('token').catch((e: unknown) => e)
+
+    expect(erro).toBeInstanceOf(GoogleDriveError)
   })
 })
 

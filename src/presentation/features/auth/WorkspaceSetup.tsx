@@ -1,24 +1,25 @@
-import { FilePlus2, Loader2, Search } from 'lucide-react'
+import { FilePlus2, FolderOpen, Loader2 } from 'lucide-react'
 import { useState } from 'react'
 import type { PlanilhaExistente } from '@/domain/workspace'
 import { useAuth } from '@/presentation/app/providers/authContext'
 import { Alert } from '@/presentation/components/Alert'
 import { Modal } from '@/presentation/components/Modal'
+import { AbrirBancoModal } from './AbrirBancoModal'
 
 const DEFAULT_TITLE = 'Minhas Ações — Carteira'
 
 /**
  * Etapa pós-login: o usuário cria o banco padrão (7 abas) ou abre um banco já
- * existente — arquivo JSON no Drive (backend `json`) ou planilha escolhida pelo
- * Google Picker (backend `sheets`) (RF02).
+ * existente escolhendo-o em uma **lista** dos bancos do Drive (RF02).
  *
  * Ao criar com um nome já existente, pergunta se o usuário quer editar o banco
  * existente (Sim) ou criar um novo mesmo assim (Não).
  */
 export function WorkspaceSetup() {
-  const { criarBanco, abrirBancoPorId, abrirBanco, isBusy, canOpenExisting, error } = useAuth()
+  const { criarBanco, abrirBancoPorId, isBusy, error } = useAuth()
   const [title, setTitle] = useState(DEFAULT_TITLE)
   const [duplicada, setDuplicada] = useState<PlanilhaExistente | null>(null)
+  const [listaAberta, setListaAberta] = useState(false)
 
   const canCreate = !isBusy && title.trim().length > 0
 
@@ -77,26 +78,16 @@ export function WorkspaceSetup() {
 
         <button
           type="button"
-          onClick={() => void abrirBanco()}
-          disabled={isBusy || !canOpenExisting}
-          title={canOpenExisting ? undefined : 'Requer VITE_GOOGLE_PICKER_API_KEY'}
+          onClick={() => setListaAberta(true)}
+          disabled={isBusy}
           className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {isBusy ? (
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-          ) : (
-            <Search className="h-4 w-4" aria-hidden />
-          )}
+          <FolderOpen className="h-4 w-4" aria-hidden />
           Abrir banco existente
         </button>
       </div>
 
-      {canOpenExisting ? null : (
-        <Alert variant="info" title="Abertura de banco existente indisponível">
-          Defina <code>VITE_GOOGLE_PICKER_API_KEY</code> no arquivo <code>.env</code> para escolher
-          uma planilha existente. A criação de um banco novo já está disponível.
-        </Alert>
-      )}
+      <AbrirBancoModal open={listaAberta} onClose={() => setListaAberta(false)} />
 
       <Modal
         open={duplicada !== null}

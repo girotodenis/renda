@@ -293,16 +293,13 @@ describe('listDatabaseFiles', () => {
 
     expect(spy).toHaveBeenCalledTimes(1)
     expect(arquivos).toEqual([
-      { fileId: 'arquivo-1', name: 'banco do Dré.json.gz', etag: null },
+      { fileId: 'arquivo-1', name: 'banco do Dré.json.gz', etag: null, modifiedTime: null },
     ])
 
     const url = new URL(chamadas[0]?.url ?? '')
     expect(url.origin + url.pathname).toBe(DRIVE_FILES_ENDPOINT)
-    expect(url.searchParams.get('q')).toBe(
-      "name = 'banco do Dré\\'s.json.gz' and mimeType = 'application/gzip' and trashed = false",
-    )
-    expect(url.searchParams.get('fields')).toBe('files(id,name)')
-    expect(url.searchParams.get('orderBy')).toBe('modifiedTime desc')
+    expect(url.searchParams.get('q')).toBe("name = 'banco do Dré\\'s.json.gz' and trashed = false")
+    expect(url.searchParams.get('fields')).toBe('files(id,name,modifiedTime)')
     expect(url.searchParams.get('pageSize')).toBe('10')
     expect(chamadas[0]?.headers.get('Authorization')).toBe('Bearer token-abc')
   })
@@ -319,13 +316,14 @@ describe('listDatabaseFiles', () => {
 })
 
 describe('listAllDatabaseFiles', () => {
-  it('lista todos os bancos do app pelo MIME, do mais recente ao mais antigo', async () => {
+  it('lista os bancos pelo sufixo do nome, do mais recente ao mais antigo', async () => {
     const { spy, chamadas } = stubFetchSequence([
       {
         json: {
           files: [
-            { id: 'arquivo-2', name: 'Carteira B.json.gz' },
-            { id: 'arquivo-1', name: 'Carteira A.json.gz' },
+            { id: 'arquivo-1', name: 'Carteira A.json.gz', modifiedTime: '2026-01-01T10:00:00Z' },
+            { id: 'arquivo-2', name: 'Carteira B.json.gz', modifiedTime: '2026-02-01T10:00:00Z' },
+            { id: 7, name: 'inválido' },
           ],
         },
       },
@@ -334,11 +332,14 @@ describe('listAllDatabaseFiles', () => {
     const arquivos = await listAllDatabaseFiles('token-abc')
 
     expect(spy).toHaveBeenCalledTimes(1)
+    // Ordenação feita no cliente (a consulta não usa `orderBy`).
     expect(arquivos.map((arquivo) => arquivo.fileId)).toEqual(['arquivo-2', 'arquivo-1'])
+    expect(arquivos[0]?.modifiedTime).toBe('2026-02-01T10:00:00Z')
 
     const url = new URL(chamadas[0]?.url ?? '')
-    expect(url.searchParams.get('q')).toBe("mimeType = 'application/gzip' and trashed = false")
-    expect(url.searchParams.get('orderBy')).toBe('modifiedTime desc')
+    expect(url.searchParams.get('q')).toBe("trashed = false and name contains '.json.gz'")
+    expect(url.searchParams.get('fields')).toBe('files(id,name,modifiedTime)')
+    expect(url.searchParams.get('orderBy')).toBeNull()
   })
 })
 
