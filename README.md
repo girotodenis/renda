@@ -48,7 +48,6 @@ Acompanhe sua carteira de investimentos direto do navegador, usando **sua conta 
    - `VITE_GOOGLE_BACKEND` — opcional (`sheets`, padrão, ou `json`; ver seção abaixo)
    - `VITE_GOOGLE_PICKER_API_KEY` — opcional (selecionar uma planilha existente; backend `sheets`)
    - `VITE_GOOGLE_PROJECT_NUMBER` — opcional (usado como `appId` do Picker)
-   - `VITE_BRAPI_TOKEN` — opcional (fallback de cotação B3 quando o `GOOGLEFINANCE` falha)
    - `VITE_GA_MEASUREMENT_ID` — opcional (Measurement ID do GA4; habilita telemetria do Google Analytics)
 
 3. Rode o servidor de desenvolvimento:
@@ -99,6 +98,7 @@ O app é um **PWA instalável** (manifest + service worker via `vite-plugin-pwa`
 - **Leitura offline:** o dashboard e as demais telas leem o **último estado em cache** (IndexedDB) quando não há conexão.
 - **Escrita offline:** operações e proventos lançados sem rede ficam numa fila local (outbox) e são reaplicados no banco da nuvem automaticamente ao reconectar.
 - **Sincronização:** ocorre ao abrir o app, a cada reconexão e por retry periódico; um indicador no cabeçalho mostra o estado (offline / pendências / sincronizado) e permite forçar a sincronização.
+- **Atualizar cotações:** o botão **Atualizar** do dashboard relê os dados e busca os preços atuais de Ação/FII/BDR/ETF na **Brapi** (ignorando o cache local), gravando-os na carteira. O token da Brapi é informado dentro do app, em **Configurações → Integrações** (não vai no `.env`). Se a integração não estiver configurada (token ausente) ou não devolver preço, o dashboard exibe um aviso com o motivo.
 - O service worker é habilitado apenas no **build de produção** (`npm run build` + `npm run preview`); em desenvolvimento (`npm run dev`) ele fica desligado.
 
 ## Privacidade

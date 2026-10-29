@@ -146,7 +146,7 @@ describe('resolverCotacao — variação do dia', () => {
     })
   })
 
-  it('não calcula variação sem abertura (ou quando cai na Brapi)', () => {
+  it('não calcula variação sem abertura', () => {
     const semAbertura = resolverCotacao({
       ticker: 'PETR4',
       categoria: CategoriaAtivo.Acao,
@@ -155,7 +155,9 @@ describe('resolverCotacao — variação do dia', () => {
     })
     expect(semAbertura.precoAbertura).toBeNull()
     expect(semAbertura.variacaoDiaPercent).toBeNull()
+  })
 
+  it('usa a abertura da Brapi quando o preço vem do fallback', () => {
     const brapi = resolverCotacao({
       ticker: 'PETR4',
       categoria: CategoriaAtivo.Acao,
@@ -163,6 +165,19 @@ describe('resolverCotacao — variação do dia', () => {
       precoMercado: null,
       precoBrapi: 1200,
       precoAbertura: 1000,
+    })
+    expect(brapi.fonte).toBe('brapi')
+    expect(brapi.precoAbertura).toBe(1000)
+    expect(brapi.variacaoDiaPercent).toBe(20)
+  })
+
+  it('mantém a variação nula quando a Brapi não informa a abertura', () => {
+    const brapi = resolverCotacao({
+      ticker: 'PETR4',
+      categoria: CategoriaAtivo.Acao,
+      ...base,
+      precoMercado: null,
+      precoBrapi: 1200,
     })
     expect(brapi.fonte).toBe('brapi')
     expect(brapi.precoAbertura).toBeNull()

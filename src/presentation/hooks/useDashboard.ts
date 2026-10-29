@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '@/presentation/app/providers/authContext'
 import { carregarDashboard, lerDashboardDoCache } from '@/application/dashboard'
-import type { DashboardData } from '@/application/dashboard'
+import type { DashboardData, DiagnosticoCotacoesBrapi } from '@/application/dashboard'
 import { persistirESincronizarCotacoesBrapi } from '@/application/brapi'
 import { jaTemSnapshotDeHoje, registrarSnapshot, upsertHistorico } from '@/application/historico'
 import type { RepositoryContext } from '@/infrastructure/repositories'
@@ -34,6 +34,49 @@ async function persistirCotacoesBrapiDoDashboard(
   }
 }
 
+/** Aviso exibido após uma atualização explícita de cotações. */
+export interface AvisoCotacoes {
+  texto: string
+  tipo: 'success' | 'info' | 'error'
+}
+
+/**
+ * Traduz o diagnóstico da Brapi em uma mensagem para o usuário.
+ *
+ * Só faz sentido quando algum ativo de Ação/FII/BDR/ETF estava elegível; nesse
+ * caso sempre há uma mensagem — inclusive quando a integração não está
+ * configurada ou não devolveu nenhum preço.
+ */
+function descreverAtualizacaoCotacoes(info: DiagnosticoCotacoesBrapi | null): AvisoCotacoes | null {
+  if (!info || info.total === 0) return null
+
+  if (info.comCotacao === 0) {
+    if (info.semToken) {
+      return {
+        tipo: 'error',
+        texto:
+          'A integração com a Brapi não está configurada. Informe o token em Configurações → Integrações para atualizar as cotações automaticamente.',
+      }
+    }
+    return {
+      tipo: 'error',
+      texto: `Não foi possível atualizar as cotações pela Brapi (${info.semCotacao.join(', ')}). Verifique o token em Configurações → Integrações e tente novamente.`,
+    }
+  }
+
+  if (info.semCotacao.length > 0) {
+    return {
+      tipo: 'info',
+      texto: `Cotações atualizadas pela Brapi: ${info.comCotacao} de ${info.total} ativos. Sem cotação: ${info.semCotacao.join(', ')}.`,
+    }
+  }
+
+  return {
+    tipo: 'info',
+    texto: `Cotações da Brapi atualizadas para ${info.comCotacao} ${info.comCotacao === 1 ? 'ativo' : 'ativos'}.`,
+  }
+}
+
 /** Estado e ações expostas pelo hook do dashboard. */
 export interface UseDashboardResult {
   data: DashboardData | null
@@ -44,7 +87,13 @@ export interface UseDashboardResult {
   isOffline: boolean
   error: string | null
   notice: string | null
-  /** Relê os dados da API (refresh explícito). */
+  /** Resultado da última atualização de cotações (null quando não houve). */
+  avisoCotacoes: AvisoCotacoes | null
+  /**
+   * Relê os dados da API e **atualiza as cotações B3 pela Brapi** (ignorando o
+   * cache local). Quando a integração não está configurada ou não devolve
+   * preço, `avisoCotacoes` traz a mensagem para a UI.
+   */
   refresh: () => Promise<void>
   /** Grava um snapshot manual no `Historico` (Seção 2). */
   registrarSnapshotManual: () => Promise<void>
@@ -68,6 +117,7 @@ export function useDashboard(): UseDashboardResult {
   const [isOffline, setIsOffline] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  const [avisoCotacoes, setAvisoCotacoes] = useState<AvisoCotacoes | null>(null)
   const autoSnapshotRef = useRef(false)
 
   const resolveContext = useCallback(async (): Promise<RepositoryContext | null> => {
@@ -84,14 +134,14 @@ export function useDashboard(): UseDashboardResult {
   }, [workspace, ensureAccessToken])
 
   const load = useCallback(
-    async (forceRefresh: boolean) => {
+    async (forceRefresh: boolean): Promise<DashboardData | null> => {
       if (forceRefresh) setIsRefreshing(true)
       else setIsLoading(true)
       setError(null)
       try {
         if (!workspace) {
           setError('Configure uma planilha para visualizar o dashboard.')
-          return
+          return null
         }
         // Sem cache local não há o que exibir offline (RNF08). No modo local a
         // origem é o próprio navegador: "offline" não impede a leitura.
@@ -103,7 +153,7 @@ export function useDashboard(): UseDashboardResult {
           } else {
             setError('Sem conexão e sem dados em cache. Conecte-se para carregar a carteira.')
           }
-          return
+          return null
         }
         const context = await resolveContext()
         if (!context) {
@@ -111,7 +161,7 @@ export function useDashboard(): UseDashboardResult {
             setData(cache)
             setIsOffline(true)
           }
-          return
+          return null
         }
         const resultado = await carregarDashboard(context, { forceRefresh })
         setData(resultado)
@@ -119,6 +169,7 @@ export function useDashboard(): UseDashboardResult {
         // Persistência best-effort das cotações Brapi usadas como fallback:
         // grava o preço na planilha (mesmo fluxo da marcação manual).
         void persistirCotacoesBrapiDoDashboard(context, resultado)
+        return resultado
       } catch (loadError) {
         const cache = workspace ? lerDashboardDoCache(workspace.spreadsheetId) : null
         if (cache) {
@@ -127,6 +178,7 @@ export function useDashboard(): UseDashboardResult {
         } else {
           setError(describeSheetsError(loadError))
         }
+        return null
       } finally {
         setIsLoading(false)
         setIsRefreshing(false)
@@ -161,7 +213,9 @@ export function useDashboard(): UseDashboardResult {
   }, [data, resolveContext, isOffline])
 
   const refresh = useCallback(async () => {
-    await load(true)
+    setAvisoCotacoes(null)
+    const resultado = await load(true)
+    setAvisoCotacoes(descreverAtualizacaoCotacoes(resultado?.cotacoesBrapi ?? null))
   }, [load])
 
   const registrarSnapshotManual = useCallback(async () => {
@@ -192,6 +246,7 @@ export function useDashboard(): UseDashboardResult {
     isOffline,
     error,
     notice,
+    avisoCotacoes,
     refresh,
     registrarSnapshotManual,
   }

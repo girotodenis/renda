@@ -19,7 +19,7 @@ import {
 import type { RepositoryContext } from '@/infrastructure/repositories'
 import { garantirColunasConsolidado, syncConsolidado } from '@/application/consolidado'
 import { registrarSnapshot } from '@/application/historico'
-import { buscarCotacoesBrapi, lerCotacaoCache as lerCotacaoCacheBrapi } from '@/infrastructure/brapi'
+import { atualizarCotacoesBrapi, lerCotacaoCache as lerCotacaoCacheBrapi } from '@/infrastructure/brapi'
 import { carregarConfiguracoes } from '@/application/configuracoes'
 import { isModoLocal } from '@/infrastructure/modoArmazenamento'
 import type { Consolidado, Operacao, Provento, Snapshot, Valuation } from '@/domain/entities'
@@ -49,8 +49,28 @@ export interface DashboardData {
   valuation: Valuation[]
   /** Cotações resolvidas por ticker (fonte + status — RF19/RNF04). */
   cotacoes: Map<string, CotacaoResolvida>
+  /**
+   * Diagnóstico da consulta de cotações B3 (Brapi) desta carga — usado pela UI
+   * para avisar quando a integração não devolveu preços. `null` quando não há
+   * ativos elegíveis ou a carga não consultou a Brapi (cache puro).
+   */
+  cotacoesBrapi: DiagnosticoCotacoesBrapi | null
   /** ISO do momento em que os dados foram montados (cache ou API). */
   carregadoEm: string
+}
+
+/** Resumo do que a integração Brapi conseguiu (ou não) atualizar. */
+export interface DiagnosticoCotacoesBrapi {
+  /** Tickers elegíveis (Ação/FII/BDR/ETF com posição aberta). */
+  total: number
+  /** Quantos desses têm cotação Brapi disponível. */
+  comCotacao: number
+  /** Tickers sem cotação nesta consulta. */
+  semCotacao: string[]
+  /** `true` quando não há token da Brapi configurado. */
+  semToken: boolean
+  /** `true` quando a consulta ignorou o cache (atualização manual). */
+  forcado: boolean
 }
 
 export interface CarregarDashboardOptions {
@@ -133,13 +153,14 @@ function montarEntradas(
   precoAberturaMercado: ReadonlyMap<string, number>,
   precoManual: ReadonlyMap<string, number>,
   precoBrapi: ReadonlyMap<string, number>,
+  aberturaBrapi: ReadonlyMap<string, number> = new Map(),
 ): EntradaCotacao[] {
   return posicoes.map((posicao) => ({
     ticker: posicao.ticker,
     categoria: posicao.categoria,
     precoMedio: posicao.precoMedio,
     precoMercado: precoMercado.get(posicao.ticker) ?? null,
-    precoAbertura: precoAberturaMercado.get(posicao.ticker) ?? null,
+    precoAbertura: precoAberturaMercado.get(posicao.ticker) ?? aberturaBrapi.get(posicao.ticker) ?? null,
     precoManual: precoManual.get(posicao.ticker) ?? null,
     precoBrapi: precoBrapi.get(posicao.ticker) ?? null,
   }))
@@ -153,6 +174,14 @@ interface MontarConsulta {
   valuation: readonly Valuation[]
   /** Preços de mercado B3 via Brapi (centavos), fallback do `GOOGLEFINANCE`. */
   cotacoesBrapi: ReadonlyMap<string, number>
+  /** Aberturas do dia obtidas da Brapi (centavos), por ticker. */
+  aberturasBrapi?: ReadonlyMap<string, number>
+  /**
+   * `true` numa atualização explícita: a cotação da Brapi substitui o preço
+   * gravado no `Consolidado` (que pode estar defasado após a remoção do
+   * `GOOGLEFINANCE`).
+   */
+  forcarBrapi?: boolean
   /** No modo local, `Consolidado` contém valores estáticos, não cotações GoogleFinance. */
   modoLocal?: boolean
 }
@@ -165,6 +194,8 @@ function montarDashboard(consulta: MontarConsulta): DashboardData {
     historico,
     valuation,
     cotacoesBrapi,
+    aberturasBrapi = new Map(),
+    forcarBrapi = false,
     modoLocal = false,
   } = consulta
 
@@ -173,6 +204,7 @@ function montarDashboard(consulta: MontarConsulta): DashboardData {
     proventos: [...proventos],
     historico: [...historico],
     valuation: [...valuation],
+    cotacoesBrapi: null,
     carregadoEm: new Date().toISOString(),
   }
 
@@ -198,8 +230,14 @@ function montarDashboard(consulta: MontarConsulta): DashboardData {
   }
   for (const [ticker, preco] of cotacoesBrapi) precoBrapi.set(ticker, preco)
 
+  // Atualização explícita: a cotação recém-buscada tem prioridade sobre o preço
+  // gravado no `Consolidado` (que pode vir de uma importação antiga).
+  if (forcarBrapi) {
+    for (const ticker of cotacoesBrapi.keys()) precoMercado.delete(ticker)
+  }
+
   const cotacoes = resolverCotacoes(
-    montarEntradas(posicoes, precoMercado, precoAbertura, precoManual, precoBrapi),
+    montarEntradas(posicoes, precoMercado, precoAbertura, precoManual, precoBrapi, aberturasBrapi),
   )
   const consolidado = aplicarPrecosAtuais(posicoes, precosDeCotacoes(cotacoes))
 
@@ -249,23 +287,29 @@ export async function carregarDashboard(
   const valuation = await carregarValuations(context, options.offline === true)
   const config = await carregarConfiguracoes(context, options.offline === true)
   const modoLocal = isModoLocal()
-  const cotacoesBrapi = await resolverCotacoesBrapi(
+  const forceRefresh = options.forceRefresh === true
+  const brapi = await resolverCotacoesBrapi(
     operacoes,
     linhasConsolidado,
     options.offline === true,
     config.brapiToken,
-    modoLocal,
+    modoLocal || forceRefresh,
+    forceRefresh,
   )
 
-  return montarDashboard({
+  const dados = montarDashboard({
     operacoes,
     linhasConsolidado,
     proventos,
     historico,
     valuation,
-    cotacoesBrapi,
+    cotacoesBrapi: brapi.precos,
+    aberturasBrapi: brapi.aberturas,
+    forcarBrapi: forceRefresh,
     modoLocal,
   })
+
+  return { ...dados, cotacoesBrapi: brapi.diagnostico }
 }
 
 /**
@@ -301,30 +345,35 @@ function tickersBrapi(
     .map((posicao) => posicao.ticker)
 }
 
-/** Cotações Brapi disponíveis no cache local para os tickers elegíveis. */
+/** Cotações Brapi do cache local (preços + aberturas) para os tickers elegíveis. */
 function cotacoesBrapiDoCache(
   operacoes: readonly Operacao[],
   linhasConsolidado: readonly Consolidado[],
   atualizarMesmoComPreco: boolean,
-): Map<string, number> {
+): { precos: Map<string, number>; aberturas: Map<string, number> } {
   const tickers = tickersBrapi(
     calcularPosicoes(operacoes),
     precosDoConsolidado(linhasConsolidado, atualizarMesmoComPreco),
     atualizarMesmoComPreco,
   )
-  const cotacoes = new Map<string, number>()
+  const precos = new Map<string, number>()
+  const aberturas = new Map<string, number>()
   for (const ticker of tickers) {
     const cache = lerCotacaoCacheBrapi(ticker)
-    if (cache) cotacoes.set(ticker, cache.preco)
+    if (!cache) continue
+    precos.set(ticker, cache.preco)
+    if (cache.precoAbertura !== null) aberturas.set(ticker, cache.precoAbertura)
   }
-  return cotacoes
+  return { precos, aberturas }
 }
 
 /**
- * Obtém cotações B3 via Brapi (centavos) para posições de Ação/FII/BDR/ETF sem
- * preço do `GOOGLEFINANCE`. No modo local, consulta todas as posições abertas,
- * pois o `Consolidado` contém valores estáticos. No modo offline usa apenas o
- * cache local (RNF08); caso contrário, cache-first com fallback.
+ * Obtém cotações B3 via Brapi (centavos) para posições de Ação/FII/BDR/ETF.
+ *
+ * No modo local e na atualização explícita (`forceRefresh`), consulta **todas**
+ * as posições abertas — o `Consolidado` pode conter preços estáticos (modo local
+ * e banco JSON, sem `GOOGLEFINANCE`). Fora isso, apenas as posições sem preço
+ * na planilha. No modo offline usa somente o cache local (RNF08).
  */
 async function resolverCotacoesBrapi(
   operacoes: readonly Operacao[],
@@ -332,22 +381,57 @@ async function resolverCotacoesBrapi(
   offline: boolean,
   token: string,
   atualizarMesmoComPreco: boolean,
-): Promise<Map<string, number>> {
+  forceRefresh: boolean,
+): Promise<ResolucaoBrapi> {
   const tickers = tickersBrapi(
     calcularPosicoes(operacoes),
     precosDoConsolidado(linhasConsolidado, atualizarMesmoComPreco),
     atualizarMesmoComPreco,
   )
-  if (tickers.length === 0) return new Map()
-
-  if (offline) {
-    return cotacoesBrapiDoCache(operacoes, linhasConsolidado, atualizarMesmoComPreco)
+  if (tickers.length === 0) {
+    return { precos: new Map(), aberturas: new Map(), diagnostico: null }
   }
 
-  const cotacoes = new Map<string, number>()
-  const resolvidas = await buscarCotacoesBrapi(tickers, { token })
-  for (const [ticker, preco] of resolvidas) cotacoes.set(ticker, preco)
-  return cotacoes
+  if (offline) {
+    const cache = cotacoesBrapiDoCache(operacoes, linhasConsolidado, atualizarMesmoComPreco)
+    return {
+      ...cache,
+      diagnostico: {
+        total: tickers.length,
+        comCotacao: cache.precos.size,
+        semCotacao: tickers.filter((ticker) => !cache.precos.has(ticker)),
+        semToken: token.trim().length === 0,
+        forcado: false,
+      },
+    }
+  }
+
+  const resultado = await atualizarCotacoesBrapi(tickers, { token, forceRefresh })
+  const precos = new Map<string, number>()
+  const aberturas = new Map<string, number>()
+  for (const [ticker, cotacao] of resultado.cotacoes) {
+    precos.set(ticker, cotacao.preco)
+    if (cotacao.precoAbertura !== null) aberturas.set(ticker, cotacao.precoAbertura)
+  }
+
+  return {
+    precos,
+    aberturas,
+    diagnostico: {
+      total: tickers.length,
+      comCotacao: precos.size,
+      semCotacao: resultado.semCotacao,
+      semToken: resultado.semToken,
+      forcado: forceRefresh,
+    },
+  }
+}
+
+/** Cotações Brapi resolvidas (+ aberturas) e o diagnóstico da consulta. */
+interface ResolucaoBrapi {
+  precos: Map<string, number>
+  aberturas: Map<string, number>
+  diagnostico: DiagnosticoCotacoesBrapi | null
 }
 
 /**
@@ -360,21 +444,24 @@ export function lerDashboardDoCache(spreadsheetId: string): DashboardData | null
   if (operacoes === null && linhasConsolidado === null) return null
 
   const modoLocal = isModoLocal()
-  const cotacoesBrapi = cotacoesBrapiDoCache(
+  const { precos, aberturas } = cotacoesBrapiDoCache(
     operacoes ?? [],
     linhasConsolidado ?? [],
     modoLocal,
   )
 
-  return montarDashboard({
+  const dados = montarDashboard({
     operacoes: operacoes ?? [],
     linhasConsolidado: linhasConsolidado ?? [],
     proventos: proventosRepo.readCache(spreadsheetId) ?? [],
     historico: historicoRepo.readCache(spreadsheetId) ?? [],
     valuation: valuationRepo.readCache(spreadsheetId) ?? [],
-    cotacoesBrapi,
+    cotacoesBrapi: precos,
+    aberturasBrapi: aberturas,
     modoLocal,
   })
+
+  return { ...dados, cotacoesBrapi: null }
 }
 
 /** Resumo patrimonial atual (RF07) a partir do estado em cache/API. */

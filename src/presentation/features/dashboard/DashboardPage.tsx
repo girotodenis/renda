@@ -73,6 +73,7 @@ function DashboardContent() {
     isOffline,
     error,
     notice,
+    avisoCotacoes,
     refresh,
     registrarSnapshotManual,
   } = useDashboard()
@@ -218,6 +219,7 @@ function DashboardContent() {
 
       {error ? <Alert variant="error">{error}</Alert> : null}
       {notice ? <Alert variant="success">{notice}</Alert> : null}
+      {avisoCotacoes ? <Alert variant={avisoCotacoes.tipo}>{avisoCotacoes.texto}</Alert> : null}
       {isOffline ? (
         <Alert variant="info" title="Modo offline">
           Sem conexão com a internet. Exibindo o último estado da carteira salvo em cache.
