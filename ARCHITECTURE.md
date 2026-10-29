@@ -11,7 +11,7 @@ funcionais da especificação (RF01–RF23, RNF02–RNF08).
 src/
 ├── domain/            # Núcleo: entidades, objetos de valor, serviços de domínio e ports
 ├── application/       # Casos de uso (orquestração), sem UI nem detalhes de infra
-├── infrastructure/    # Adaptadores: Google Sheets/Drive/Identity, storage, cache
+├── infrastructure/    # Adaptadores: Google Drive/Identity, storage, cache
 └── presentation/      # UI React: app, features, components, hooks
 ```
 
@@ -48,23 +48,27 @@ flowchart LR
 | **Ports (contratos de repositório)** | `domain/repositories/ports.ts` — `Repository<T>`, `CrudRepository<T>` |
 | **Linguagem ubíqua** | `Operacao`, `Provento`, `Consolidado`, `Snapshot`, `Carteira`, `Aporte`, `Desvio`, `Split`, `Grupamento`, `Bonificação` |
 
-## Camada anticorrupção (Sheets)
+## Camada anticorrupção (dados em células)
 
-`infrastructure/sheets/*` traduz entre o domínio e a planilha do Google, para
-que a "língua" do Sheets (células, cabeçalhos, fórmulas) nunca vaze para o
-domínio:
+`infrastructure/sheets/*` e `infrastructure/driveFile/*` traduzem entre o
+domínio e a origem de dados, para que a "língua" das células (intervalos A1,
+cabeçalhos, valores tipados) nunca vaze para o domínio:
 
-- `sheetsSchema.ts` (domínio) — nomes e cabeçalhos das 5 abas (fonte única).
+- `sheetsSchema.ts` (domínio) — nomes e cabeçalhos das 7 abas (fonte única).
 - `sheetCodecs.ts` — conversão linha ↔ entidade.
 - `sheetCells.ts` — células ↔ valores tipados (datas serial, centavos, pt-BR).
-- `sheetFormulas.ts` — fórmulas `GOOGLEFINANCE`/soma da aba `Consolidado`.
-- `gateway.ts` — porta de rede da API do Google Sheets.
+- `sheetFormulas.ts` — fórmulas `GOOGLEFINANCE`/soma da aba `Consolidado`
+  (legado Sheets; com o banco JSON o `Consolidado` é 100% calculado no cliente).
+- `sheets/gateway.ts` — porta de rede legada da API do Google Sheets.
+- `driveFile/gateway.ts` — porta de rede do banco JSON no Drive (substitui o
+  Sheets): mesma superfície de células, sobre um arquivo `minhasacoes.json.gz`
+  compactado com gzip e lido/escrito via `drive.file`.
 
 ## Princípios SOLID
 
 | Princípio | Aplicação |
 | --- | --- |
-| **S** — Responsabilidade única | Cada módulo tem uma razão para mudar: `domain/consolidado.ts` calcula; `application/consolidado.ts` sincroniza; `infrastructure/sheets/gateway.ts` fala HTTP. |
+| **S** — Responsabilidade única | Cada módulo tem uma razão para mudar: `domain/consolidado.ts` calcula; `application/consolidado.ts` sincroniza; `infrastructure/driveFile/gateway.ts` fala HTTP/Drive. |
 | **O** — Aberto/fechado | Novas fontes de cotação ou novos tipos de evento são adicionados sem alterar os módulos consumidores (ex.: `resolverCotacao` por categoria). |
 | **L** — Substituição de Liskov | `CrudRepository<T>` estende `Repository<T>` sem quebrar os contratos; qualquer implementação de um port pode substituir a atual. |
 | **I** — Segregação de interfaces | `Repository<T>` (leitura+escrita de aba) é separado de `CrudRepository<T>` (edição/remoção por ID). |
@@ -83,11 +87,13 @@ domínio:
 
 ## Adaptadores (infrastructure)
 
-- `sheets/gateway.ts` — Google Sheets API v4 (RF01–RF06).
-- `drive.ts`, `googleIdentity.ts`, `googleConfig.ts` — Google Picker e OAuth.
-  `drive.ts` também garante a pasta padrão `minhasacoe_app` (`ensureAppFolder`) e
-  move para ela as planilhas criadas (`moveFileToFolder`) — tudo coberto pelo
-  escopo `drive.file`, sem permissões extras.
+- `driveFile/gateway.ts` — banco JSON no Google Drive via `drive.file`
+  (RF01–RF06): operações de células sobre um único arquivo compactado.
+- `drive.ts`, `googleIdentity.ts`, `googleConfig.ts` — OAuth 2.0 e organização
+  no Drive. `drive.ts` garante a pasta padrão `minhasacoe_app`
+  (`ensureAppFolder`) e move para ela o arquivo criado (`moveFileToFolder`) —
+  tudo coberto pelo escopo `drive.file`, sem permissões extras.
+- `compression.ts` — compactação gzip nativa (`CompressionStream`) do banco JSON.
 - `brapi.ts` — fallback de cotação B3 (cache-first, nunca lança).
 - `storage.ts` — `localStorage` para token/workspace/consent (RNF05).
 - `db.ts` + `kvStore.ts` — IndexedDB (stores `sheets`/`outbox`) com espelho em
@@ -110,7 +116,7 @@ requisições ao Google carregam `Bearer token`.
 flowchart LR
   UI[presentation] --> APP[application]
   APP --> REPO[repositories<br/>offline-aware]
-  REPO -->|online| API[(Google Sheets API)]
+  REPO -->|online| API[(Google Drive<br/>JSON .gz)]
   REPO -->|offline| OUTBOX[outbox<br/>IndexedDB]
   REPO --> CACHE[cache de abas<br/>IndexedDB]
   APP --> SYNC[sync.ts]
