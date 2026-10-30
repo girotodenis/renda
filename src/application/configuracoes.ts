@@ -6,7 +6,7 @@ import {
 import type { IntegracoesConfig } from '@/domain/configuracoes'
 import { configuracoesRepo } from '@/infrastructure/repositories'
 import type { RepositoryContext } from '@/infrastructure/repositories'
-import { ensureRequiredSheets } from '@/infrastructure/sheets/gateway'
+import { ensureRequiredSheets } from '@/infrastructure/sheets/gatewayRouter'
 
 /**
  * Casos de uso das configurações de integrações (aba `Configuracoes`).

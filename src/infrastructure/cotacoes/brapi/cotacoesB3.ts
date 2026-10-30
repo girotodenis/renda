@@ -1,4 +1,5 @@
 import { parseDecimalBR, toCentavos } from '@/domain/money'
+import type { CotacaoMercado, ResultadoCotacoes } from '@/domain/provedoresCotacao'
 import { clearStorageKeys, readStorageJson, writeStorageJson } from '@/infrastructure/storage'
 
 /**
@@ -27,20 +28,13 @@ const CACHE_PREFIX = 'minhaacoes.brapi.v1.'
 export interface BuscarBrapiOptions {
   /** Token da Brapi.dev (vazio = fallback desligado). */
   token?: string
+  /** Ignora o cache local e consulta a API (atualização manual do dashboard). */
+  forceRefresh?: boolean
 }
 
 /** Normaliza o token recebido; vazio quando não configurado. */
 function resolverToken(token?: string): string {
   return typeof token === 'string' ? token.trim() : ''
-}
-
-/** Cotação de um ticker B3. */
-export interface BrapiCotacao {
-  /** Preço unitário em **centavos**. */
-  preco: number
-  /** ISO da última atualização conhecida (`null` quando desconhecida). */
-  atualizadoEm: string | null
-  fonte: 'api' | 'cache'
 }
 
 function isRegistro(value: unknown): value is Record<string, unknown> {
@@ -69,11 +63,12 @@ function extrairData(value: unknown): string | null {
 
 /**
  * Extrai `ticker → cotação` da resposta da Brapi
- * (`{ results: [{ symbol, regularMarketPrice, regularMarketTime }] }`).
- * Entradas inesperadas ou sem preço são ignoradas.
+ * (`{ results: [{ symbol, regularMarketPrice, regularMarketOpen, regularMarketTime }] }`).
+ * A abertura vem na mesma resposta (sem chamada extra) e alimenta a coluna
+ * "Variação Dia (%)". Entradas inesperadas ou sem preço são ignoradas.
  */
-export function extrairCotacoes(payload: unknown): Map<string, BrapiCotacao> {
-  const resultado = new Map<string, BrapiCotacao>()
+export function extrairCotacoes(payload: unknown): Map<string, CotacaoMercado> {
+  const resultado = new Map<string, CotacaoMercado>()
   if (!isRegistro(payload) || payload.error === true) return resultado
   const results = payload.results
   if (!Array.isArray(results)) return resultado
@@ -85,6 +80,7 @@ export function extrairCotacoes(payload: unknown): Map<string, BrapiCotacao> {
     if (symbol.length === 0 || preco === null) continue
     resultado.set(symbol, {
       preco,
+      precoAbertura: extrairPreco(item.regularMarketOpen),
       atualizadoEm: extrairData(item.regularMarketTime),
       fonte: 'api',
     })
@@ -96,13 +92,13 @@ function cacheKey(ticker: string): string {
   return `${CACHE_PREFIX}${ticker.trim().toUpperCase()}`
 }
 
-function lerCache(ticker: string): { valor: BrapiCotacao; gravadoEm: number } | null {
-  const registro = readStorageJson<{ cotacao: BrapiCotacao; gravadoEm: number }>(cacheKey(ticker))
+function lerCache(ticker: string): { valor: CotacaoMercado; gravadoEm: number } | null {
+  const registro = readStorageJson<{ cotacao: CotacaoMercado; gravadoEm: number }>(cacheKey(ticker))
   if (!registro || typeof registro.gravadoEm !== 'number') return null
   return { valor: registro.cotacao, gravadoEm: registro.gravadoEm }
 }
 
-function gravarCache(ticker: string, cotacao: BrapiCotacao): void {
+function gravarCache(ticker: string, cotacao: CotacaoMercado): void {
   writeStorageJson(cacheKey(ticker), { cotacao, gravadoEm: Date.now() })
 }
 
@@ -112,7 +108,7 @@ export function clearBrapiCache(): void {
 }
 
 /** Lê a cotação do cache local, quando ainda válida. */
-export function lerCotacaoCache(ticker: string): BrapiCotacao | null {
+export function lerCotacaoCache(ticker: string): CotacaoMercado | null {
   const registro = lerCache(ticker)
   if (!registro) return null
   if (Date.now() - registro.gravadoEm > CACHE_TTL_MS) return null
@@ -120,48 +116,77 @@ export function lerCotacaoCache(ticker: string): BrapiCotacao | null {
 }
 
 /**
+ * Atualiza as cotações B3 dos tickers informados (cache-first, ou direto na API
+ * com `forceRefresh`). Nunca lança: devolve o que foi possível obter e **o que
+ * faltou**, para a UI avisar o usuário.
+ *
+ * O token é resolvido por `options.token` (config do usuário na planilha);
+ * quando vazio, a integração fica desligada (`semToken: true`, apenas cache).
+ */
+export async function atualizarCotacoesBrapi(
+  tickers: readonly string[],
+  options: BuscarBrapiOptions = {},
+): Promise<ResultadoCotacoes> {
+  const cotacoes = new Map<string, CotacaoMercado>()
+  const semCotacao: string[] = []
+  const pendentes: string[] = []
+  const consultados = new Set<string>()
+
+  for (const ticker of tickers) {
+    const normalizado = ticker.trim().toUpperCase()
+    if (normalizado.length === 0 || consultados.has(normalizado)) continue
+    consultados.add(normalizado)
+
+    const cache = options.forceRefresh ? null : lerCotacaoCache(normalizado)
+    if (cache) cotacoes.set(normalizado, cache)
+    else pendentes.push(normalizado)
+  }
+
+  const token = resolverToken(options.token)
+  const semToken = token.length === 0
+  if (semToken || typeof fetch !== 'function') {
+    semCotacao.push(...pendentes)
+    return { cotacoes, semCotacao, semToken, consultouRede: false }
+  }
+
+  // O plano gratuito da Brapi permite apenas 1 ativo por requisição — buscamos
+  // um ticker por vez. Falhas individuais são registradas (best-effort).
+  let consultouRede = false
+  for (const ticker of pendentes) {
+    consultouRede = true
+    const cotacao = await buscarCotacao(ticker, token)
+    if (!cotacao) {
+      semCotacao.push(ticker)
+      continue
+    }
+    gravarCache(ticker, cotacao)
+    cotacoes.set(ticker, cotacao)
+  }
+
+  return { cotacoes, semCotacao, semToken, consultouRede }
+}
+
+/**
  * Busca cotações B3 (centavos) para os tickers informados (cache-first).
  * Nunca lança: em caso de falha retorna apenas o que estiver disponível.
  *
- * O token é resolvido por `options.token` (config do usuário na planilha);
- * quando vazio, o fallback fica desligado (apenas cache).
+ * Atalho de `atualizarCotacoesBrapi` para os fluxos que só precisam dos preços.
  */
 export async function buscarCotacoesBrapi(
   tickers: readonly string[],
   options: BuscarBrapiOptions = {},
 ): Promise<Map<string, number>> {
-  const resultado = new Map<string, number>()
-  const pendentes: string[] = []
-
-  for (const ticker of tickers) {
-    const normalizado = ticker.trim().toUpperCase()
-    if (normalizado.length === 0 || resultado.has(normalizado)) continue
-    const cache = lerCotacaoCache(normalizado)
-    if (cache) resultado.set(normalizado, cache.preco)
-    else pendentes.push(normalizado)
-  }
-
-  if (pendentes.length === 0) return resultado
-  const token = resolverToken(options.token)
-  if (token.length === 0) return resultado
-  if (typeof fetch !== 'function') return resultado
-
-  // O plano gratuito da Brapi permite apenas 1 ativo por requisição — buscamos
-  // um ticker por vez. Falhas individuais são ignoradas (best-effort).
-  for (const ticker of pendentes) {
-    const cotacao = await buscarCotacao(ticker, token)
-    if (!cotacao) continue
-    gravarCache(ticker, cotacao)
-    resultado.set(ticker, cotacao.preco)
-  }
-  return resultado
+  const { cotacoes } = await atualizarCotacoesBrapi(tickers, options)
+  const precos = new Map<string, number>()
+  for (const [ticker, cotacao] of cotacoes) precos.set(ticker, cotacao.preco)
+  return precos
 }
 
 /** Busca (best-effort) a cotação de um único ticker. Falhas retornam `null`. */
 async function buscarCotacao(
   ticker: string,
   token: string,
-): Promise<BrapiCotacao | null> {
+): Promise<CotacaoMercado | null> {
   if (typeof AbortController !== 'function') return null
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)

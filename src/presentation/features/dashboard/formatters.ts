@@ -28,6 +28,12 @@ export function formatarPercentual(valor: number): string {
   })}%`
 }
 
+/** Formata um percentual com sinal explícito (ex.: `1.23` → `"+1,23%"`). */
+export function formatarPercentualComSinal(valor: number): string {
+  const sinal = valor > 0 ? '+' : ''
+  return `${sinal}${formatarPercentual(valor)}`
+}
+
 /** Formata uma quantidade (ex.: `150` → `"150"`, `0.5` → `"0,5"`). */
 export function formatarQuantidade(quantidade: number): string {
   return quantidade.toLocaleString('pt-BR', { maximumFractionDigits: 8 })

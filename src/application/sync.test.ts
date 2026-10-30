@@ -35,6 +35,7 @@ interface FakeSync {
   duplicados: Set<string>
   syncCalls: () => number
   prefetchCalls: () => number
+  batchCalls: () => number
 }
 
 /** Fábrica de dependências falsas com estado observável. */
@@ -47,6 +48,7 @@ function createFakes(initial: Mutation[]): FakeSync {
   const tentativas = new Map<string, number>()
   let syncCalls = 0
   let prefetchCalls = 0
+  let batchCalls = 0
 
   const deps: SyncDependencies = {
     listMutations: () => fila.map((mutation) => ({ ...mutation })),
@@ -71,6 +73,10 @@ function createFakes(initial: Mutation[]): FakeSync {
     prefetchAllSheets: async () => {
       prefetchCalls += 1
     },
+    executarEmLote: async (_context, fn) => {
+      batchCalls += 1
+      return fn()
+    },
   }
 
   return {
@@ -82,6 +88,7 @@ function createFakes(initial: Mutation[]): FakeSync {
     duplicados,
     syncCalls: () => syncCalls,
     prefetchCalls: () => prefetchCalls,
+    batchCalls: () => batchCalls,
   }
 }
 
@@ -170,5 +177,38 @@ describe('sincronizarPendentes', () => {
     expect(resultado.aplicadas).toBe(0)
     expect(resultado.pendentes).toBe(1)
     expect(resultado.erro).toContain('Sessão expirada')
+  })
+
+  it('aplica a fila inteira em um único lote', async () => {
+    const fakes = createFakes([
+      makeMutation({ id: 'm1' }),
+      makeMutation({ id: 'm2' }),
+      makeMutation({ id: 'm3' }),
+    ])
+
+    const resultado = await sincronizarPendentes(context, { deps: fakes.deps })
+
+    // 1 gravação em lote para as 3 mutações (no backend JSON: 1 read + 1 write).
+    expect(fakes.batchCalls()).toBe(1)
+    expect(resultado.aplicadas).toBe(3)
+  })
+
+  it('mantém a fila quando a gravação do lote falha', async () => {
+    const fakes = createFakes([makeMutation({ id: 'm1' }), makeMutation({ id: 'm2' })])
+
+    const resultado = await sincronizarPendentes(context, {
+      deps: {
+        ...fakes.deps,
+        executarEmLote: async (_context, fn) => {
+          await fn()
+          throw new Error('Falha ao gravar o banco no Drive.')
+        },
+      },
+    })
+
+    expect(fakes.removidos).toEqual([])
+    expect(resultado.aplicadas).toBe(0)
+    expect(resultado.pendentes).toBe(2)
+    expect(resultado.erro).toContain('Drive')
   })
 })

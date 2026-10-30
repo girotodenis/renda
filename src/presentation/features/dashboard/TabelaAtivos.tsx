@@ -12,6 +12,7 @@ import {
   classeValor,
   formatarCentavos,
   formatarPercentual,
+  formatarPercentualComSinal,
 } from '@/presentation/features/dashboard/formatters'
 
 interface TabelaAtivosProps {
@@ -382,6 +383,15 @@ function TabelaPosicoes({
         <tbody>
           {ativos.map((ativo) => {
             const cotacao = cotacoes?.get(ativo.ticker)
+            const variacaoDia = cotacao?.variacaoDiaPercent ?? null
+            const tituloVariacao =
+              variacaoDia === null
+                ? undefined
+                : `Variação do dia: ${formatarPercentualComSinal(variacaoDia)}`
+            const classeCotacao =
+              variacaoDia === null || variacaoDia === 0
+                ? 'text-slate-700'
+                : classeValor(variacaoDia)
             return (
               <tr key={ativo.ticker} className="border-t border-slate-100">
                 <td className="px-4 py-2">
@@ -409,8 +419,10 @@ function TabelaPosicoes({
                 <td className="px-4 py-2 text-right tabular-nums text-slate-700">
                   {formatarCentavos(ativo.precoMedio)}
                 </td>
-                <td className="px-4 py-2 text-right tabular-nums text-slate-700">
-                  <span className="block">{formatarCentavos(ativo.precoAtual)}</span>
+                <td className={cn('px-4 py-2 text-right tabular-nums', classeCotacao)}>
+                  <span className="block" title={tituloVariacao}>
+                    {formatarCentavos(ativo.precoAtual)}
+                  </span>
                   {cotacao && cotacao.status !== 'disponivel' ? (
                     <CotacaoSelo status={cotacao.status} />
                   ) : null}

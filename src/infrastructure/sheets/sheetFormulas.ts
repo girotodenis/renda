@@ -1,7 +1,9 @@
 import { usaGoogFinance } from '@/domain/categoria'
 import type { PosicaoConsolidada, PrecosAtuais } from '@/domain/consolidado'
+import type { Consolidado } from '@/domain/entities'
 import { fromCentavos } from '@/domain/money'
 import type { CellValue } from '@/infrastructure/sheets/sheetCells'
+import { consolidadoCodec } from '@/infrastructure/sheets/sheetCodecs'
 import { SHEET_HEADERS } from '@/domain/sheetsSchema'
 
 /**
@@ -38,6 +40,22 @@ export function buildGoogFinanceFormula(
   return `=GOOGLEFINANCE("BVMF:"&${tickerCellRef}${separator}"price")`
 }
 
+/** Monta a fórmula de abertura do dia: `=GOOGLEFINANCE("BVMF:"&$A2;"priceopen")`. */
+export function buildGoogFinanceOpenFormula(
+  tickerCellRef: string,
+  separator: FormulaSeparator,
+): string {
+  return `=GOOGLEFINANCE("BVMF:"&${tickerCellRef}${separator}"priceopen")`
+}
+
+/**
+ * Monta a fórmula da variação do dia (%) entre o preço atual (coluna E) e a
+ * abertura (coluna K). Fica vazia quando qualquer um dos dois não é positivo.
+ */
+export function buildVariacaoDiaFormula(row: number, separator: FormulaSeparator): string {
+  return `=IF(OR($K${row}<=0${separator}$E${row}<=0)${separator}""${separator}($E${row}-$K${row})/$K${row}*100)`
+}
+
 /** Entrada para gerar as linhas da aba `Consolidado`. */
 export interface ConsolidadoSheetInput {
   /** Posições calculadas (sem cotação), na ordem de escrita. */
@@ -54,12 +72,12 @@ const CONSOLIDADO_COLUMN_COUNT = SHEET_HEADERS.Consolidado.length
  * Gera as linhas de dados da aba `Consolidado` (a partir da linha 2), na ordem
  * exata das colunas: `Ticker`, `Categoria`, `Quantidade Atual`, `Preço Médio`,
  * `Preço Atual`, `Total Investido`, `Valor Atual`, `Lucro/Prejuízo (R$)`,
- * `Lucro/Prejuízo (%)`, `% da Carteira`.
+ * `Lucro/Prejuízo (%)`, `% da Carteira`, `Preço Abertura`, `Variação Dia (%)`.
  *
- * Colunas C e D são valores calculados no app; E é `GOOGLEFINANCE` (Ação/FII/
- * BDR) — ou valor estático quando há cotação persistida (Tesouro/Renda Fixa/
- * fallback Brapi); F–J são fórmulas que referenciam C/D/E e o total da coluna
- * G — preservando o comportamento reativo da planilha.
+ * Colunas C e D são valores calculados no app; E e K são `GOOGLEFINANCE` (Ação/
+ * FII/BDR) — ou valores estáticos quando há cotação persistida (Tesouro/Renda
+ * Fixa/fallback da API de cotações); F–J e L são fórmulas que referenciam C/D/E/K e o total
+ * da coluna G — preservando o comportamento reativo da planilha.
  */
 export function buildConsolidadoRows(input: ConsolidadoSheetInput): CellValue[][] {
   const { posicoes, precosAtuais, separator } = input
@@ -69,12 +87,20 @@ export function buildConsolidadoRows(input: ConsolidadoSheetInput): CellValue[][
     const row = index + 2
     const precoAtual = precosAtuais.get(posicao.ticker) ?? posicao.precoMedio
     // Ação/FII/BDR/ETF usa GOOGLEFINANCE; quando há preço persistido (fallback
-    // Brapi), grava o valor estático em vez da fórmula — o preço persiste na
+    // API de cotações), grava o valor estático em vez da fórmula — o preço persiste na
     // planilha mesmo quando o GOOGLEFINANCE falha.
-    const precoAtualCell =
+    const usaGoogFinanceNaLinha =
       usaGoogFinance(posicao.categoria) && !precosAtuais.has(posicao.ticker)
-        ? buildGoogFinanceFormula(`$A${row}`, separator)
-        : fromCentavos(precoAtual)
+    const precoAtualCell = usaGoogFinanceNaLinha
+      ? buildGoogFinanceFormula(`$A${row}`, separator)
+      : fromCentavos(precoAtual)
+    // A abertura acompanha a mesma decisão do preço atual: fórmula somente
+    // quando a linha é reativa ao GOOGLEFINANCE (evita comparar fontes/sessões
+    // diferentes).
+    const precoAberturaCell = usaGoogFinanceNaLinha
+      ? buildGoogFinanceOpenFormula(`$A${row}`, separator)
+      : ''
+    const variacaoDiaCell = usaGoogFinanceNaLinha ? buildVariacaoDiaFormula(row, separator) : ''
 
     const totalInvestido = `=$C${row}*$D${row}`
     const valorAtual = `=$C${row}*$E${row}`
@@ -94,9 +120,32 @@ export function buildConsolidadoRows(input: ConsolidadoSheetInput): CellValue[][
       lucro,
       lucroPercent,
       percentualCarteira,
+      precoAberturaCell,
+      variacaoDiaCell,
     ]
 
     // Garante que nenhuma coluna seja adicionada/removida sem atualizar o schema.
+    if (cells.length !== CONSOLIDADO_COLUMN_COUNT) {
+      throw new Error('Número de colunas do Consolidado divergente do esquema.')
+    }
+
+    return cells
+  })
+}
+
+/**
+ * Linhas da aba `Consolidado` com **valores estáticos** (sem fórmulas).
+ *
+ * Usado pelo modo sem Google: como não há superfície de cálculo, a aba recebe o
+ * resultado já calculado pelo app (`aplicarPrecosAtuais`). Reutiliza o codec da
+ * aba para não duplicar a conversão de centavos/colunas.
+ */
+export function buildConsolidadoRowsEstaticas(
+  consolidado: readonly Consolidado[],
+): CellValue[][] {
+  return consolidado.map((linha) => {
+    const cells = consolidadoCodec.toRow(linha)
+
     if (cells.length !== CONSOLIDADO_COLUMN_COUNT) {
       throw new Error('Número de colunas do Consolidado divergente do esquema.')
     }

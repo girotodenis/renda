@@ -1,5 +1,6 @@
-import { permiteMarcacaoManual, usaGoogFinance } from '@/domain/categoria'
+import { isTesouroDireto, permiteMarcacaoManual, usaGoogFinance } from '@/domain/categoria'
 import type { CategoriaAtivo, Operacao } from '@/domain/entities'
+import { round2 } from '@/domain/money'
 
 /**
  * Resolução de **cotações** por ativo (RF10, RF19, RNF04).
@@ -9,12 +10,13 @@ import type { CategoriaAtivo, Operacao } from '@/domain/entities'
  * "cotação indisponível" sem travar nem quebrar o dashboard (RNF04).
  *
  * Ordem de preferência:
- * - Ação/FII/BDR/ETF: `GOOGLEFINANCE` (planilha) → Brapi (fallback) → preço médio.
- * - Tesouro Direto e Renda Fixa: marcação manual → estimativa → indisponível.
+ * - Ação/FII/BDR/ETF: `GOOGLEFINANCE` (planilha) → API de cotações (fallback) → preço médio.
+ * - Tesouro Direto: API de cotações (preço de resgate) → marcação manual → estimativa → indisponível.
+ * - Renda Fixa: marcação manual → estimativa → indisponível.
  */
 
 /** Fonte do preço atual de um ativo. */
-export type FonteCotacao = 'googlefinance' | 'brapi' | 'manual' | 'estimada'
+export type FonteCotacao = 'googlefinance' | 'api' | 'manual' | 'estimada'
 
 /** Estado da cotação exibido na UI. */
 export type StatusCotacao = 'disponivel' | 'manual' | 'estimada' | 'indisponivel'
@@ -27,8 +29,13 @@ export interface EntradaCotacao {
   precoMedio: number
   /** Preço de mercado em **centavos** (GOOGLEFINANCE ou último preço conhecido); `null` se ausente. */
   precoMercado: number | null
-  /** Preço de mercado em **centavos** (Brapi); `null` se ausente (fallback do GOOGLEFINANCE). */
-  precoBrapi?: number | null
+  /** Preço de abertura do dia em **centavos**; `null` se ausente (mesma fonte de `precoMercado`). */
+  precoAbertura?: number | null
+  /**
+   * Preço de mercado em **centavos** (API de cotações); `null` se ausente. Fallback do
+   * GOOGLEFINANCE na B3; no Tesouro Direto, prioridade sobre a marcação manual.
+   */
+  precoApi?: number | null
   /** Marcação a mercado manual em **centavos** (`Valor Bruto Atual`); `null` se ausente. */
   precoManual: number | null
   /** ISO do momento da última atualização conhecida. */
@@ -41,6 +48,10 @@ export interface CotacaoResolvida {
   categoria: CategoriaAtivo
   /** Preço atual usado nos cálculos, em **centavos**. */
   precoAtual: number
+  /** Preço de abertura do dia em **centavos**; `null` quando indisponível. */
+  precoAbertura: number | null
+  /** Variação do dia (%) entre `precoAtual` e `precoAbertura`; `null` quando indisponível. */
+  variacaoDiaPercent: number | null
   fonte: FonteCotacao
   status: StatusCotacao
   /** `true` quando não há cotação e o preço médio foi usado como fallback. */
@@ -54,6 +65,19 @@ function precoValido(preco: number | null | undefined): preco is number {
 }
 
 /**
+ * Calcula a variação do dia (%) entre o preço atual e a abertura.
+ * Retorna `null` quando algum preço é inválido ou a abertura é zero — evitando
+ * divisão por zero e o falso preço (~R$ 0,11) de ticker não encontrado.
+ */
+export function calcularVariacaoDiaPercent(
+  precoAtual: number | null | undefined,
+  precoAbertura: number | null | undefined,
+): number | null {
+  if (!precoValido(precoAtual) || !precoValido(precoAbertura)) return null
+  return round2(((precoAtual - precoAbertura) / precoAbertura) * 100)
+}
+
+/**
  * Abaixo disso (em centavos), a cotação do `GOOGLEFINANCE` é tratada como erro:
  * quando o ticker não é encontrado, o GOOGLEFINANCE devolve valores ~R$ 0,11.
  */
@@ -62,7 +86,7 @@ export const PRECO_MINIMO_GOOGLEFINANCE = 20
 /**
  * `true` para preço de mercado válido conforme a categoria: Ação/FII/BDR/ETF
  * rejeitam cotações do `GOOGLEFINANCE` abaixo de `PRECO_MINIMO_GOOGLEFINANCE`
- * (acionando o fallback Brapi).
+ * (acionando o fallback das APIs).
  */
 export function precoMercadoValido(
   preco: number | null | undefined,
@@ -83,33 +107,65 @@ export const STATUS_COTACAO_LABELS: Record<StatusCotacao, string> = {
 
 /** Resolve a cotação de um ativo conforme a categoria e os preços disponíveis. */
 export function resolverCotacao(entrada: EntradaCotacao): CotacaoResolvida {
-  const { ticker, categoria, precoMedio, precoManual, precoBrapi = null, atualizadoEm = null } = entrada
+  const {
+    ticker,
+    categoria,
+    precoMedio,
+    precoManual,
+    precoApi = null,
+    precoAbertura = null,
+    atualizadoEm = null,
+  } = entrada
   const mercado = entrada.precoMercado
 
   if (usaGoogFinance(categoria)) {
     if (precoMercadoValido(mercado, categoria)) {
+      const abertura = precoMercadoValido(precoAbertura, categoria) ? precoAbertura : null
       return {
         ticker,
         categoria,
         precoAtual: mercado,
+        precoAbertura: abertura,
+        variacaoDiaPercent: calcularVariacaoDiaPercent(mercado, abertura),
         fonte: 'googlefinance',
         status: 'disponivel',
         usandoFallback: false,
         atualizadoEm,
       }
     }
-    if (precoValido(precoBrapi)) {
+    if (precoValido(precoApi)) {
+      // A API devolve a abertura do dia na mesma resposta: com ela a coluna
+      // "Variação Dia (%)" continua preenchida sem depender do `GOOGLEFINANCE`.
+      const abertura = precoValido(precoAbertura) ? precoAbertura : null
       return {
         ticker,
         categoria,
-        precoAtual: precoBrapi,
-        fonte: 'brapi',
+        precoAtual: precoApi,
+        precoAbertura: abertura,
+        variacaoDiaPercent: calcularVariacaoDiaPercent(precoApi, abertura),
+        fonte: 'api',
         status: 'disponivel',
         usandoFallback: false,
         atualizadoEm,
       }
     }
   } else if (permiteMarcacaoManual(categoria)) {
+    // Tesouro Direto: o preço de resgate publicado pelo Tesouro (via API)
+    // tem prioridade; ele é persistido em `Valor Bruto Atual` e passa a valer
+    // como marcação quando a integração estiver indisponível.
+    if (isTesouroDireto(categoria) && precoValido(precoApi)) {
+      return {
+        ticker,
+        categoria,
+        precoAtual: precoApi,
+        precoAbertura: null,
+        variacaoDiaPercent: null,
+        fonte: 'api',
+        status: 'disponivel',
+        usandoFallback: false,
+        atualizadoEm,
+      }
+    }
     // Renda Fixa e Tesouro Direto são marcados manualmente (RF19): o valor
     // informado pelo usuário tem prioridade; na ausência, usamos o último
     // preço conhecido (planilha) como estimativa.
@@ -118,6 +174,8 @@ export function resolverCotacao(entrada: EntradaCotacao): CotacaoResolvida {
         ticker,
         categoria,
         precoAtual: precoManual,
+        precoAbertura: null,
+        variacaoDiaPercent: null,
         fonte: 'manual',
         status: 'manual',
         usandoFallback: false,
@@ -129,6 +187,8 @@ export function resolverCotacao(entrada: EntradaCotacao): CotacaoResolvida {
         ticker,
         categoria,
         precoAtual: mercado,
+        precoAbertura: null,
+        variacaoDiaPercent: null,
         fonte: 'estimada',
         status: 'estimada',
         usandoFallback: false,
@@ -142,6 +202,8 @@ export function resolverCotacao(entrada: EntradaCotacao): CotacaoResolvida {
     ticker,
     categoria,
     precoAtual: precoMedio,
+    precoAbertura: null,
+    variacaoDiaPercent: null,
     fonte: 'manual',
     status: 'indisponivel',
     usandoFallback: true,
@@ -217,7 +279,7 @@ export function precosManuaisDeOperacoes(
 
 /**
  * Extrai o preço **persistido** por ticker B3 (Ação/FII/BDR/ETF), gravado em
- * `Valor Bruto Atual` da operação mais recente via Brapi. Usado para gravar o
+ * `Valor Bruto Atual` da operação mais recente via API de cotações. Usado para gravar o
  * fallback na planilha quando o `GOOGLEFINANCE` não trouxe preço (RNF04).
  */
 export function precosPersistidosDeOperacoes(

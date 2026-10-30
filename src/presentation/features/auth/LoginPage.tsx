@@ -1,4 +1,4 @@
-import { KeyRound, Loader2, LogIn, ShieldCheck } from 'lucide-react'
+import { HardDrive, KeyRound, Loader2, LogIn, ShieldCheck } from 'lucide-react'
 import { useAuth } from '@/presentation/app/providers/authContext'
 import { Alert } from '@/presentation/components/Alert'
 import { WorkspaceSetup } from '@/presentation/features/auth/WorkspaceSetup'
@@ -9,7 +9,7 @@ import { WorkspaceSetup } from '@/presentation/features/auth/WorkspaceSetup'
  * de erro claro em vez de quebrar em runtime.
  */
 export function LoginPage() {
-  const { login, status, workspace, isConfigured, error } = useAuth()
+  const { login, status, workspace, isConfigured, error, isBusy, usarModoLocal } = useAuth()
 
   return (
     <section className="mx-auto max-w-xl space-y-6">
@@ -86,6 +86,36 @@ export function LoginPage() {
             Agora escolha a planilha que servirá de base de dados para a sua carteira.
           </Alert>
           <WorkspaceSetup />
+        </div>
+      ) : null}
+
+      {status === 'unauthenticated' ? (
+        <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="space-y-1">
+            <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900">
+              <HardDrive className="h-4 w-4 text-brand-600" aria-hidden />
+              Prefere não usar o Google?
+            </h2>
+            <p className="text-xs text-slate-500">
+              A carteira fica salva <strong>apenas neste navegador</strong> (sem login e sem
+              servidores próprios) e pode ser exportada para uma planilha{' '}
+              <code className="rounded bg-slate-100 px-1">.ods</code> a qualquer momento.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => void usarModoLocal()}
+            disabled={isBusy}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isBusy ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            ) : (
+              <HardDrive className="h-4 w-4" aria-hidden />
+            )}
+            Usar sem Google (dados neste navegador)
+          </button>
         </div>
       ) : null}
 

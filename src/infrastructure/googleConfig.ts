@@ -11,11 +11,27 @@ function readEnv(value: string | undefined): string | null {
   return trimmed.length > 0 ? trimmed : null
 }
 
-/** Escopos MÍNIMOS exigidos (RF03). Nada além disso é solicitado. */
-export const GOOGLE_SCOPES = [
-  'https://www.googleapis.com/auth/spreadsheets',
-  'https://www.googleapis.com/auth/drive.file',
-] as const
+/** Backend do modo Google: planilha (`sheets`) ou arquivo JSON no Drive (`json`). */
+export type GoogleBackend = 'sheets' | 'json'
+
+/** Selecionado em tempo de BUILD por `VITE_GOOGLE_BACKEND` (padrão: `sheets`). */
+export const GOOGLE_BACKEND: GoogleBackend =
+  import.meta.env.VITE_GOOGLE_BACKEND === 'json' ? 'json' : 'sheets'
+
+/**
+ * Escopos MÍNIMOS exigidos (RF03). Nada além disso é solicitado.
+ *
+ * No backend `json` basta `drive.file`: é um escopo NÃO sensível, então o app
+ * dispensa a verificação OAuth do Google. Durante o rollout do backend
+ * `sheets` o escopo `spreadsheets` continua necessário.
+ */
+export const GOOGLE_SCOPES: readonly string[] =
+  GOOGLE_BACKEND === 'json'
+    ? ['https://www.googleapis.com/auth/drive.file']
+    : [
+        'https://www.googleapis.com/auth/spreadsheets',
+        'https://www.googleapis.com/auth/drive.file',
+      ]
 
 export interface GoogleConfig {
   clientId: string | null
@@ -32,6 +48,11 @@ export const googleConfig: GoogleConfig = {
 /** `true` quando o login OAuth está configurado (`VITE_GOOGLE_CLIENT_ID`). */
 export function isGoogleConfigured(): boolean {
   return googleConfig.clientId !== null
+}
+
+/** `true` quando o backend ativo grava um único arquivo JSON no Drive. */
+export function isJsonBackend(): boolean {
+  return GOOGLE_BACKEND === 'json'
 }
 
 /** `true` quando a seleção de planilha existente está configurada. */

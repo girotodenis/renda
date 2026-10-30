@@ -1,9 +1,12 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Loader2 } from 'lucide-react'
-import { useForm } from 'react-hook-form'
+import { Controller, useForm } from 'react-hook-form'
+import { Autocomplete } from '@/presentation/components/Autocomplete'
 import { FormField, inputClassName } from '@/presentation/components/FormField'
-import { CATEGORIA_ATIVO_LABELS, isRendaFixa } from '@/domain/categoria'
+import { useSugestoesTicker } from '@/presentation/hooks/useSugestoesTicker'
+import { CATEGORIA_ATIVO_LABELS, isRendaFixa, isTesouroDireto } from '@/domain/categoria'
 import type { Operacao } from '@/domain/entities'
+import type { TickerConhecido } from '@/domain/tickers'
 import { CategoriaAtivo, IndexadorRendaFixa, OPERACAO_MOVIMENTO_TIPOS, OperacaoTipo } from '@/domain/entities'
 import {
   operacaoFormDefaults,
@@ -22,6 +25,8 @@ interface OperacaoFormProps {
   travarTicker?: boolean
   /** Trava o campo Categoria (cadastro vinculado a uma categoria específica). */
   travarCategoria?: boolean
+  /** Tickers já usados na carteira (priorizados nas sugestões do autocomplete). */
+  tickersConhecidos?: readonly TickerConhecido[]
   isSaving: boolean
   onSubmit: (values: OperacaoFormOutput) => Promise<void>
   onCancel: () => void
@@ -53,6 +58,7 @@ export function OperacaoForm({
   categoriaPadrao,
   travarTicker = false,
   travarCategoria = false,
+  tickersConhecidos,
   isSaving,
   onSubmit,
   onCancel,
@@ -68,6 +74,7 @@ export function OperacaoForm({
 
   const {
     register,
+    control,
     handleSubmit,
     watch,
     formState: { errors },
@@ -78,6 +85,10 @@ export function OperacaoForm({
 
   const categoria = watch('categoria')
   const showRendaFixa = isRendaFixa(categoria)
+  const { sugestoes: sugestoesTicker, carregando: carregandoTickers } = useSugestoesTicker(
+    categoria,
+    tickersConhecidos,
+  )
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate className="space-y-5">
@@ -117,15 +128,35 @@ export function OperacaoForm({
         </FormField>
 
         <FormField htmlFor="operacao-ticker" label="Ticker" error={errors.ticker?.message}>
-          <input
-            id="operacao-ticker"
-            type="text"
-            placeholder="Ex.: PETR4"
-            autoComplete="off"
-            disabled={travarTicker}
-            className={inputClassName}
-            {...register('ticker')}
-          />
+          {travarTicker ? (
+            <input
+              id="operacao-ticker"
+              type="text"
+              placeholder="Ex.: PETR4"
+              autoComplete="off"
+              disabled
+              className={inputClassName}
+              {...register('ticker')}
+            />
+          ) : (
+            <Controller
+              control={control}
+              name="ticker"
+              render={({ field }) => (
+                <Autocomplete
+                  id="operacao-ticker"
+                  value={field.value}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
+                  inputRef={field.ref}
+                  options={sugestoesTicker}
+                  carregando={carregandoTickers}
+                  mensagemVazia={null}
+                  placeholder={isTesouroDireto(categoria) ? 'Ex.: Tesouro Selic 2029' : 'Ex.: PETR4'}
+                />
+              )}
+            />
+          )}
         </FormField>
 
         <FormField

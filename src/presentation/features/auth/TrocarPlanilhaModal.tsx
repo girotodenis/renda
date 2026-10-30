@@ -11,9 +11,9 @@ interface TrocarPlanilhaModalProps {
 }
 
 /**
- * Modal para trocar a planilha ativa: permite criar uma planilha padrão nova ou
- * selecionar outra planilha existente no Drive, reaproveitando o `WorkspaceSetup`
- * da etapa pós-login. Fecha automaticamente quando a planilha ativa muda.
+ * Modal para trocar o banco ativo: permite criar um banco padrão novo ou abrir
+ * outro já existente, reaproveitando o `WorkspaceSetup` da etapa pós-login.
+ * Fecha automaticamente quando o banco ativo muda.
  */
 export function TrocarPlanilhaModal({ open, onClose }: TrocarPlanilhaModalProps) {
   const { workspace, clearError } = useAuth()
@@ -38,10 +38,10 @@ export function TrocarPlanilhaModal({ open, onClose }: TrocarPlanilhaModalProps)
   }, [open, workspace, clearError, onClose])
 
   return (
-    <Modal open={open} onClose={onClose} titulo="Trocar planilha" className="max-w-xl">
+    <Modal open={open} onClose={onClose} titulo="Trocar banco de dados" className="max-w-xl">
       <p className="mb-4 text-sm text-slate-500">
-        Escolha outra planilha existente no Drive ou crie uma nova planilha padrão com as 5 abas.
-        Nada é apagado: cada planilha continua salva no seu Drive.
+        Abra outro banco já existente ou crie um novo com as 7 abas do app. Nada é apagado: cada
+        banco continua salvo no seu Drive.
       </p>
       <WorkspaceSetup />
     </Modal>

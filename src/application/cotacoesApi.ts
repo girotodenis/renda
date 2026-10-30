@@ -4,8 +4,9 @@ import type { RepositoryContext } from '@/infrastructure/repositories'
 import type { Operacao } from '@/domain/entities'
 
 /**
- * Persistência das cotações B3 obtidas via Brapi na planilha (fallback do
- * `GOOGLEFINANCE`), usando o mesmo fluxo da marcação manual (RF19):
+ * Persistência das cotações obtidas das APIs de cotação na planilha (fallback do
+ * `GOOGLEFINANCE` na B3 e preço de resgate do Tesouro Direto), usando o mesmo
+ * fluxo da marcação manual (RF19):
  *
  * 1. grava o preço em `Operacao.valorBrutoAtual` da operação mais recente de
  *    cada ticker;
@@ -24,14 +25,17 @@ function eMaisRecente(candidato: Operacao, atual: Operacao): boolean {
 }
 
 /**
- * Grava os preços Brapi (centavos) na operação mais recente de cada ticker
+ * Grava os preços das APIs (centavos) na operação mais recente de cada ticker
  * (`Valor Bruto Atual`). Retorna o número de operações atualizadas.
  */
-export async function persistirCotacoesBrapi(
+export async function persistirCotacoesApi(
   context: RepositoryContext,
   precos: ReadonlyMap<string, number>,
 ): Promise<number> {
   if (precos.size === 0) return 0
+  // Tickers do Tesouro têm caixa mista (`Tesouro Selic 2029`): compara sem caixa.
+  const precoPorTicker = new Map<string, number>()
+  for (const [ticker, preco] of precos) precoPorTicker.set(ticker.trim().toUpperCase(), preco)
 
   const operacoes = await operacoesRepo.refresh(context)
   const recentePorTicker = new Map<string, Operacao>()
@@ -45,7 +49,7 @@ export async function persistirCotacoesBrapi(
   let alteradas = 0
   const proximas = operacoes.map((operacao) => {
     const ticker = operacao.ticker.trim().toUpperCase()
-    const preco = precos.get(ticker)
+    const preco = precoPorTicker.get(ticker)
     if (preco === undefined) return operacao
     const recente = recentePorTicker.get(ticker)
     if (!recente || recente.id !== operacao.id) return operacao
@@ -60,14 +64,14 @@ export async function persistirCotacoesBrapi(
 }
 
 /**
- * Persiste os preços Brapi e reescreve o `Consolidado` + snapshot do dia.
+ * Persiste os preços das APIs e reescreve o `Consolidado` + snapshot do dia.
  * Reutiliza `sincronizarConsolidadoESnapshot` com o passo extra de gravação.
  */
-export async function persistirESincronizarCotacoesBrapi(
+export async function persistirESincronizarCotacoesApi(
   context: RepositoryContext,
   precos: ReadonlyMap<string, number>,
 ): Promise<void> {
-  const alteradas = await persistirCotacoesBrapi(context, precos)
+  const alteradas = await persistirCotacoesApi(context, precos)
   if (alteradas === 0) return
   await sincronizarConsolidadoESnapshot(context)
 }

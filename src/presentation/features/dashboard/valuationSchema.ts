@@ -4,18 +4,19 @@ import type { CategoriaAtivo, Valuation } from '@/domain/entities'
 
 /**
  * Schema `zod` do formulário de valuation (aba `Valuation`) — alerta de
- * oportunidade de compra.
+ * oportunidade de compra e premissas do Fluxo de Caixa Descontado (FCD).
  *
- * Todos os campos são opcionais (vazios = análise removida). O preço teto entra
- * como texto pt-BR (`"100,00"`) e sai em **centavos**; a margem entra como
- * percentual (`"20"` = 20%).
+ * Todos os campos são opcionais (vazios = análise removida). O preço teto e os
+ * valores monetários entram como texto pt-BR (`"100,00"`) e saem em
+ * **centavos**; percentuais entram como `"20"` (= 20%) e saem como `number`.
  */
 
 /** Dinheiro opcional (vazio = `null`), em centavos; > 0 quando informado. */
 const optionalPriceTeto = z
   .string()
+  .optional()
   .transform((raw, ctx) => {
-    if (raw.trim().length === 0) return null
+    if (raw === undefined || raw.trim().length === 0) return null
     const value = parseBRL(raw)
     if (value === null) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Informe um preço teto válido.' })
@@ -28,8 +29,9 @@ const optionalPriceTeto = z
 /** Margem de segurança opcional (vazio = `null`), entre 0 e 100. */
 const optionalMargem = z
   .string()
+  .optional()
   .transform((raw, ctx) => {
-    if (raw.trim().length === 0) return null
+    if (raw === undefined || raw.trim().length === 0) return null
     const value = parseDecimalBR(raw)
     if (value === null) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Informe uma margem válida.' })
@@ -42,6 +44,98 @@ const optionalMargem = z
     'A margem de segurança deve estar entre 0 e 100.',
   )
 
+/** Dinheiro opcional (R$) → centavos; > 0 quando preenchido (usado no FCD). */
+const fclOpcional = z
+  .string()
+  .optional()
+  .transform((raw, ctx) => {
+    if (raw === undefined || raw.trim().length === 0) return null
+    const value = parseBRL(raw)
+    if (value === null) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Informe um fluxo de caixa livre válido.' })
+      return z.NEVER
+    }
+    return toCentavos(value)
+  })
+  .refine(
+    (centavos) => centavos === null || centavos > 0,
+    'O fluxo de caixa livre deve ser maior que zero.',
+  )
+
+/** Dinheiro com sinal opcional (R$) → centavos; pode ser negativo (caixa líquido). */
+const dividaLiquidaOpcional = z.string().optional().transform((raw, ctx) => {
+  if (raw === undefined || raw.trim().length === 0) return null
+  const value = parseBRL(raw)
+  if (value === null) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Informe uma dívida líquida válida.' })
+    return z.NEVER
+  }
+  return toCentavos(value)
+})
+
+/** Dinheiro opcional (R$) → centavos; > 0 quando preenchido (usado no Graham). */
+function dinheiroPositivoOpcional(message: string) {
+  return z
+    .string()
+    .optional()
+    .transform((raw, ctx) => {
+      if (raw === undefined || raw.trim().length === 0) return null
+      const value = parseBRL(raw)
+      if (value === null) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message })
+        return z.NEVER
+      }
+      return toCentavos(value)
+    })
+    .refine((centavos) => centavos === null || centavos > 0, 'O valor deve ser maior que zero.')
+}
+
+/** Lucro por ação (LPA) opcional, em centavos. */
+const lpaOpcional = dinheiroPositivoOpcional('Informe um lucro por ação válido.')
+
+/** Valor patrimonial por ação (VPA) opcional, em centavos. */
+const vpaOpcional = dinheiroPositivoOpcional('Informe um valor patrimonial por ação válido.')
+
+/** Decimal opcional (pt-BR); aceita negativos. */
+function decimalOpcional(message: string) {
+  return z.string().optional().transform((raw, ctx) => {
+    if (raw === undefined || raw.trim().length === 0) return null
+    const value = parseDecimalBR(raw)
+    if (value === null) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message })
+      return z.NEVER
+    }
+    return value
+  })
+}
+
+/** Decimal positivo opcional (pt-BR). */
+function decimalPositivoOpcional(message: string) {
+  return decimalOpcional(message).refine(
+    (value) => value === null || value > 0,
+    'O valor deve ser maior que zero.',
+  )
+}
+
+/** Inteiro opcional entre 1 e 50 (anos de projeção). */
+const anosProjecaoOpcional = z
+  .string()
+  .optional()
+  .transform((raw, ctx) => {
+    if (raw === undefined || raw.trim().length === 0) return null
+    const value = parseDecimalBR(raw)
+    if (value === null) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Informe um número inteiro de anos.' })
+      return z.NEVER
+    }
+    return value
+  })
+  .refine(
+    (value) => value === null || (Number.isInteger(value) && value >= 1 && value <= 50),
+    'Informe um número inteiro entre 1 e 50.',
+  )
+
+/** Schema completo do formulário (todos os campos opcionais). */
 export const valuationFormSchema = z.object({
   precoTeto: optionalPriceTeto,
   margemSeguranca: optionalMargem,
@@ -49,6 +143,59 @@ export const valuationFormSchema = z.object({
     .string()
     .trim()
     .max(2000, 'As anotações devem ter no máximo 2000 caracteres.'),
+  fclAtual: fclOpcional,
+  dividaLiquida: dividaLiquidaOpcional,
+  acoesMilhoes: decimalPositivoOpcional('Informe uma quantidade de ações válida.'),
+  crescimentoAno: decimalOpcional('Informe um crescimento válido.'),
+  taxaDesconto: decimalPositivoOpcional('Informe uma taxa de desconto válida.'),
+  anosProjecao: anosProjecaoOpcional,
+  crescimentoPerpetuidade: decimalOpcional('Informe um crescimento na perpetuidade válido.'),
+  lpa: lpaOpcional,
+  vpa: vpaOpcional,
+})
+
+/** Schema do FCD usado pelo botão **Calcular** (todas as premissas obrigatórias). */
+export const dcfFormSchema = z.object({
+  fclAtual: fclOpcional.refine(
+    (value): value is number => value !== null,
+    'Informe o fluxo de caixa livre atual.',
+  ),
+  dividaLiquida: dividaLiquidaOpcional.refine(
+    (value): value is number => value !== null,
+    'Informe a dívida líquida (use 0 se não houver).',
+  ),
+  acoesMilhoes: decimalPositivoOpcional('Informe uma quantidade de ações válida.').refine(
+    (value): value is number => value !== null,
+    'Informe a quantidade de ações (em milhões).',
+  ),
+  crescimentoAno: decimalOpcional('Informe um crescimento válido.').refine(
+    (value): value is number => value !== null,
+    'Informe o crescimento do FCL (% a.a.).',
+  ),
+  taxaDesconto: decimalPositivoOpcional('Informe uma taxa de desconto válida.').refine(
+    (value): value is number => value !== null,
+    'Informe a taxa de desconto (% a.a.).',
+  ),
+  anosProjecao: anosProjecaoOpcional.refine(
+    (value): value is number => value !== null,
+    'Informe os anos de projeção.',
+  ),
+  crescimentoPerpetuidade: decimalOpcional('Informe um crescimento na perpetuidade válido.').refine(
+    (value): value is number => value !== null,
+    'Informe o crescimento na perpetuidade (% a.a.).',
+  ),
+})
+
+/** Schema do Graham usado pelo botão **Calcular** (LPA e VPA obrigatórios). */
+export const grahamFormSchema = z.object({
+  lpa: lpaOpcional.refine(
+    (value): value is number => value !== null,
+    'Informe o lucro por ação (LPA).',
+  ),
+  vpa: vpaOpcional.refine(
+    (value): value is number => value !== null,
+    'Informe o valor patrimonial por ação (VPA).',
+  ),
 })
 
 /** Valores crus do formulário (entrada do schema). */
@@ -57,19 +204,58 @@ export type ValuationFormInput = z.input<typeof valuationFormSchema>
 /** Valores validados/transformados do formulário (saída do schema). */
 export type ValuationFormOutput = z.output<typeof valuationFormSchema>
 
+/** Valores validados das premissas do FCD (todas preenchidas). */
+export type DcfFormOutput = z.output<typeof dcfFormSchema>
+
+/** Valores validados das premissas do Graham (todas preenchidas). */
+export type GrahamFormOutput = z.output<typeof grahamFormSchema>
+
 /** Valores iniciais do formulário a partir de uma análise existente (ou vazio). */
 export function valuationFormDefaults(valuation?: Valuation | null): ValuationFormInput {
   if (!valuation) {
-    return { precoTeto: '', margemSeguranca: '', anotacoes: '' }
+    return {
+      precoTeto: '',
+      margemSeguranca: '',
+      anotacoes: '',
+      fclAtual: '',
+      dividaLiquida: '',
+      acoesMilhoes: '',
+      crescimentoAno: '',
+      taxaDesconto: '',
+      anosProjecao: '',
+      crescimentoPerpetuidade: '',
+      lpa: '',
+      vpa: '',
+    }
   }
   return {
-    precoTeto: valuation.precoTeto !== null ? formatMoneyInput(valuation.precoTeto) : '',
-    margemSeguranca:
-      valuation.margemSeguranca !== null
-        ? String(valuation.margemSeguranca).replace('.', ',')
-        : '',
+    precoTeto: moneyInput(valuation.precoTeto),
+    margemSeguranca: moneyOrDecimalInput(valuation.margemSeguranca),
     anotacoes: valuation.anotacoes ?? '',
+    fclAtual: moneyInput(valuation.fclAtual),
+    dividaLiquida: moneyInput(valuation.dividaLiquida),
+    acoesMilhoes: moneyOrDecimalInput(valuation.acoesMilhoes),
+    crescimentoAno: moneyOrDecimalInput(valuation.crescimentoAno),
+    taxaDesconto: moneyOrDecimalInput(valuation.taxaDesconto),
+    anosProjecao: moneyOrDecimalInput(valuation.anosProjecao),
+    crescimentoPerpetuidade: moneyOrDecimalInput(valuation.crescimentoPerpetuidade),
+    lpa: moneyInput(valuation.lpa),
+    vpa: moneyInput(valuation.vpa),
   }
+}
+
+/**
+ * Formata centavos para o input monetário pt-BR. Valores ausentes ou não
+ * finitos (ex.: entidades em cache de versões antigas, sem os campos novos)
+ * viram `''` em vez de `"NaN"`.
+ */
+function moneyInput(value: number | null | undefined): string {
+  return typeof value === 'number' && Number.isFinite(value) ? formatMoneyInput(value) : ''
+}
+
+/** Formata um número opcional para o input pt-BR (vazio quando ausente/inválido). */
+function moneyOrDecimalInput(value: number | null | undefined): string {
+  return typeof value === 'number' && Number.isFinite(value) ? String(value).replace('.', ',') : ''
 }
 
 /** Converte a saída validada do formulário na entidade de domínio. */
@@ -84,5 +270,14 @@ export function toValuationPayload(
     precoTeto: values.precoTeto,
     margemSeguranca: values.margemSeguranca,
     anotacoes: values.anotacoes,
+    fclAtual: values.fclAtual,
+    dividaLiquida: values.dividaLiquida,
+    acoesMilhoes: values.acoesMilhoes,
+    crescimentoAno: values.crescimentoAno,
+    taxaDesconto: values.taxaDesconto,
+    anosProjecao: values.anosProjecao,
+    crescimentoPerpetuidade: values.crescimentoPerpetuidade,
+    lpa: values.lpa,
+    vpa: values.vpa,
   }
 }

@@ -1,6 +1,6 @@
 import { valuationRepo } from '@/infrastructure/repositories'
 import type { RepositoryContext } from '@/infrastructure/repositories'
-import { ensureRequiredSheets } from '@/infrastructure/sheets/gateway'
+import { ensureRequiredSheets } from '@/infrastructure/sheets/gatewayRouter'
 import type { Valuation } from '@/domain/entities'
 
 /**
@@ -16,7 +16,16 @@ export function valuationVazia(valuation: Valuation): boolean {
   return (
     valuation.precoTeto === null &&
     valuation.margemSeguranca === null &&
-    valuation.anotacoes.trim().length === 0
+    valuation.anotacoes.trim().length === 0 &&
+    valuation.fclAtual === null &&
+    valuation.dividaLiquida === null &&
+    valuation.acoesMilhoes === null &&
+    valuation.crescimentoAno === null &&
+    valuation.taxaDesconto === null &&
+    valuation.anosProjecao === null &&
+    valuation.crescimentoPerpetuidade === null &&
+    valuation.lpa === null &&
+    valuation.vpa === null
   )
 }
 

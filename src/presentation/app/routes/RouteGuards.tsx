@@ -33,16 +33,17 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
 
 /**
  * Rota pública: com sessão Google ativa e planilha pronta, redireciona para
- * `/dashboard`. Em modo local o usuário permanece — a página oferece o login
- * para voltar a sincronizar.
+ * `/dashboard`. No modo local (banco do navegador) também redireciona — não há
+ * login a fazer. Em modo local "do Google" (planilha persistida sem token) o
+ * usuário permanece, para poder entrar novamente.
  */
 export function PublicOnlyRoute({ children }: { children: ReactNode }) {
-  const { status, workspace } = useAuth()
+  const { status, workspace, isModoLocal } = useAuth()
 
   if (status === 'loading') {
     return <FullPageLoader message="Verificando sessão..." />
   }
-  if (status === 'authenticated' && workspace) {
+  if (workspace && (status === 'authenticated' || isModoLocal)) {
     return <Navigate to="/dashboard" replace />
   }
   return <>{children}</>

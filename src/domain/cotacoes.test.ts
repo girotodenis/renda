@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  calcularVariacaoDiaPercent,
   precosDeCotacoes,
   precosManuaisDeOperacoes,
   precosPersistidosDeOperacoes,
@@ -61,11 +62,11 @@ describe('resolverCotacao — Ação/FII/BDR (GOOGLEFINANCE)', () => {
       categoria: CategoriaAtivo.Acao,
       ...base,
       precoMercado: null,
-      precoBrapi: 2500,
+      precoApi: 2500,
     })
     expect(cotacao).toMatchObject({
       precoAtual: 2500,
-      fonte: 'brapi',
+      fonte: 'api',
       status: 'disponivel',
       usandoFallback: false,
     })
@@ -77,7 +78,7 @@ describe('resolverCotacao — Ação/FII/BDR (GOOGLEFINANCE)', () => {
       categoria: CategoriaAtivo.Acao,
       ...base,
       precoMercado: 2600,
-      precoBrapi: 2500,
+      precoApi: 2500,
     })
     expect(cotacao).toMatchObject({ precoAtual: 2600, fonte: 'googlefinance' })
   })
@@ -88,9 +89,9 @@ describe('resolverCotacao — Ação/FII/BDR (GOOGLEFINANCE)', () => {
       categoria: CategoriaAtivo.Acao,
       ...base,
       precoMercado: 11, // R$ 0,11 — ticker não encontrado no GOOGLEFINANCE
-      precoBrapi: 2500,
+      precoApi: 2500,
     })
-    expect(cotacao).toMatchObject({ precoAtual: 2500, fonte: 'brapi', usandoFallback: false })
+    expect(cotacao).toMatchObject({ precoAtual: 2500, fonte: 'api', usandoFallback: false })
   })
 
   it('aceita o GOOGLEFINANCE a partir de R$ 0,20', () => {
@@ -114,6 +115,76 @@ describe('precoMercadoValido', () => {
   })
 })
 
+describe('calcularVariacaoDiaPercent', () => {
+  it('calcula a variação entre o preço atual e a abertura', () => {
+    expect(calcularVariacaoDiaPercent(1200, 1000)).toBe(20)
+    expect(calcularVariacaoDiaPercent(900, 1000)).toBe(-10)
+    expect(calcularVariacaoDiaPercent(1000, 1000)).toBe(0)
+  })
+
+  it('retorna null quando não há abertura válida (evita divisão por zero)', () => {
+    expect(calcularVariacaoDiaPercent(1200, null)).toBeNull()
+    expect(calcularVariacaoDiaPercent(1200, 0)).toBeNull()
+    expect(calcularVariacaoDiaPercent(null, 1000)).toBeNull()
+  })
+})
+
+describe('resolverCotacao — variação do dia', () => {
+  it('usa a abertura do GOOGLEFINANCE no mesmo par do preço atual', () => {
+    const cotacao = resolverCotacao({
+      ticker: 'PETR4',
+      categoria: CategoriaAtivo.Acao,
+      ...base,
+      precoMercado: 1200,
+      precoAbertura: 1000,
+    })
+    expect(cotacao).toMatchObject({
+      precoAtual: 1200,
+      precoAbertura: 1000,
+      variacaoDiaPercent: 20,
+      fonte: 'googlefinance',
+    })
+  })
+
+  it('não calcula variação sem abertura', () => {
+    const semAbertura = resolverCotacao({
+      ticker: 'PETR4',
+      categoria: CategoriaAtivo.Acao,
+      ...base,
+      precoMercado: 1200,
+    })
+    expect(semAbertura.precoAbertura).toBeNull()
+    expect(semAbertura.variacaoDiaPercent).toBeNull()
+  })
+
+  it('usa a abertura da Brapi quando o preço vem do fallback', () => {
+    const brapi = resolverCotacao({
+      ticker: 'PETR4',
+      categoria: CategoriaAtivo.Acao,
+      ...base,
+      precoMercado: null,
+      precoApi: 1200,
+      precoAbertura: 1000,
+    })
+    expect(brapi.fonte).toBe('api')
+    expect(brapi.precoAbertura).toBe(1000)
+    expect(brapi.variacaoDiaPercent).toBe(20)
+  })
+
+  it('mantém a variação nula quando a Brapi não informa a abertura', () => {
+    const brapi = resolverCotacao({
+      ticker: 'PETR4',
+      categoria: CategoriaAtivo.Acao,
+      ...base,
+      precoMercado: null,
+      precoApi: 1200,
+    })
+    expect(brapi.fonte).toBe('api')
+    expect(brapi.precoAbertura).toBeNull()
+    expect(brapi.variacaoDiaPercent).toBeNull()
+  })
+})
+
 describe('resolverCotacao — Tesouro Direto (marcação manual)', () => {
   it('usa a marcação manual quando informada', () => {
     const cotacao = resolverCotacao({
@@ -132,6 +203,33 @@ describe('resolverCotacao — Tesouro Direto (marcação manual)', () => {
       ...base,
     })
     expect(cotacao).toMatchObject({ status: 'indisponivel', usandoFallback: true, precoAtual: 1000 })
+  })
+
+  it('prioriza o preço da Brapi sobre a marcação manual', () => {
+    const cotacao = resolverCotacao({
+      ticker: 'Tesouro Selic 2029',
+      categoria: CategoriaAtivo.TesouroDireto,
+      ...base,
+      precoManual: 340000,
+      precoApi: 1800050,
+    })
+    expect(cotacao).toMatchObject({
+      precoAtual: 1800050,
+      fonte: 'api',
+      status: 'disponivel',
+      variacaoDiaPercent: null,
+    })
+  })
+
+  it('ignora a Brapi na Renda Fixa (somente marcação manual)', () => {
+    const cotacao = resolverCotacao({
+      ticker: 'CDB-BANCO',
+      categoria: CategoriaAtivo.RendaFixa,
+      ...base,
+      precoManual: 105000,
+      precoApi: 999999,
+    })
+    expect(cotacao).toMatchObject({ precoAtual: 105000, fonte: 'manual' })
   })
 })
 

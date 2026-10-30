@@ -1,5 +1,6 @@
-import { ExternalLink, Files, LayoutDashboard, Loader2, RefreshCw, Save } from 'lucide-react'
+import { ExternalLink, Files, HardDrive, LayoutDashboard, Loader2, RefreshCw, Save } from 'lucide-react'
 import { lazy, Suspense, useCallback, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '@/presentation/app/providers/authContext'
 import { Alert } from '@/presentation/components/Alert'
 import { ErrorBoundary } from '@/presentation/components/ErrorBoundary'
@@ -18,6 +19,7 @@ import { toISO } from '@/domain/dates'
 import { calcularDetalheAtivo } from '@/domain/detalheAtivo'
 import { tickersComOportunidade } from '@/domain/valuation'
 import type { CategoriaAtivo } from '@/domain/entities'
+import { isJsonBackend } from '@/infrastructure/googleConfig'
 
 /**
  * Gráficos carregados sob demanda (lazy) para não inflar o bundle inicial com
@@ -62,7 +64,7 @@ export function DashboardPage() {
 }
 
 function DashboardContent() {
-  const { workspace } = useAuth()
+  const { workspace, isModoLocal } = useAuth()
   const {
     data,
     isLoading,
@@ -71,6 +73,7 @@ function DashboardContent() {
     isOffline,
     error,
     notice,
+    avisoCotacoes,
     refresh,
     registrarSnapshotManual,
   } = useDashboard()
@@ -139,7 +142,9 @@ function DashboardContent() {
 
   const sheetUrl = workspace
     ? (workspace.spreadsheetUrl ??
-      `https://docs.google.com/spreadsheets/d/${workspace.spreadsheetId}/edit`)
+      (isJsonBackend()
+        ? `https://drive.google.com/file/d/${workspace.spreadsheetId}/view`
+        : `https://docs.google.com/spreadsheets/d/${workspace.spreadsheetId}/edit`))
     : '#'
 
   return (
@@ -158,23 +163,35 @@ function DashboardContent() {
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <a
-            href={sheetUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100"
-          >
-            <ExternalLink className="h-4 w-4" aria-hidden />
-            Abrir no Google Sheets
-          </a>
-          <button
-            type="button"
-            onClick={() => setTrocarPlanilhaAberto(true)}
-            className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100"
-          >
-            <Files className="h-4 w-4" aria-hidden />
-            Trocar planilha
-          </button>
+          {isModoLocal ? null : (
+            <a
+              href={sheetUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100"
+            >
+              <ExternalLink className="h-4 w-4" aria-hidden />
+              {isJsonBackend() ? 'Abrir no Google Drive' : 'Abrir no Google Sheets'}
+            </a>
+          )}
+          {isModoLocal ? (
+            <Link
+              to="/configuracoes"
+              className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100"
+            >
+              <HardDrive className="h-4 w-4" aria-hidden />
+              Exportar / importar .ods
+            </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setTrocarPlanilhaAberto(true)}
+              className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100"
+            >
+              <Files className="h-4 w-4" aria-hidden />
+              Trocar banco
+            </button>
+          )}
           <button
             type="button"
             onClick={() => void refresh()}
@@ -202,6 +219,7 @@ function DashboardContent() {
 
       {error ? <Alert variant="error">{error}</Alert> : null}
       {notice ? <Alert variant="success">{notice}</Alert> : null}
+      {avisoCotacoes ? <Alert variant={avisoCotacoes.tipo}>{avisoCotacoes.texto}</Alert> : null}
       {isOffline ? (
         <Alert variant="info" title="Modo offline">
           Sem conexão com a internet. Exibindo o último estado da carteira salvo em cache.
@@ -267,6 +285,7 @@ function DashboardContent() {
             categoria={categoriaNovaOperacao}
             onClose={() => setCategoriaNovaOperacao(null)}
             onSaved={refresh}
+            tickersConhecidos={consolidado}
           />
           <ValorManualModal
             alvo={valorManualAlvo}

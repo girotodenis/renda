@@ -125,6 +125,13 @@ export interface Consolidado {
   precoMedio: number
   /** Preço atual (cotação) em **centavos**. */
   precoAtual: number
+  /**
+   * Preço de abertura do dia em **centavos** (`null`/ausente quando a
+   * categoria não tem abertura de mercado ou a cotação não está disponível).
+   */
+  precoAbertura?: number | null
+  /** Variação do dia (%) entre o preço atual e a abertura. */
+  variacaoDiaPercent?: number | null
   /** Total investido em **centavos**. */
   totalInvestido: number
   /** Valor atual em **centavos**. */
@@ -174,6 +181,32 @@ export interface Valuation {
   margemSeguranca: number | null
   /** Anotações livres da tese de investimento. */
   anotacoes: string
+  /**
+   * Premissas do Fluxo de Caixa Descontado (FCD) — todas opcionais.
+   * Dinheiro em **centavos**; taxas em pontos percentuais (ex.: `12` = 12%).
+   */
+  /** Fluxo de caixa livre atual (últimos 12 meses), em centavos. */
+  fclAtual: number | null
+  /** Dívida líquida (dívida − caixa), em centavos; negativa = caixa líquido. */
+  dividaLiquida: number | null
+  /** Quantidade de ações em circulação, em milhões. */
+  acoesMilhoes: number | null
+  /** Crescimento anual do FCL no período de projeção (%). */
+  crescimentoAno: number | null
+  /** Taxa de desconto anual — WACC (%). */
+  taxaDesconto: number | null
+  /** Período de projeção em anos. */
+  anosProjecao: number | null
+  /** Crescimento anual na perpetuidade (%). */
+  crescimentoPerpetuidade: number | null
+  /**
+   * Premissas do Preço Justo de Graham (Graham Number) — opcionais.
+   * Dinheiro em **centavos**.
+   */
+  /** Lucro por ação (LPA), em centavos. */
+  lpa: number | null
+  /** Valor patrimonial por ação (VPA), em centavos. */
+  vpa: number | null
 }
 
 /** Snapshot de patrimônio — aba `Historico` (RF18). */
@@ -192,11 +225,11 @@ export interface Snapshot {
  * Parâmetro de configuração persistido na aba `Configuracoes` (chave/valor).
  *
  * Guarda ajustes do usuário **na própria planilha** (em vez de variáveis de
- * ambiente), como o token da Brapi. As chaves canônicas vivem em
- * `domain/configuracoes.ts` (`CONFIG_CHAVES`).
+ * ambiente), como os tokens das APIs de cotação. As chaves canônicas vivem em
+ * `domain/configuracoes.ts` (`chaveToken`).
  */
 export interface Configuracao {
-  /** Identificador estável do parâmetro (ver `CONFIG_CHAVES`). */
+  /** Identificador estável do parâmetro (ex.: `brapi_token` — ver `chaveToken`). */
   chave: string
   /** Valor textual do parâmetro (`''` = não configurado). */
   valor: string
