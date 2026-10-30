@@ -285,6 +285,7 @@ function DashboardContent() {
             categoria={categoriaNovaOperacao}
             onClose={() => setCategoriaNovaOperacao(null)}
             onSaved={refresh}
+            tickersConhecidos={consolidado}
           />
           <ValorManualModal
             alvo={valorManualAlvo}

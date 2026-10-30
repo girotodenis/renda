@@ -160,6 +160,12 @@ export function OperacoesPage() {
     return [...unicos].sort((a, b) => a.localeCompare(b))
   }, [sorted])
 
+  /** Tickers da carteira (com categoria), priorizados no autocomplete do formulário. */
+  const tickersConhecidos = useMemo(
+    () => (operacoes ?? []).map(({ ticker, categoria }) => ({ ticker, categoria })),
+    [operacoes],
+  )
+
   const filtrados = useMemo(() => {
     const termo = filtroTicker.trim().toUpperCase()
     return termo
@@ -230,6 +236,7 @@ export function OperacoesPage() {
           </h2>
           <OperacaoForm
             initial={formState.mode === 'edit' ? formState.operacao : undefined}
+            tickersConhecidos={tickersConhecidos}
             isSaving={isSaving}
             onSubmit={handleSubmit}
             onCancel={() => setFormState({ mode: 'closed' })}
