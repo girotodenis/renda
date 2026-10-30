@@ -2,6 +2,7 @@ import { newId } from '@/domain/ids'
 import type { CellValue } from '@/infrastructure/sheets/sheetCells'
 import { toCell } from '@/infrastructure/sheets/sheetCells'
 import {
+  ativosCodec,
   configuracoesCodec,
   consolidadoCodec,
   historicoCodec,
@@ -22,7 +23,7 @@ import {
   getValues,
   updateValues,
 } from '@/infrastructure/sheets/gatewayRouter'
-import type { Configuracao, Consolidado, MetaRebalanceamento, Operacao, Provento, Snapshot, Valuation } from '@/domain/entities'
+import type { Ativo, Configuracao, Consolidado, MetaRebalanceamento, Operacao, Provento, Snapshot, Valuation } from '@/domain/entities'
 
 /**
  * Repositórios por aba (Seção 2) — abstraem a planilha como um banco de dados.
@@ -197,6 +198,7 @@ const consolidadoRepoRaw = createRepository<Consolidado>({
 const metasRepoRaw = createRepository<MetaRebalanceamento>({ codec: metasCodec })
 const historicoRepoRaw = createRepository<Snapshot>({ codec: historicoCodec })
 const valuationRepoRaw = createRepository<Valuation>({ codec: valuationCodec })
+const ativosRepoRaw = createRepository<Ativo>({ codec: ativosCodec })
 const configuracoesRepoRaw = createRepository<Configuracao>({ codec: configuracoesCodec })
 
 // Repositórios da camada de dados já **envoltos pelo decorador offline** (Fase 1):
@@ -209,6 +211,7 @@ export const consolidadoRepo = withOfflineOutbox(consolidadoRepoRaw, { outboxEna
 export const metasRepo = withOfflineOutbox(metasRepoRaw)
 export const historicoRepo = withOfflineOutbox(historicoRepoRaw)
 export const valuationRepo = withOfflineOutbox(valuationRepoRaw)
+export const ativosRepo = withOfflineOutbox(ativosRepoRaw)
 export const configuracoesRepo = withOfflineOutbox(configuracoesRepoRaw)
 
 /**
@@ -264,6 +267,7 @@ export const rawRepositories: Record<SheetName, RawSheetRepository> = {
   Metas_Rebalanceamento: asRawSheetRepository(metasRepoRaw),
   Historico: asRawSheetRepository(historicoRepoRaw),
   Valuation: asRawSheetRepository(valuationRepoRaw),
+  Ativos: asRawSheetRepository(ativosRepoRaw),
   Configuracoes: asRawSheetRepository(configuracoesRepoRaw),
 }
 

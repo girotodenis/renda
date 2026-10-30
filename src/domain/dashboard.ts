@@ -228,6 +228,32 @@ export function alocacaoPorAtivo(consolidado: readonly Consolidado[]): AlocacaoI
   return montarAlocacao(entradas)
 }
 
+/**
+ * Alocação por **setor de atuação** (RF08) — agrupa as posições abertas pelo
+ * setor informado em `setores` (aba `Ativos` + integrações).
+ *
+ * Ativos **sem setor conhecido ficam fora do gráfico** — e, por consequência,
+ * do denominador dos percentuais, que somam 100% apenas entre os setores
+ * exibidos.
+ */
+export function alocacaoPorSetor(
+  consolidado: readonly Consolidado[],
+  setores: ReadonlyMap<string, string>,
+): AlocacaoItem[] {
+  const entradas = new Map<string, { rotulo: string; valor: number }>()
+  for (const linha of posicoesAbertas(consolidado)) {
+    const setor = setores.get(linha.ticker.trim().toUpperCase())?.trim() ?? ''
+    if (setor.length === 0) continue
+    const valor = Math.max(linha.valorAtual, 0)
+    // Agrupa ignorando caixa ("Energia" e "energia" são o mesmo setor).
+    const chave = setor.toLowerCase()
+    const atual = entradas.get(chave)
+    if (atual) atual.valor += valor
+    else entradas.set(chave, { rotulo: setor, valor })
+  }
+  return montarAlocacao(entradas)
+}
+
 function agruparProventos(
   proventos: readonly Provento[],
   chaveDe: (provento: Provento) => string,

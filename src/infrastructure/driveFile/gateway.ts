@@ -675,7 +675,7 @@ export async function getSpreadsheetLocale(
   return DATABASE_LOCALE
 }
 
-/** Cria o arquivo do banco com as 7 abas (só cabeçalho) e o workspace. */
+/** Cria o arquivo do banco com as abas do schema (só cabeçalho) e o workspace. */
 export async function createDefaultSpreadsheet(
   accessToken: string,
   title: string = DEFAULT_DATABASE_TITLE,

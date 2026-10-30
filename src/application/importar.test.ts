@@ -131,7 +131,7 @@ describe('ciclo exportar → importar (modo local)', () => {
 
     const resultado = await importarOds(CONTEXTO, backup)
 
-    // O backup traz as sete abas; `Consolidado` é derivada e não é importada.
+    // O backup traz as abas do app; `Consolidado` é derivada e não é importada.
     expect(resultado.abas.map((aba) => aba.nome)).toEqual([...ABAS_IMPORTAVEIS])
     expect(readLocalSheet('Operacoes')[1]?.slice(0, 5)).toEqual([
       'a1',

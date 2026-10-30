@@ -35,7 +35,7 @@ export function RebalanceamentoPage() {
         <header className="space-y-1">
           <h1 className="text-xl font-semibold text-slate-900">Configurar planilha</h1>
           <p className="text-sm text-slate-500">
-            Escolha uma planilha existente no Drive ou crie a planilha padrão com as 5 abas.
+            Escolha uma planilha existente no Drive ou crie a planilha padrão com as abas do app.
           </p>
         </header>
         {error ? <Alert variant="error">{error}</Alert> : null}

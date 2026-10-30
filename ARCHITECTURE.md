@@ -42,7 +42,7 @@ flowchart LR
 
 | Artefato DDD | Onde vive |
 | --- | --- |
-| **Entidades** (com identidade) | `domain/entities.ts` — `Operacao`, `Provento`, `Consolidado`, `Snapshot`, `MetaRebalanceamento` |
+| **Entidades** (com identidade) | `domain/entities.ts` — `Operacao`, `Provento`, `Consolidado`, `Snapshot`, `MetaRebalanceamento`, `Ativo` |
 | **Objetos de valor / convenções** | `domain/money.ts` (centavos), `domain/dates.ts` (ISO `YYYY-MM-DD`), `domain/categoria.ts` (enum canônico) |
 | **Serviços de domínio** (lógica pura) | `domain/consolidado.ts`, `domain/dashboard.ts`, `domain/detalheAtivo.ts`, `domain/cotacoes.ts`, `domain/eventosCorporativos.ts`, `domain/b3Import.ts`, `domain/rebalanceamento/*` |
 | **Ports (contratos de repositório)** | `domain/repositories/ports.ts` — `Repository<T>`, `CrudRepository<T>` |
@@ -54,7 +54,7 @@ flowchart LR
 domínio e a origem de dados, para que a "língua" das células (intervalos A1,
 cabeçalhos, valores tipados) nunca vaze para o domínio:
 
-- `sheetsSchema.ts` (domínio) — nomes e cabeçalhos das 7 abas (fonte única).
+- `sheetsSchema.ts` (domínio) — nomes e cabeçalhos das abas do schema (fonte única).
 - `sheetCodecs.ts` — conversão linha ↔ entidade.
 - `sheetCells.ts` — células ↔ valores tipados (datas serial, centavos, pt-BR).
 - `sheetFormulas.ts` — fórmulas `GOOGLEFINANCE`/soma da aba `Consolidado`

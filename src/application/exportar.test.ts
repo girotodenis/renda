@@ -39,6 +39,7 @@ describe('gerarPlanilhaOds (modo local)', () => {
       'Metas_Rebalanceamento',
       'Historico',
       'Valuation',
+      'Ativos',
       'Configuracoes',
     ])
 

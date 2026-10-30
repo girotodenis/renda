@@ -143,7 +143,7 @@ export async function runDataLayerDiagnostics(context: RepositoryContext): Promi
   await historicoRepo.append(context, snapshot)
   const writeRequests = getSheetsRequestCount()
 
-  // 2) Refresh agrupado: uma única chamada `values.batchGet` para as 5 abas.
+  // 2) Refresh agrupado: uma única chamada `values.batchGet` para as abas.
   await prefetchAllSheets(context)
   const refreshRequests = getSheetsRequestCount() - writeRequests
 

@@ -9,6 +9,10 @@ import {
   clearMaisRetornoTesouroCache,
   lerCotacoesTesouroCache,
 } from '@/infrastructure/cotacoes/maisRetorno/tesouro'
+import {
+  clearMaisRetornoSetorCache,
+  provedorSetoresMaisRetorno,
+} from '@/infrastructure/cotacoes/maisRetorno/assetInfo'
 
 export const MAIS_RETORNO_ID = 'maisretorno'
 
@@ -40,8 +44,10 @@ export const integracaoMaisRetorno: IntegracaoCotacao = {
         forceRefresh,
       }),
   },
+  setores: provedorSetoresMaisRetorno,
   limparCache() {
     clearMaisRetornoCache()
     clearMaisRetornoTesouroCache()
+    clearMaisRetornoSetorCache()
   },
 }

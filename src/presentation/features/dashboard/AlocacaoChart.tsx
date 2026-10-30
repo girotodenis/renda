@@ -18,72 +18,77 @@ const CORES = [
   '#ec4899',
 ]
 
-type Modo = 'categoria' | 'ativo'
+type Modo = 'categoria' | 'setor' | 'ativo'
+
+/** Modos de agrupamento exibidos no seletor do gráfico. */
+const MODOS: readonly { valor: Modo; rotulo: string }[] = [
+  { valor: 'categoria', rotulo: 'Categoria' },
+  { valor: 'setor', rotulo: 'Setor' },
+  { valor: 'ativo', rotulo: 'Ativo' },
+]
 
 interface AlocacaoChartProps {
   porCategoria: AlocacaoItem[]
+  /** Setores de atuação; ativos sem setor não entram nesta série. */
+  porSetor: AlocacaoItem[]
   porAtivo: AlocacaoItem[]
 }
 
 /**
- * Gráfico de alocação da carteira (RF08) — rosca/pizza por categoria ou por
- * ativo. Carregado sob demanda (lazy) junto com o Recharts (RNF06).
+ * Gráfico de alocação da carteira (RF08) — rosca/pizza por categoria, por setor
+ * de atuação ou por ativo. Carregado sob demanda (lazy) junto com o Recharts
+ * (RNF06).
  */
-export function AlocacaoChart({ porCategoria, porAtivo }: AlocacaoChartProps) {
+export function AlocacaoChart({ porCategoria, porSetor, porAtivo }: AlocacaoChartProps) {
   const [modo, setModo] = useState<Modo>('categoria')
-  const itens = modo === 'categoria' ? porCategoria : porAtivo
+  const itens = modo === 'categoria' ? porCategoria : modo === 'setor' ? porSetor : porAtivo
+  const rotuloModo = modo === 'categoria' ? 'categoria' : modo === 'setor' ? 'setor' : 'ativo'
 
   return (
     <section className="flex flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <header className="flex flex-col gap-3">
         <div>
           <h2 className="text-base font-semibold text-slate-900">Alocação da carteira</h2>
-          <p className="text-sm text-slate-500">Distribuição por categoria ou por ativo.</p>
+          <p className="text-sm text-slate-500">
+            Distribuição por categoria, setor de atuação ou ativo.
+          </p>
         </div>
         <div
           role="group"
           aria-label="Agrupar alocação por"
-          className="inline-flex self-start rounded-md border border-slate-300 bg-slate-50 p-0.5"
+          className="inline-flex flex-wrap self-start rounded-md border border-slate-300 bg-slate-50 p-0.5"
         >
-          <button
-            type="button"
-            onClick={() => setModo('categoria')}
-            aria-pressed={modo === 'categoria'}
-            className={cn(
-              'rounded px-3 py-1.5 text-xs font-semibold transition-colors',
-              modo === 'categoria'
-                ? 'bg-white text-brand-700 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900',
-            )}
-          >
-            Por categoria
-          </button>
-          <button
-            type="button"
-            onClick={() => setModo('ativo')}
-            aria-pressed={modo === 'ativo'}
-            className={cn(
-              'rounded px-3 py-1.5 text-xs font-semibold transition-colors',
-              modo === 'ativo'
-                ? 'bg-white text-brand-700 shadow-sm'
-                : 'text-slate-600 hover:text-slate-900',
-            )}
-          >
-            Por ativo
-          </button>
+          {MODOS.map((opcao) => (
+            <button
+              key={opcao.valor}
+              type="button"
+              onClick={() => setModo(opcao.valor)}
+              aria-pressed={modo === opcao.valor}
+              className={cn(
+                'whitespace-nowrap rounded px-2.5 py-1.5 text-xs font-semibold transition-colors',
+                modo === opcao.valor
+                  ? 'bg-white text-brand-700 shadow-sm'
+                  : 'text-slate-600 hover:text-slate-900',
+              )}
+            >
+              {opcao.rotulo}
+            </button>
+          ))}
         </div>
       </header>
 
       {itens.length === 0 ? (
         <p className="flex flex-1 items-center justify-center py-12 text-sm text-slate-500">
-          Sem posições abertas para exibir a alocação.
+          {modo === 'setor'
+            ? 'Nenhum setor identificado nas posições abertas.'
+            : 'Sem posições abertas para exibir a alocação.'}
         </p>
       ) : (
         <>
           <div
             className="mt-4 h-64 w-full"
             role="img"
-            aria-label={`Gráfico de alocação por ${modo === 'categoria' ? 'categoria' : 'ativo'}`}
+            aria-label={`Gráfico de alocação por ${rotuloModo}`}
           >
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>

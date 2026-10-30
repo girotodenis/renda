@@ -193,7 +193,7 @@ afterEach(() => {
  * ------------------------------------------------------------------------ */
 
 describe('createDefaultSpreadsheet', () => {
-  it('cria o arquivo (POST + upload) com as 7 abas e devolve o workspace', async () => {
+  it('cria o arquivo (POST + upload) com as abas do schema e devolve o workspace', async () => {
     const drive = criarDriveFalso()
 
     const workspace = await gateway.createDefaultSpreadsheet('token', '  Carteira Teste  ')
@@ -358,7 +358,9 @@ describe('abas e cabeçalhos', () => {
     const antigo = { version: 1, sheets: { Operacoes: [['ID'], ['id-1']] } }
     const drive = criarDriveFalso({ id: 'arquivo-2', bytes: await compactar(antigo) })
 
-    expect(await gateway.ensureRequiredSheets('token', drive.id)).toBe(6)
+    expect(await gateway.ensureRequiredSheets('token', drive.id)).toBe(
+      SHEET_NAMES.length - 1,
+    )
     expect(escritas(drive)).toBe(1)
 
     const abas = await descompactar(drive.bytes)

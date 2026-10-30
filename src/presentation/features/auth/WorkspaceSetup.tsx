@@ -9,7 +9,7 @@ import { AbrirBancoModal } from './AbrirBancoModal'
 const DEFAULT_TITLE = 'Minhas Ações — Carteira'
 
 /**
- * Etapa pós-login: o usuário cria o banco padrão (7 abas) ou abre um banco já
+ * Etapa pós-login: o usuário cria o banco padrão (abas do schema) ou abre um banco já
  * existente escolhendo-o em uma **lista** dos bancos do Drive (RF02).
  *
  * Ao criar com um nome já existente, pergunta se o usuário quer editar o banco

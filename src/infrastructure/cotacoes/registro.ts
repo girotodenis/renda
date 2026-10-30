@@ -2,6 +2,7 @@ import {
   cadeiaCotacoesB3,
   cadeiaCotacoesTesouro,
   cadeiaListaTickers,
+  cadeiaSetores,
 } from '@/domain/provedoresCotacao'
 import type { IntegracaoCotacao } from '@/domain/provedoresCotacao'
 import { integracaoBrapi } from '@/infrastructure/cotacoes/brapi'
@@ -23,3 +24,4 @@ export const integracoesCotacao: readonly IntegracaoCotacao[] = [
 export const provedorCotacoesB3 = cadeiaCotacoesB3(integracoesCotacao)
 export const provedorCotacoesTesouro = cadeiaCotacoesTesouro(integracoesCotacao)
 export const provedorListaTickers = cadeiaListaTickers(integracoesCotacao)
+export const provedorSetores = cadeiaSetores(integracoesCotacao)

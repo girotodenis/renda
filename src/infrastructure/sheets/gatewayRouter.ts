@@ -193,7 +193,7 @@ export function ensureSheetHeaders(accessToken: string, spreadsheetId: string): 
   return google.ensureSheetHeaders(accessToken, spreadsheetId)
 }
 
-/** Cria o workspace inicial da origem ativa (7 abas + cabeçalhos, RF02). */
+/** Cria o workspace inicial da origem ativa (abas do schema + cabeçalhos, RF02). */
 export function criarWorkspace(
   accessToken: string,
   title?: string,

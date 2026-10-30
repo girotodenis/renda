@@ -67,7 +67,7 @@ export interface AuthContextValue {
    */
   abrirPlanilhaNoPicker: () => Promise<void>
   /**
-   * Cria o banco padrão (as 7 abas do schema) e o define como workspace.
+   * Cria o banco padrão (as abas do schema) e o define como workspace.
    *
    * Antes de criar, verifica se já existe um banco com o mesmo nome. Quando
    * existe (e `options.force` não está ligado), devolve

@@ -12,6 +12,7 @@ import {
 import type { CellValue } from '@/infrastructure/sheets/sheetCells'
 import type { SheetName } from '@/domain/sheetsSchema'
 import type {
+  Ativo,
   Configuracao,
   Consolidado,
   IndexadorRendaFixa,
@@ -237,6 +238,16 @@ export const valuationCodec: SheetCodec<Valuation> = {
     crescimentoPerpetuidade: cellToOptionalNumber(at(row, 11)),
     lpa: cellToOptionalCentavos(at(row, 12)),
     vpa: cellToOptionalCentavos(at(row, 13)),
+  }),
+}
+
+export const ativosCodec: SheetCodec<Ativo> = {
+  sheetName: 'Ativos',
+  toRow: (ativo) => [ativo.ticker, ativo.categoria, ativo.setor],
+  fromRow: (row) => ({
+    ticker: cellToText(at(row, 0)),
+    categoria: parseCategoriaAtivo(at(row, 1)) ?? CategoriaAtivo.Acao,
+    setor: cellToText(at(row, 2)),
   }),
 }
 

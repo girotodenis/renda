@@ -37,6 +37,23 @@ export interface ResultadoCotacoes {
   consultouRede: boolean
 }
 
+/**
+ * Resultado de uma consulta de **setores** (metadados por ticker).
+ *
+ * Mesmo contrato dos demais provedores: nunca lança; o que não foi possível
+ * obter volta em `semSetor`.
+ */
+export interface ResultadoSetores {
+  /** Setor de atuação por ticker (normalizado em maiúsculas). */
+  setores: Map<string, string>
+  /** Tickers consultados que ficaram sem setor. */
+  semSetor: string[]
+  /** `true` quando o provedor exige token e nenhum foi configurado. */
+  semToken: boolean
+  /** `true` quando houve pelo menos uma requisição à API. */
+  consultouRede: boolean
+}
+
 /** Tokens configurados pelo usuário, por `id` do provedor. */
 export type TokensProvedores = Readonly<Record<string, string>>
 
@@ -78,6 +95,19 @@ export interface ProvedorListaTickers {
 }
 
 /**
+ * Setor de atuação por ticker (dado quase estático, usado no gráfico de
+ * alocação por setor do dashboard).
+ */
+export interface ProvedorSetores {
+  /** Setores do cache local ainda válidos (modo offline). */
+  lerCache(tickers: readonly string[]): Map<string, string>
+  atualizar(
+    tickers: readonly string[],
+    opcoes: OpcoesConsultaCotacoes,
+  ): Promise<ResultadoSetores>
+}
+
+/**
  * Uma integração de cotações (uma API externa) e as capacidades que ela
  * oferece. Capacidades ausentes simplesmente não participam da cadeia.
  */
@@ -97,6 +127,7 @@ export interface IntegracaoCotacao {
   b3?: ProvedorCotacoesB3
   tesouro?: ProvedorCotacoesTesouro
   tickers?: ProvedorListaTickers
+  setores?: ProvedorSetores
   /** Remove os caches locais (ex.: após trocar o token). */
   limparCache(): void
 }
@@ -199,6 +230,70 @@ export function cadeiaListaTickers(integracoes: readonly IntegracaoCotacao[]): P
         if (tickers.length > 0) return tickers
       }
       return []
+    },
+  }
+}
+
+function resultadoSetoresVazio(tickers: readonly string[]): ResultadoSetores {
+  return {
+    setores: new Map(),
+    semSetor: [...new Set(tickers.map((ticker) => ticker.trim().toUpperCase()))],
+    semToken: false,
+    consultouRede: false,
+  }
+}
+
+/**
+ * Compõe os provedores de **setor** das integrações numa única porta.
+ *
+ * Mesma estratégia da cadeia de cotações: cada integração recebe apenas os
+ * tickers que as anteriores não resolveram (Brapi → Mais Retorno).
+ */
+export function cadeiaSetores(integracoes: readonly IntegracaoCotacao[]): ProvedorSetores {
+  const provedores = integracoes.flatMap((integracao) =>
+    integracao.setores ? [integracao.setores] : [],
+  )
+  const chave = (ticker: string): string => ticker.trim().toUpperCase()
+
+  return {
+    lerCache(tickers) {
+      const setores = new Map<string, string>()
+      for (const provedor of provedores) {
+        const pendentes = tickers.filter((ticker) => !setores.has(chave(ticker)))
+        if (pendentes.length === 0) break
+        for (const [ticker, setor] of provedor.lerCache(pendentes)) {
+          setores.set(chave(ticker), setor)
+        }
+      }
+      return setores
+    },
+
+    async atualizar(tickers, opcoes) {
+      if (tickers.length === 0 || provedores.length === 0) {
+        return resultadoSetoresVazio(tickers)
+      }
+
+      const setores = new Map<string, string>()
+      let pendentes: readonly string[] = tickers
+      let todosSemToken = true
+      let consultouRede = false
+
+      for (const provedor of provedores) {
+        if (pendentes.length === 0) break
+        const resultado = await provedor.atualizar(pendentes, opcoes)
+        for (const [ticker, setor] of resultado.setores) setores.set(chave(ticker), setor)
+        consultouRede ||= resultado.consultouRede
+        todosSemToken &&= resultado.semToken
+        const faltando = new Set(resultado.semSetor.map(chave))
+        pendentes = pendentes.filter((ticker) => faltando.has(chave(ticker)))
+      }
+
+      return {
+        setores,
+        semSetor: [...new Set(pendentes.map(chave))],
+        semToken: todosSemToken,
+        consultouRede,
+      }
     },
   }
 }

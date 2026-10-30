@@ -116,7 +116,7 @@ function normalizeVersion(value: unknown): number {
   return value
 }
 
-/** Banco novo: as 7 abas com apenas a linha de cabeçalho. */
+/** Banco novo: todas as abas do schema com apenas a linha de cabeçalho. */
 export function emptyDatabase(version: number = DATABASE_FILE_VERSION): DatabaseFile {
   const sheets = {} as DatabaseSheets
   for (const name of SHEET_NAMES) sheets[name] = [headerRow(name)]
