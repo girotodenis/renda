@@ -5,9 +5,9 @@ import { carregarDashboard } from '@/application/dashboard'
 
 const mocks = vi.hoisted(() => ({
   isModoLocal: vi.fn(),
-  atualizarCotacoesBrapi: vi.fn(),
-  lerCotacaoCacheBrapi: vi.fn(),
-  atualizarCotacoesTesouroBrapi: vi.fn(),
+  atualizarCotacoesB3: vi.fn(),
+  lerCotacaoCacheB3: vi.fn(),
+  atualizarCotacoesTesouro: vi.fn(),
   lerCotacoesTesouroCache: vi.fn(),
   carregarConfiguracoes: vi.fn(),
   prefetchAllSheets: vi.fn(),
@@ -23,14 +23,23 @@ vi.mock('@/infrastructure/modoArmazenamento', () => ({
   isModoLocal: mocks.isModoLocal,
 }))
 
-vi.mock('@/infrastructure/brapi', () => ({
-  atualizarCotacoesBrapi: mocks.atualizarCotacoesBrapi,
-  lerCotacaoCache: mocks.lerCotacaoCacheBrapi,
-}))
-
-vi.mock('@/infrastructure/brapiTesouro', () => ({
-  atualizarCotacoesTesouroBrapi: mocks.atualizarCotacoesTesouroBrapi,
-  lerCotacoesTesouroCache: mocks.lerCotacoesTesouroCache,
+vi.mock('@/infrastructure/cotacoes/registro', () => ({
+  integracoesCotacao: [
+    {
+      id: 'brapi',
+      nome: 'Brapi',
+      exigeToken: true,
+      dicaTesouroSemCotacao: 'Os preços do Tesouro Direto exigem o plano Pro da Brapi.',
+    },
+  ],
+  provedorCotacoesB3: {
+    atualizar: mocks.atualizarCotacoesB3,
+    lerCache: mocks.lerCotacaoCacheB3,
+  },
+  provedorCotacoesTesouro: {
+    atualizar: mocks.atualizarCotacoesTesouro,
+    lerCache: mocks.lerCotacoesTesouroCache,
+  },
 }))
 
 vi.mock('@/application/configuracoes', () => ({
@@ -86,21 +95,21 @@ describe('carregarDashboard — cotações Brapi no modo local', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.isModoLocal.mockReturnValue(false)
-    mocks.atualizarCotacoesBrapi.mockResolvedValue({
+    mocks.atualizarCotacoesB3.mockResolvedValue({
       cotacoes: new Map(),
       semCotacao: [],
       semToken: false,
       consultouRede: true,
     })
-    mocks.lerCotacaoCacheBrapi.mockReturnValue(null)
-    mocks.atualizarCotacoesTesouroBrapi.mockResolvedValue({
+    mocks.lerCotacaoCacheB3.mockReturnValue(null)
+    mocks.atualizarCotacoesTesouro.mockResolvedValue({
       cotacoes: new Map(),
       semCotacao: [],
       semToken: false,
       consultouRede: false,
     })
     mocks.lerCotacoesTesouroCache.mockReturnValue(new Map())
-    mocks.carregarConfiguracoes.mockResolvedValue({ brapiToken: 'token-brapi' })
+    mocks.carregarConfiguracoes.mockResolvedValue({ tokens: { brapi: 'token-brapi' } })
     mocks.operacoesReadCache.mockReturnValue([operacao])
     mocks.proventosReadCache.mockReturnValue([])
     mocks.consolidadoReadCache.mockReturnValue([consolidado])
@@ -115,7 +124,7 @@ describe('carregarDashboard — cotações Brapi no modo local', () => {
       spreadsheetId: 'planilha',
     })
 
-    expect(mocks.atualizarCotacoesBrapi).not.toHaveBeenCalled()
+    expect(mocks.atualizarCotacoesB3).not.toHaveBeenCalled()
     expect(dashboard.cotacoes.get('PETR4')).toMatchObject({
       precoAtual: 12000,
       fonte: 'googlefinance',
@@ -124,7 +133,7 @@ describe('carregarDashboard — cotações Brapi no modo local', () => {
 
   it('atualiza pela Brapi mesmo quando o Consolidado local já tem um preço estático', async () => {
     mocks.isModoLocal.mockReturnValue(true)
-    mocks.atualizarCotacoesBrapi.mockResolvedValue({
+    mocks.atualizarCotacoesB3.mockResolvedValue({
       cotacoes: new Map([
         ['PETR4', { preco: 15500, precoAbertura: 15000, atualizadoEm: null, fonte: 'api' }],
       ]),
@@ -138,18 +147,18 @@ describe('carregarDashboard — cotações Brapi no modo local', () => {
       spreadsheetId: 'local',
     })
 
-    expect(mocks.atualizarCotacoesBrapi).toHaveBeenCalledWith(['PETR4'], {
-      token: 'token-brapi',
+    expect(mocks.atualizarCotacoesB3).toHaveBeenCalledWith(['PETR4'], {
+      tokens: { brapi: 'token-brapi' },
       forceRefresh: false,
     })
     expect(dashboard.cotacoes.get('PETR4')).toMatchObject({
       precoAtual: 15500,
-      fonte: 'brapi',
+      fonte: 'api',
     })
   })
 
   it('no refresh explícito consulta a Brapi para todos os ativos e prioriza o preço novo', async () => {
-    mocks.atualizarCotacoesBrapi.mockResolvedValue({
+    mocks.atualizarCotacoesB3.mockResolvedValue({
       cotacoes: new Map([
         ['PETR4', { preco: 13000, precoAbertura: 12500, atualizadoEm: null, fonte: 'api' }],
       ]),
@@ -164,17 +173,17 @@ describe('carregarDashboard — cotações Brapi no modo local', () => {
     )
 
     // O Consolidado já tem preço (12000), mas a atualização manual busca de novo.
-    expect(mocks.atualizarCotacoesBrapi).toHaveBeenCalledWith(['PETR4'], {
-      token: 'token-brapi',
+    expect(mocks.atualizarCotacoesB3).toHaveBeenCalledWith(['PETR4'], {
+      tokens: { brapi: 'token-brapi' },
       forceRefresh: true,
     })
     expect(dashboard.cotacoes.get('PETR4')).toMatchObject({
       precoAtual: 13000,
       precoAbertura: 12500,
       variacaoDiaPercent: 4,
-      fonte: 'brapi',
+      fonte: 'api',
     })
-    expect(dashboard.cotacoesBrapi).toMatchObject({
+    expect(dashboard.cotacoesApi).toMatchObject({
       total: 1,
       comCotacao: 1,
       semCotacao: [],
@@ -184,9 +193,9 @@ describe('carregarDashboard — cotações Brapi no modo local', () => {
   })
 
   it('sem token da Brapi, informa a integração desligada no diagnóstico', async () => {
-    mocks.carregarConfiguracoes.mockResolvedValue({ brapiToken: '' })
+    mocks.carregarConfiguracoes.mockResolvedValue({ tokens: { brapi: '' } })
     mocks.consolidadoReadCache.mockReturnValue([])
-    mocks.atualizarCotacoesBrapi.mockResolvedValue({
+    mocks.atualizarCotacoesB3.mockResolvedValue({
       cotacoes: new Map(),
       semCotacao: ['PETR4'],
       semToken: true,
@@ -198,11 +207,12 @@ describe('carregarDashboard — cotações Brapi no modo local', () => {
       { forceRefresh: true },
     )
 
-    expect(dashboard.cotacoesBrapi).toMatchObject({
+    expect(dashboard.cotacoesApi).toMatchObject({
       total: 1,
       comCotacao: 0,
       semCotacao: ['PETR4'],
       semToken: true,
+      provedores: ['Brapi'],
     })
     expect(dashboard.cotacoes.get('PETR4')).toMatchObject({ status: 'indisponivel' })
   })
@@ -215,13 +225,13 @@ describe('carregarDashboard — cotações Brapi no modo local', () => {
       spreadsheetId: 'local',
     })
 
-    expect(mocks.atualizarCotacoesBrapi).toHaveBeenCalledWith(['PETR4'], {
-      token: 'token-brapi',
+    expect(mocks.atualizarCotacoesB3).toHaveBeenCalledWith(['PETR4'], {
+      tokens: { brapi: 'token-brapi' },
       forceRefresh: false,
     })
     expect(dashboard.cotacoes.get('PETR4')).toMatchObject({
       precoAtual: 12000,
-      fonte: 'brapi',
+      fonte: 'api',
     })
   })
 
@@ -237,7 +247,7 @@ describe('carregarDashboard — cotações Brapi no modo local', () => {
       valorBrutoAtual: 1750000,
     }
     mocks.operacoesReadCache.mockReturnValue([operacao, tesouro])
-    mocks.atualizarCotacoesTesouroBrapi.mockResolvedValue({
+    mocks.atualizarCotacoesTesouro.mockResolvedValue({
       cotacoes: new Map([
         [
           'Tesouro Selic 2029',
@@ -254,16 +264,16 @@ describe('carregarDashboard — cotações Brapi no modo local', () => {
       spreadsheetId: 'planilha',
     })
 
-    expect(mocks.atualizarCotacoesTesouroBrapi).toHaveBeenCalledWith(
+    expect(mocks.atualizarCotacoesTesouro).toHaveBeenCalledWith(
       [{ ticker: 'Tesouro Selic 2029', vencimento: '2029-03-01' }],
-      { token: 'token-brapi', forceRefresh: false },
+      { tokens: { brapi: 'token-brapi' }, forceRefresh: false },
     )
-    expect(mocks.atualizarCotacoesBrapi).not.toHaveBeenCalled()
+    expect(mocks.atualizarCotacoesB3).not.toHaveBeenCalled()
     expect(dashboard.cotacoes.get('Tesouro Selic 2029')).toMatchObject({
       precoAtual: 1800050,
-      fonte: 'brapi',
+      fonte: 'api',
       status: 'disponivel',
     })
-    expect(dashboard.cotacoesBrapi).toMatchObject({ total: 1, comCotacao: 1, semCotacao: [] })
+    expect(dashboard.cotacoesApi).toMatchObject({ total: 1, comCotacao: 1, semCotacao: [] })
   })
 })

@@ -225,11 +225,11 @@ export interface Snapshot {
  * Parâmetro de configuração persistido na aba `Configuracoes` (chave/valor).
  *
  * Guarda ajustes do usuário **na própria planilha** (em vez de variáveis de
- * ambiente), como o token da Brapi. As chaves canônicas vivem em
- * `domain/configuracoes.ts` (`CONFIG_CHAVES`).
+ * ambiente), como os tokens das APIs de cotação. As chaves canônicas vivem em
+ * `domain/configuracoes.ts` (`chaveToken`).
  */
 export interface Configuracao {
-  /** Identificador estável do parâmetro (ver `CONFIG_CHAVES`). */
+  /** Identificador estável do parâmetro (ex.: `brapi_token` — ver `chaveToken`). */
   chave: string
   /** Valor textual do parâmetro (`''` = não configurado). */
   valor: string

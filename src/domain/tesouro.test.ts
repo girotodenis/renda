@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { encontrarTituloTesouro, extrairTitulosTesouro } from '@/domain/tesouro'
+import { encontrarTituloTesouro } from '@/domain/tesouro'
+import { extrairTitulosTesouro } from '@/infrastructure/cotacoes/brapi/tesouro'
 
 function item(symbol: string, bondType: string, maturityDate: string, sellPrice: number) {
   return { symbol, bondType, maturityDate, baseDate: '2026-10-28', sellPrice, basePrice: sellPrice }

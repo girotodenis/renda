@@ -4,7 +4,7 @@ import {
   buscarCotacoesBrapi,
   extrairCotacoes,
   lerCotacaoCache,
-} from '@/infrastructure/brapi'
+} from '@/infrastructure/cotacoes/brapi/cotacoesB3'
 
 /** Testes do parser/serviço de cotação B3 via Brapi (fallback do GOOGLEFINANCE). */
 

@@ -1,18 +1,16 @@
-import { toCentavos } from '@/domain/money'
-
 /**
- * Títulos do **Tesouro Direto** obtidos da Brapi (`/api/v2/treasury/list`) e o
- * casamento com os tickers da carteira (`"Tesouro Selic 2029"`, ...).
+ * Títulos do **Tesouro Direto** (preço indicativo publicado, obtido por uma
+ * API de cotações) e o casamento com os tickers da carteira (`"Tesouro Selic 2029"`, ...).
  *
  * Módulo **puro**. O ticker do usuário é livre; o casamento usa a família do
  * título (nome normalizado, aceitando nomes antigos como `LFT`/`NTN-B`) e o
  * vencimento (data completa quando conhecida; senão apenas o ano). O `symbol`
- * da Brapi (`tesouro-selic-01032031`) também é aceito como ticker.
+ * do título (`tesouro-selic-01032031`) também é aceito como ticker.
  */
 
 /** Título do Tesouro Direto com o preço indicativo mais recente. */
 export interface TituloTesouro {
-  /** Código Brapi (`tesouro-selic-01032031`). */
+  /** Código do título (`tesouro-selic-01032031`). */
   symbol: string
   /** Nome do título (`Tesouro Selic`). */
   bondType: string
@@ -22,44 +20,6 @@ export interface TituloTesouro {
   preco: number
   /** Data-base do preço (`YYYY-MM-DD`); `null` quando ausente. */
   dataBase: string | null
-}
-
-function isRegistro(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
-
-function precoEmCentavos(value: unknown): number | null {
-  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return null
-  return toCentavos(value)
-}
-
-function dataISO(value: unknown): string | null {
-  if (typeof value !== 'string') return null
-  const match = value.trim().match(/^\d{4}-\d{2}-\d{2}/)
-  return match ? match[0] : null
-}
-
-/**
- * Extrai os títulos da resposta da Brapi (`{ results: [...] }`, usada por
- * `/treasury/list` e `/treasury/indicators`). O preço é o de **resgate**
- * (`sellPrice`, com `basePrice` como alternativa) — o valor de mercado de
- * quem já tem o título. Itens inválidos são ignorados.
- */
-export function extrairTitulosTesouro(payload: unknown): TituloTesouro[] {
-  if (!isRegistro(payload) || payload.error === true || !Array.isArray(payload.results)) {
-    return []
-  }
-  const titulos: TituloTesouro[] = []
-  for (const item of payload.results) {
-    if (!isRegistro(item)) continue
-    const symbol = typeof item.symbol === 'string' ? item.symbol.trim().toLowerCase() : ''
-    const bondType = typeof item.bondType === 'string' ? item.bondType.trim() : ''
-    const maturityDate = dataISO(item.maturityDate)
-    const preco = precoEmCentavos(item.sellPrice) ?? precoEmCentavos(item.basePrice)
-    if (symbol.length === 0 || !maturityDate || preco === null) continue
-    titulos.push({ symbol, bondType, maturityDate, preco, dataBase: dataISO(item.baseDate) })
-  }
-  return titulos
 }
 
 /** Remove acentos, caixa e tudo que não for letra/dígito. */
@@ -122,7 +82,7 @@ function decomporTicker(ticker: string): TickerTesouro {
 }
 
 /**
- * Encontra o título da Brapi correspondente ao ticker da carteira.
+ * Encontra o título correspondente ao ticker da carteira.
  *
  * Ordem: `symbol` idêntico → família exata + vencimento → família por prefixo
  * (ex.: `"Tesouro Renda+ 2065"` → `Tesouro Renda+ Aposentadoria Extra`),

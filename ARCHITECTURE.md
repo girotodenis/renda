@@ -104,7 +104,15 @@ cabeçalhos, valores tipados) nunca vaze para o domínio:
   (`ensureAppFolder`) e move para ela o arquivo criado (`moveFileToFolder`) —
   tudo coberto pelo escopo `drive.file`, sem permissões extras.
 - `compression.ts` — compactação gzip nativa (`CompressionStream`) do banco JSON.
-- `brapi.ts` — fallback de cotação B3 (cache-first, nunca lança).
+- `cotacoes/` — integrações de cotação (cache-first, nunca lançam). As portas
+  ficam em `domain/provedoresCotacao.ts` (`ProvedorCotacoesB3`,
+  `ProvedorCotacoesTesouro`, `ProvedorListaTickers`, `IntegracaoCotacao`). Cada
+  API é um adaptador em `cotacoes/<provedor>/` (hoje só `brapi/`), e
+  `cotacoes/registro.ts` monta a cadeia de fallback em ordem de prioridade.
+  **Para adicionar uma API:** implemente um `IntegracaoCotacao` com as
+  capacidades que ela suporta e inclua-o em `integracoesCotacao`. O token
+  (`<id>_token` na aba `Configuracoes`) e o card em Configurações aparecem
+  automaticamente. A UI acessa tudo via `application/integracoesCotacao.ts`.
 - `storage.ts` — `localStorage` para token/workspace/consent (RNF05).
 - `db.ts` + `kvStore.ts` — IndexedDB (stores `sheets`/`outbox`) com espelho em
   memória para leitura síncrona e migração única do `localStorage`.

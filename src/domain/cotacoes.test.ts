@@ -62,11 +62,11 @@ describe('resolverCotacao — Ação/FII/BDR (GOOGLEFINANCE)', () => {
       categoria: CategoriaAtivo.Acao,
       ...base,
       precoMercado: null,
-      precoBrapi: 2500,
+      precoApi: 2500,
     })
     expect(cotacao).toMatchObject({
       precoAtual: 2500,
-      fonte: 'brapi',
+      fonte: 'api',
       status: 'disponivel',
       usandoFallback: false,
     })
@@ -78,7 +78,7 @@ describe('resolverCotacao — Ação/FII/BDR (GOOGLEFINANCE)', () => {
       categoria: CategoriaAtivo.Acao,
       ...base,
       precoMercado: 2600,
-      precoBrapi: 2500,
+      precoApi: 2500,
     })
     expect(cotacao).toMatchObject({ precoAtual: 2600, fonte: 'googlefinance' })
   })
@@ -89,9 +89,9 @@ describe('resolverCotacao — Ação/FII/BDR (GOOGLEFINANCE)', () => {
       categoria: CategoriaAtivo.Acao,
       ...base,
       precoMercado: 11, // R$ 0,11 — ticker não encontrado no GOOGLEFINANCE
-      precoBrapi: 2500,
+      precoApi: 2500,
     })
-    expect(cotacao).toMatchObject({ precoAtual: 2500, fonte: 'brapi', usandoFallback: false })
+    expect(cotacao).toMatchObject({ precoAtual: 2500, fonte: 'api', usandoFallback: false })
   })
 
   it('aceita o GOOGLEFINANCE a partir de R$ 0,20', () => {
@@ -163,10 +163,10 @@ describe('resolverCotacao — variação do dia', () => {
       categoria: CategoriaAtivo.Acao,
       ...base,
       precoMercado: null,
-      precoBrapi: 1200,
+      precoApi: 1200,
       precoAbertura: 1000,
     })
-    expect(brapi.fonte).toBe('brapi')
+    expect(brapi.fonte).toBe('api')
     expect(brapi.precoAbertura).toBe(1000)
     expect(brapi.variacaoDiaPercent).toBe(20)
   })
@@ -177,9 +177,9 @@ describe('resolverCotacao — variação do dia', () => {
       categoria: CategoriaAtivo.Acao,
       ...base,
       precoMercado: null,
-      precoBrapi: 1200,
+      precoApi: 1200,
     })
-    expect(brapi.fonte).toBe('brapi')
+    expect(brapi.fonte).toBe('api')
     expect(brapi.precoAbertura).toBeNull()
     expect(brapi.variacaoDiaPercent).toBeNull()
   })
@@ -211,11 +211,11 @@ describe('resolverCotacao — Tesouro Direto (marcação manual)', () => {
       categoria: CategoriaAtivo.TesouroDireto,
       ...base,
       precoManual: 340000,
-      precoBrapi: 1800050,
+      precoApi: 1800050,
     })
     expect(cotacao).toMatchObject({
       precoAtual: 1800050,
-      fonte: 'brapi',
+      fonte: 'api',
       status: 'disponivel',
       variacaoDiaPercent: null,
     })
@@ -227,7 +227,7 @@ describe('resolverCotacao — Tesouro Direto (marcação manual)', () => {
       categoria: CategoriaAtivo.RendaFixa,
       ...base,
       precoManual: 105000,
-      precoBrapi: 999999,
+      precoApi: 999999,
     })
     expect(cotacao).toMatchObject({ precoAtual: 105000, fonte: 'manual' })
   })

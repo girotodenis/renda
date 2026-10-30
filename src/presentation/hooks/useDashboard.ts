@@ -1,34 +1,34 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '@/presentation/app/providers/authContext'
 import { carregarDashboard, lerDashboardDoCache } from '@/application/dashboard'
-import type { DashboardData, DiagnosticoCotacoesBrapi } from '@/application/dashboard'
-import { persistirESincronizarCotacoesBrapi } from '@/application/brapi'
+import type { DashboardData, DiagnosticoCotacoesApi } from '@/application/dashboard'
+import { persistirESincronizarCotacoesApi } from '@/application/cotacoesApi'
 import { jaTemSnapshotDeHoje, registrarSnapshot, upsertHistorico } from '@/application/historico'
 import type { RepositoryContext } from '@/infrastructure/repositories'
 import { isModoLocal } from '@/infrastructure/modoArmazenamento'
 import { describeSheetsError } from '@/infrastructure/sheets/gateway'
 import { useOnlineStatus } from '@/presentation/hooks/useOnlineStatus'
 
-/** Extrai os preços (centavos) dos tickers cuja cotação veio da Brapi (fallback). */
-function cotacoesBrapiDoDashboard(data: DashboardData): Map<string, number> {
+/** Extrai os preços (centavos) dos tickers cuja cotação veio das APIs (fallback). */
+function cotacoesApiDoDashboard(data: DashboardData): Map<string, number> {
   const precos = new Map<string, number>()
   for (const cotacao of data.cotacoes.values()) {
-    if (cotacao.fonte === 'brapi' && !cotacao.usandoFallback) {
+    if (cotacao.fonte === 'api' && !cotacao.usandoFallback) {
       precos.set(cotacao.ticker, cotacao.precoAtual)
     }
   }
   return precos
 }
 
-/** Persiste (best-effort) as cotações Brapi do dashboard na planilha. */
-async function persistirCotacoesBrapiDoDashboard(
+/** Persiste (best-effort) as cotações das APIs do dashboard na planilha. */
+async function persistirCotacoesApiDoDashboard(
   context: RepositoryContext,
   data: DashboardData,
 ): Promise<void> {
-  const precos = cotacoesBrapiDoDashboard(data)
+  const precos = cotacoesApiDoDashboard(data)
   if (precos.size === 0) return
   try {
-    await persistirESincronizarCotacoesBrapi(context, precos)
+    await persistirESincronizarCotacoesApi(context, precos)
   } catch {
     // Best-effort (RNF04): nunca bloqueia o dashboard.
   }
@@ -41,45 +41,45 @@ export interface AvisoCotacoes {
 }
 
 /**
- * Traduz o diagnóstico da Brapi em uma mensagem para o usuário.
+ * Traduz o diagnóstico das APIs de cotação em uma mensagem para o usuário.
  *
  * Só faz sentido quando algum ativo de Ação/FII/BDR/ETF/Tesouro estava elegível; nesse
  * caso sempre há uma mensagem — inclusive quando a integração não está
  * configurada ou não devolveu nenhum preço.
  */
-function descreverAtualizacaoCotacoes(info: DiagnosticoCotacoesBrapi | null): AvisoCotacoes | null {
+function descreverAtualizacaoCotacoes(info: DiagnosticoCotacoesApi | null): AvisoCotacoes | null {
   if (!info || info.total === 0) return null
 
-  // Tesouro Direto na Brapi é do plano Pro: com token válido e sem preço, avisa.
+  const nomes = info.provedores.length > 0 ? info.provedores.join(' / ') : 'API de cotações'
+  // Algumas APIs só cotam o Tesouro em planos pagos: com token e sem preço, avisa.
   const dicaTesouro =
-    !info.semToken && (info.tesouroSemCotacao?.length ?? 0) > 0
-      ? ' Os preços do Tesouro Direto exigem o plano Pro da Brapi.'
+    !info.semToken && (info.tesouroSemCotacao?.length ?? 0) > 0 && info.dicasTesouro.length > 0
+      ? ` ${info.dicasTesouro.join(' ')}`
       : ''
 
   if (info.comCotacao === 0) {
     if (info.semToken) {
       return {
         tipo: 'error',
-        texto:
-          'A integração com a Brapi não está configurada. Informe o token em Configurações → Integrações para atualizar as cotações automaticamente.',
+        texto: `A integração com a ${nomes} não está configurada. Informe o token em Configurações → Integrações para atualizar as cotações automaticamente.`,
       }
     }
     return {
       tipo: 'error',
-      texto: `Não foi possível atualizar as cotações pela Brapi (${info.semCotacao.join(', ')}). Verifique o token em Configurações → Integrações e tente novamente.${dicaTesouro}`,
+      texto: `Não foi possível atualizar as cotações pela ${nomes} (${info.semCotacao.join(', ')}). Verifique o token em Configurações → Integrações e tente novamente.${dicaTesouro}`,
     }
   }
 
   if (info.semCotacao.length > 0) {
     return {
       tipo: 'info',
-      texto: `Cotações atualizadas pela Brapi: ${info.comCotacao} de ${info.total} ativos. Sem cotação: ${info.semCotacao.join(', ')}.${dicaTesouro}`,
+      texto: `Cotações atualizadas pela ${nomes}: ${info.comCotacao} de ${info.total} ativos. Sem cotação: ${info.semCotacao.join(', ')}.${dicaTesouro}`,
     }
   }
 
   return {
     tipo: 'info',
-    texto: `Cotações da Brapi atualizadas para ${info.comCotacao} ${info.comCotacao === 1 ? 'ativo' : 'ativos'}.`,
+    texto: `Cotações da ${nomes} atualizadas para ${info.comCotacao} ${info.comCotacao === 1 ? 'ativo' : 'ativos'}.`,
   }
 }
 
@@ -96,7 +96,7 @@ export interface UseDashboardResult {
   /** Resultado da última atualização de cotações (null quando não houve). */
   avisoCotacoes: AvisoCotacoes | null
   /**
-   * Relê os dados da API e **atualiza as cotações B3 pela Brapi** (ignorando o
+   * Relê os dados da API e **atualiza as cotações B3 pelas APIs** (ignorando o
    * cache local). Quando a integração não está configurada ou não devolve
    * preço, `avisoCotacoes` traz a mensagem para a UI.
    */
@@ -172,9 +172,9 @@ export function useDashboard(): UseDashboardResult {
         const resultado = await carregarDashboard(context, { forceRefresh })
         setData(resultado)
         setIsOffline(false)
-        // Persistência best-effort das cotações Brapi usadas como fallback:
+        // Persistência best-effort das cotações das APIs usadas como fallback:
         // grava o preço na planilha (mesmo fluxo da marcação manual).
-        void persistirCotacoesBrapiDoDashboard(context, resultado)
+        void persistirCotacoesApiDoDashboard(context, resultado)
         return resultado
       } catch (loadError) {
         const cache = workspace ? lerDashboardDoCache(workspace.spreadsheetId) : null
@@ -221,7 +221,7 @@ export function useDashboard(): UseDashboardResult {
   const refresh = useCallback(async () => {
     setAvisoCotacoes(null)
     const resultado = await load(true)
-    setAvisoCotacoes(descreverAtualizacaoCotacoes(resultado?.cotacoesBrapi ?? null))
+    setAvisoCotacoes(descreverAtualizacaoCotacoes(resultado?.cotacoesApi ?? null))
   }, [load])
 
   const registrarSnapshotManual = useCallback(async () => {

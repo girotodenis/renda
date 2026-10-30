@@ -4,7 +4,7 @@ import type { RepositoryContext } from '@/infrastructure/repositories'
 import type { Operacao } from '@/domain/entities'
 
 /**
- * Persistência das cotações obtidas via Brapi na planilha (fallback do
+ * Persistência das cotações obtidas das APIs de cotação na planilha (fallback do
  * `GOOGLEFINANCE` na B3 e preço de resgate do Tesouro Direto), usando o mesmo
  * fluxo da marcação manual (RF19):
  *
@@ -25,10 +25,10 @@ function eMaisRecente(candidato: Operacao, atual: Operacao): boolean {
 }
 
 /**
- * Grava os preços Brapi (centavos) na operação mais recente de cada ticker
+ * Grava os preços das APIs (centavos) na operação mais recente de cada ticker
  * (`Valor Bruto Atual`). Retorna o número de operações atualizadas.
  */
-export async function persistirCotacoesBrapi(
+export async function persistirCotacoesApi(
   context: RepositoryContext,
   precos: ReadonlyMap<string, number>,
 ): Promise<number> {
@@ -64,14 +64,14 @@ export async function persistirCotacoesBrapi(
 }
 
 /**
- * Persiste os preços Brapi e reescreve o `Consolidado` + snapshot do dia.
+ * Persiste os preços das APIs e reescreve o `Consolidado` + snapshot do dia.
  * Reutiliza `sincronizarConsolidadoESnapshot` com o passo extra de gravação.
  */
-export async function persistirESincronizarCotacoesBrapi(
+export async function persistirESincronizarCotacoesApi(
   context: RepositoryContext,
   precos: ReadonlyMap<string, number>,
 ): Promise<void> {
-  const alteradas = await persistirCotacoesBrapi(context, precos)
+  const alteradas = await persistirCotacoesApi(context, precos)
   if (alteradas === 0) return
   await sincronizarConsolidadoESnapshot(context)
 }

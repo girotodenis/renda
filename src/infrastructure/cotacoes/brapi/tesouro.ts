@@ -1,6 +1,11 @@
-import { encontrarTituloTesouro, extrairTitulosTesouro } from '@/domain/tesouro'
+import { toCentavos } from '@/domain/money'
+import { encontrarTituloTesouro } from '@/domain/tesouro'
 import type { TituloTesouro } from '@/domain/tesouro'
-import type { BrapiCotacao, ResultadoCotacoesBrapi } from '@/infrastructure/brapi'
+import type {
+  CotacaoMercado,
+  ResultadoCotacoes,
+  TituloTesouroCarteira,
+} from '@/domain/provedoresCotacao'
 import { clearStorageKeys, readStorageJson, writeStorageJson } from '@/infrastructure/storage'
 
 /**
@@ -19,13 +24,6 @@ const CACHE_TTL_MS = 6 * 60 * 60 * 1000
 const CACHE_KEY = 'minhaacoes.brapiTesouro.v1.titulos'
 const LIMITE_POR_PAGINA = 100
 const MAX_PAGINAS = 5
-
-/** Título do Tesouro da carteira a cotar (ticker + vencimento da operação). */
-export interface TickerTesouroCarteira {
-  ticker: string
-  /** Vencimento ISO registrado nas operações (`null` quando ausente). */
-  vencimento: string | null
-}
 
 interface CacheTitulos {
   titulos: TituloTesouro[]
@@ -54,6 +52,40 @@ export function clearBrapiTesouroCache(): void {
 
 function isRegistro(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function precoEmCentavos(value: unknown): number | null {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return null
+  return toCentavos(value)
+}
+
+function dataISO(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const match = value.trim().match(/^\d{4}-\d{2}-\d{2}/)
+  return match ? match[0] : null
+}
+
+/**
+ * Extrai os títulos da resposta da Brapi (`{ results: [...] }`, usada por
+ * `/treasury/list` e `/treasury/indicators`). O preço é o de **resgate**
+ * (`sellPrice`, com `basePrice` como alternativa) — o valor de mercado de
+ * quem já tem o título. Itens inválidos são ignorados.
+ */
+export function extrairTitulosTesouro(payload: unknown): TituloTesouro[] {
+  if (!isRegistro(payload) || payload.error === true || !Array.isArray(payload.results)) {
+    return []
+  }
+  const titulos: TituloTesouro[] = []
+  for (const item of payload.results) {
+    if (!isRegistro(item)) continue
+    const symbol = typeof item.symbol === 'string' ? item.symbol.trim().toLowerCase() : ''
+    const bondType = typeof item.bondType === 'string' ? item.bondType.trim() : ''
+    const maturityDate = dataISO(item.maturityDate)
+    const preco = precoEmCentavos(item.sellPrice) ?? precoEmCentavos(item.basePrice)
+    if (symbol.length === 0 || !maturityDate || preco === null) continue
+    titulos.push({ symbol, bondType, maturityDate, preco, dataBase: dataISO(item.baseDate) })
+  }
+  return titulos
 }
 
 /** Baixa todas as páginas da listagem; `null` em qualquer falha. */
@@ -85,17 +117,17 @@ async function baixarTitulos(token: string): Promise<TituloTesouro[] | null> {
   }
 }
 
-function cotacaoDoTitulo(titulo: TituloTesouro, fonte: BrapiCotacao['fonte']): BrapiCotacao {
+function cotacaoDoTitulo(titulo: TituloTesouro, fonte: CotacaoMercado['fonte']): CotacaoMercado {
   return { preco: titulo.preco, precoAbertura: null, atualizadoEm: titulo.dataBase, fonte }
 }
 
 /** Casa os tickers com os títulos (chave = ticker como informado). */
 function cotarTickers(
-  tickers: readonly TickerTesouroCarteira[],
+  tickers: readonly TituloTesouroCarteira[],
   titulos: readonly TituloTesouro[],
-  fonte: BrapiCotacao['fonte'],
-): { cotacoes: Map<string, BrapiCotacao>; semCotacao: string[] } {
-  const cotacoes = new Map<string, BrapiCotacao>()
+  fonte: CotacaoMercado['fonte'],
+): { cotacoes: Map<string, CotacaoMercado>; semCotacao: string[] } {
+  const cotacoes = new Map<string, CotacaoMercado>()
   const semCotacao: string[] = []
   for (const { ticker, vencimento } of tickers) {
     if (cotacoes.has(ticker) || semCotacao.includes(ticker)) continue
@@ -108,8 +140,8 @@ function cotarTickers(
 
 /** Cotações do Tesouro a partir do cache local válido (modo offline). */
 export function lerCotacoesTesouroCache(
-  tickers: readonly TickerTesouroCarteira[],
-): Map<string, BrapiCotacao> {
+  tickers: readonly TituloTesouroCarteira[],
+): Map<string, CotacaoMercado> {
   const titulos = titulosDoCache()
   if (!titulos) return new Map()
   return cotarTickers(tickers, titulos, 'cache').cotacoes
@@ -120,9 +152,9 @@ export function lerCotacoesTesouroCache(
  * na API com `forceRefresh`). Mesmo contrato de `atualizarCotacoesBrapi`.
  */
 export async function atualizarCotacoesTesouroBrapi(
-  tickers: readonly TickerTesouroCarteira[],
+  tickers: readonly TituloTesouroCarteira[],
   options: { token?: string; forceRefresh?: boolean } = {},
-): Promise<ResultadoCotacoesBrapi> {
+): Promise<ResultadoCotacoes> {
   const token = typeof options.token === 'string' ? options.token.trim() : ''
   const semToken = token.length === 0
   if (tickers.length === 0) {

@@ -132,7 +132,7 @@ export async function syncConsolidado(
 /**
  * Preços para as classes sem `GOOGLEFINANCE` (RF19): Renda Fixa e Tesouro Direto
  * usam a marcação manual (`Valor Bruto Atual`) e os ativos B3 podem ter preço
- * persistido via Brapi (fallback do `GOOGLEFINANCE`). Sem preço, o
+ * persistido via API de cotações (fallback do `GOOGLEFINANCE`). Sem preço, o
  * `writeConsolidado` cai no preço médio como fallback (RNF04).
  */
 async function precosDaCarteira(
@@ -140,7 +140,7 @@ async function precosDaCarteira(
 ): Promise<Map<string, number>> {
   const precos = new Map<string, number>(precosManuaisDeOperacoes(operacoes))
 
-  // B3 (Ação/FII/BDR/ETF): preço persistido via Brapi (fallback do GOOGLEFINANCE).
+  // B3 (Ação/FII/BDR/ETF): preço persistido via API de cotações (fallback do GOOGLEFINANCE).
   for (const [ticker, preco] of precosPersistidosDeOperacoes(operacoes)) precos.set(ticker, preco)
 
   return precos

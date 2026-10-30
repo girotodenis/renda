@@ -13,11 +13,19 @@ import { carregarConfiguracoes, salvarConfiguracoes } from '@/application/config
 import { exportarPlanilhaOds } from '@/application/exportar'
 import { analisarOds, aplicarImportacao } from '@/application/importar'
 import type { AnaliseImportacao } from '@/application/importar'
-import { clearBrapiCache } from '@/infrastructure/brapi'
-import { clearBrapiTesouroCache } from '@/infrastructure/brapiTesouro'
+import { limparCachesCotacao, listarIntegracoesCotacao } from '@/application/integracoesCotacao'
+import type { IntegracaoCotacaoInfo } from '@/application/integracoesCotacao'
 import { lerAbasOds } from '@/infrastructure/ods/odsReader'
 import { OdsFormatError } from '@/infrastructure/ods/zipReader'
 import { describeSheetsError } from '@/infrastructure/sheets/gateway'
+
+/** Integrações de cotação registradas (fixas durante a execução do app). */
+const INTEGRACOES = listarIntegracoesCotacao().filter((integracao) => integracao.exigeToken)
+
+/** Apenas os tokens das integrações registradas (demais chaves são preservadas na aba). */
+function tokensDasIntegracoes(tokens: Readonly<Record<string, string>>): Record<string, string> {
+  return Object.fromEntries(INTEGRACOES.map(({ id }) => [id, tokens[id] ?? '']))
+}
 
 /**
  * Página de configurações das integrações (aba `Configuracoes` da planilha).
@@ -30,8 +38,7 @@ import { describeSheetsError } from '@/infrastructure/sheets/gateway'
 export function ConfiguracoesPage() {
   const { workspace, ensureAccessToken, isModoLocal, usarModoLocal, logout } = useAuth()
   const { tema, setTema } = useLayout()
-  const [brapiToken, setBrapiToken] = useState('')
-  const [mostrarToken, setMostrarToken] = useState(false)
+  const [tokens, setTokens] = useState<Record<string, string>>({})
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
@@ -58,7 +65,7 @@ export function ConfiguracoesPage() {
         accessToken,
         spreadsheetId: workspace.spreadsheetId,
       })
-      setBrapiToken(config.brapiToken)
+      setTokens({ ...config.tokens })
     } catch (loadError) {
       setError(describeSheetsError(loadError))
     } finally {
@@ -86,11 +93,10 @@ export function ConfiguracoesPage() {
       }
       await salvarConfiguracoes(
         { accessToken, spreadsheetId: workspace.spreadsheetId },
-        { brapiToken },
+        { tokens: tokensDasIntegracoes(tokens) },
       )
       // Invalida o cache para que o novo token passe a valer já na próxima busca.
-      clearBrapiCache()
-      clearBrapiTesouroCache()
+      limparCachesCotacao()
       setNotice('Configurações salvas na planilha.')
     } catch (saveError) {
       setError(describeSheetsError(saveError))
@@ -380,71 +386,16 @@ export function ConfiguracoesPage() {
         </div>
       </div>
 
-      <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex items-start gap-3">
-          <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
-            <KeyRound className="h-4 w-4" aria-hidden />
-          </span>
-          <div className="space-y-1">
-            <h2 className="text-sm font-semibold text-slate-900">Token da Brapi.dev</h2>
-            <p className="text-xs text-slate-500">
-              Usado como <strong>fallback de cotação da B3</strong> (Ação/FII/BDR/ETF) quando o
-              <code className="mx-1 rounded bg-slate-100 px-1">GOOGLEFINANCE</code>da planilha não
-              retorna preço.
-            </p>
-            <p className="text-xs text-slate-500">
-              <strong>Como obter:</strong> crie uma conta gratuita em{' '}
-              <a
-                href="https://brapi.dev"
-                target="_blank"
-                rel="noreferrer"
-                className="font-medium text-brand-600 underline"
-              >
-                brapi.dev
-              </a>
-              , acesse o painel e copie o seu <em>token</em>. Deixe em branco para desativar o
-              fallback.
-            </p>
-          </div>
-        </div>
-
-        <FormField
-          htmlFor="brapi-token"
-          label="Token da Brapi"
-          hint={
-            isModoLocal
-              ? 'Fica salvo na aba Configurações do banco local deste navegador.'
-              : 'Fica salvo na sua planilha do Google Drive — não é enviado a nenhum servidor do app.'
-          }
-        >
-          <div className="flex items-center gap-2">
-            <input
-              id="brapi-token"
-              type={mostrarToken ? 'text' : 'password'}
-              value={brapiToken}
-              onChange={(evento) => setBrapiToken(evento.target.value)}
-              placeholder="Cole aqui o seu token"
-              spellCheck={false}
-              autoComplete="off"
-              className={inputClassName}
-              disabled={isLoading || isSaving}
-            />
-            <button
-              type="button"
-              onClick={() => setMostrarToken((valor) => !valor)}
-              className="inline-flex h-9 shrink-0 items-center gap-1 rounded-md border border-slate-300 bg-white px-3 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100"
-              aria-label={mostrarToken ? 'Ocultar token' : 'Mostrar token'}
-            >
-              {mostrarToken ? (
-                <EyeOff className="h-4 w-4" aria-hidden />
-              ) : (
-                <Eye className="h-4 w-4" aria-hidden />
-              )}
-              {mostrarToken ? 'Ocultar' : 'Mostrar'}
-            </button>
-          </div>
-        </FormField>
-      </div>
+      {INTEGRACOES.map((integracao) => (
+        <TokenIntegracaoCard
+          key={integracao.id}
+          integracao={integracao}
+          valor={tokens[integracao.id] ?? ''}
+          onChange={(valor) => setTokens((atuais) => ({ ...atuais, [integracao.id]: valor }))}
+          disabled={isLoading || isSaving}
+          isModoLocal={isModoLocal}
+        />
+      ))}
 
       <div className="flex justify-end">
         <button
@@ -546,6 +497,95 @@ function PreviewLayout({ tema }: { tema: LayoutTema }) {
     <div className="overflow-hidden rounded-md border border-slate-200 bg-slate-50 p-2">
       <div className="h-2 w-2/3 rounded-full bg-gradient-to-r from-[#60a5fa] to-[#2563eb]" />
       <div className="mt-1.5 h-5 rounded-sm bg-white shadow-sm" />
+    </div>
+  )
+}
+
+interface TokenIntegracaoCardProps {
+  integracao: IntegracaoCotacaoInfo
+  valor: string
+  onChange: (valor: string) => void
+  disabled: boolean
+  isModoLocal: boolean
+}
+
+/** Campo de token de uma integração de cotações (um card por API registrada). */
+function TokenIntegracaoCard({
+  integracao,
+  valor,
+  onChange,
+  disabled,
+  isModoLocal,
+}: TokenIntegracaoCardProps) {
+  const [mostrarToken, setMostrarToken] = useState(false)
+  const inputId = `${integracao.id}-token`
+  const dominio = integracao.site.replace(/^https?:\/\//, '').replace(/\/$/, '')
+
+  return (
+    <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex items-start gap-3">
+        <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
+          <KeyRound className="h-4 w-4" aria-hidden />
+        </span>
+        <div className="space-y-1">
+          <h2 className="text-sm font-semibold text-slate-900">Token da {integracao.nome}</h2>
+          <p className="text-xs text-slate-500">
+            Usado como <strong>fallback de cotação da B3</strong> (Ação/FII/BDR/ETF) quando o
+            <code className="mx-1 rounded bg-slate-100 px-1">GOOGLEFINANCE</code>da planilha não
+            retorna preço.
+          </p>
+          <p className="text-xs text-slate-500">
+            <strong>Como obter:</strong> crie uma conta em{' '}
+            <a
+              href={integracao.site}
+              target="_blank"
+              rel="noreferrer"
+              className="font-medium text-brand-600 underline"
+            >
+              {dominio}
+            </a>
+            , acesse o painel e copie o seu <em>token</em>. Deixe em branco para desativar o
+            fallback.
+          </p>
+        </div>
+      </div>
+
+      <FormField
+        htmlFor={inputId}
+        label={`Token da ${integracao.nome}`}
+        hint={
+          isModoLocal
+            ? 'Fica salvo na aba Configurações do banco local deste navegador.'
+            : 'Fica salvo na sua planilha do Google Drive — não é enviado a nenhum servidor do app.'
+        }
+      >
+        <div className="flex items-center gap-2">
+          <input
+            id={inputId}
+            type={mostrarToken ? 'text' : 'password'}
+            value={valor}
+            onChange={(evento) => onChange(evento.target.value)}
+            placeholder="Cole aqui o seu token"
+            spellCheck={false}
+            autoComplete="off"
+            className={inputClassName}
+            disabled={disabled}
+          />
+          <button
+            type="button"
+            onClick={() => setMostrarToken((atual) => !atual)}
+            className="inline-flex h-9 shrink-0 items-center gap-1 rounded-md border border-slate-300 bg-white px-3 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-100"
+            aria-label={mostrarToken ? 'Ocultar token' : 'Mostrar token'}
+          >
+            {mostrarToken ? (
+              <EyeOff className="h-4 w-4" aria-hidden />
+            ) : (
+              <Eye className="h-4 w-4" aria-hidden />
+            )}
+            {mostrarToken ? 'Ocultar' : 'Mostrar'}
+          </button>
+        </div>
+      </FormField>
     </div>
   )
 }

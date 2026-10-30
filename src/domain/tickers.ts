@@ -4,7 +4,7 @@ import { CategoriaAtivo } from '@/domain/entities'
  * Sugestões de ticker para o cadastro de operações (autocomplete).
  *
  * Fontes, por categoria:
- * - Ação/FII/BDR/ETF: tickers listados na B3 (Brapi, sem token) + os da carteira.
+ * - Ação/FII/BDR/ETF: tickers listados na B3 (API de cotações) + os da carteira.
  * - Tesouro Direto: catálogo local de títulos (não há API pública sem token).
  * - Renda Fixa: apenas os já usados na carteira (produtos não padronizados).
  */
@@ -43,7 +43,7 @@ export const CATALOGO_TESOURO_DIRETO: readonly string[] = TESOURO_DIRETO_FAMILIA
   ({ nome, anos }) => anos.map((ano) => `${nome} ${ano}`),
 )
 
-/** `true` quando a categoria tem lista de tickers na B3 (consultada na Brapi). */
+/** `true` quando a categoria tem lista de tickers na B3 (consultada nas APIs de cotação). */
 export function categoriaListadaNaB3(categoria: CategoriaAtivo): boolean {
   return (
     categoria === CategoriaAtivo.Acao ||

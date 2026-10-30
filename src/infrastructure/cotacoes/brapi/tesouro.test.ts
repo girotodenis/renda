@@ -3,7 +3,7 @@ import {
   atualizarCotacoesTesouroBrapi,
   clearBrapiTesouroCache,
   lerCotacoesTesouroCache,
-} from '@/infrastructure/brapiTesouro'
+} from '@/infrastructure/cotacoes/brapi/tesouro'
 
 /** Testes do serviço de preços do Tesouro Direto via Brapi (`/treasury/list`). */
 

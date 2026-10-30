@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { CategoriaAtivo } from '@/domain/entities'
-import { extrairTickersBrapi, listarTickersBrapi } from '@/infrastructure/brapiTickers'
+import { extrairTickersBrapi, listarTickersBrapi } from '@/infrastructure/cotacoes/brapi/tickers'
 
 /** Testes da lista de tickers B3 (autocomplete do cadastro de operações). */
 

@@ -1,4 +1,5 @@
 import { parseDecimalBR, toCentavos } from '@/domain/money'
+import type { CotacaoMercado, ResultadoCotacoes } from '@/domain/provedoresCotacao'
 import { clearStorageKeys, readStorageJson, writeStorageJson } from '@/infrastructure/storage'
 
 /**
@@ -31,32 +32,9 @@ export interface BuscarBrapiOptions {
   forceRefresh?: boolean
 }
 
-/** Resultado detalhado de uma atualização de cotações (para avisos na UI). */
-export interface ResultadoCotacoesBrapi {
-  /** Cotações obtidas (cache ou API), por ticker. */
-  cotacoes: Map<string, BrapiCotacao>
-  /** Tickers consultados que ficaram sem cotação. */
-  semCotacao: string[]
-  /** `true` quando não há token configurado (integração desligada). */
-  semToken: boolean
-  /** `true` quando houve pelo menos uma requisição à API. */
-  consultouRede: boolean
-}
-
 /** Normaliza o token recebido; vazio quando não configurado. */
 function resolverToken(token?: string): string {
   return typeof token === 'string' ? token.trim() : ''
-}
-
-/** Cotação de um ticker B3. */
-export interface BrapiCotacao {
-  /** Preço unitário em **centavos**. */
-  preco: number
-  /** Preço de abertura do dia em **centavos** (`null` quando indisponível). */
-  precoAbertura: number | null
-  /** ISO da última atualização conhecida (`null` quando desconhecida). */
-  atualizadoEm: string | null
-  fonte: 'api' | 'cache'
 }
 
 function isRegistro(value: unknown): value is Record<string, unknown> {
@@ -89,8 +67,8 @@ function extrairData(value: unknown): string | null {
  * A abertura vem na mesma resposta (sem chamada extra) e alimenta a coluna
  * "Variação Dia (%)". Entradas inesperadas ou sem preço são ignoradas.
  */
-export function extrairCotacoes(payload: unknown): Map<string, BrapiCotacao> {
-  const resultado = new Map<string, BrapiCotacao>()
+export function extrairCotacoes(payload: unknown): Map<string, CotacaoMercado> {
+  const resultado = new Map<string, CotacaoMercado>()
   if (!isRegistro(payload) || payload.error === true) return resultado
   const results = payload.results
   if (!Array.isArray(results)) return resultado
@@ -114,13 +92,13 @@ function cacheKey(ticker: string): string {
   return `${CACHE_PREFIX}${ticker.trim().toUpperCase()}`
 }
 
-function lerCache(ticker: string): { valor: BrapiCotacao; gravadoEm: number } | null {
-  const registro = readStorageJson<{ cotacao: BrapiCotacao; gravadoEm: number }>(cacheKey(ticker))
+function lerCache(ticker: string): { valor: CotacaoMercado; gravadoEm: number } | null {
+  const registro = readStorageJson<{ cotacao: CotacaoMercado; gravadoEm: number }>(cacheKey(ticker))
   if (!registro || typeof registro.gravadoEm !== 'number') return null
   return { valor: registro.cotacao, gravadoEm: registro.gravadoEm }
 }
 
-function gravarCache(ticker: string, cotacao: BrapiCotacao): void {
+function gravarCache(ticker: string, cotacao: CotacaoMercado): void {
   writeStorageJson(cacheKey(ticker), { cotacao, gravadoEm: Date.now() })
 }
 
@@ -130,7 +108,7 @@ export function clearBrapiCache(): void {
 }
 
 /** Lê a cotação do cache local, quando ainda válida. */
-export function lerCotacaoCache(ticker: string): BrapiCotacao | null {
+export function lerCotacaoCache(ticker: string): CotacaoMercado | null {
   const registro = lerCache(ticker)
   if (!registro) return null
   if (Date.now() - registro.gravadoEm > CACHE_TTL_MS) return null
@@ -148,8 +126,8 @@ export function lerCotacaoCache(ticker: string): BrapiCotacao | null {
 export async function atualizarCotacoesBrapi(
   tickers: readonly string[],
   options: BuscarBrapiOptions = {},
-): Promise<ResultadoCotacoesBrapi> {
-  const cotacoes = new Map<string, BrapiCotacao>()
+): Promise<ResultadoCotacoes> {
+  const cotacoes = new Map<string, CotacaoMercado>()
   const semCotacao: string[] = []
   const pendentes: string[] = []
   const consultados = new Set<string>()
@@ -208,7 +186,7 @@ export async function buscarCotacoesBrapi(
 async function buscarCotacao(
   ticker: string,
   token: string,
-): Promise<BrapiCotacao | null> {
+): Promise<CotacaoMercado | null> {
   if (typeof AbortController !== 'function') return null
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)

@@ -7,11 +7,11 @@ import {
   montarSugestoesTicker,
 } from '@/domain/tickers'
 import type { TickerConhecido } from '@/domain/tickers'
-import { listarTickersBrapi } from '@/infrastructure/brapiTickers'
+import { listarTickersMercado } from '@/application/integracoesCotacao'
 
 /**
  * Sugestões de ticker para a categoria informada: tickers da carteira +
- * lista da B3 (Brapi, sem token) ou catálogo do Tesouro Direto. Falhas de rede
+ * lista da B3 (API de cotações) ou catálogo do Tesouro Direto. Falhas de rede
  * apenas reduzem as sugestões aos tickers já conhecidos.
  */
 export function useSugestoesTicker(
@@ -26,7 +26,7 @@ export function useSugestoesTicker(
   useEffect(() => {
     if (!buscaRemota) return
     let ativo = true
-    void listarTickersBrapi(categoria).then((tickers) => {
+    void listarTickersMercado(categoria).then((tickers) => {
       if (ativo) setRemotos({ categoria, tickers })
     })
     return () => {

@@ -76,7 +76,7 @@ const CONSOLIDADO_COLUMN_COUNT = SHEET_HEADERS.Consolidado.length
  *
  * Colunas C e D são valores calculados no app; E e K são `GOOGLEFINANCE` (Ação/
  * FII/BDR) — ou valores estáticos quando há cotação persistida (Tesouro/Renda
- * Fixa/fallback Brapi); F–J e L são fórmulas que referenciam C/D/E/K e o total
+ * Fixa/fallback da API de cotações); F–J e L são fórmulas que referenciam C/D/E/K e o total
  * da coluna G — preservando o comportamento reativo da planilha.
  */
 export function buildConsolidadoRows(input: ConsolidadoSheetInput): CellValue[][] {
@@ -87,7 +87,7 @@ export function buildConsolidadoRows(input: ConsolidadoSheetInput): CellValue[][
     const row = index + 2
     const precoAtual = precosAtuais.get(posicao.ticker) ?? posicao.precoMedio
     // Ação/FII/BDR/ETF usa GOOGLEFINANCE; quando há preço persistido (fallback
-    // Brapi), grava o valor estático em vez da fórmula — o preço persiste na
+    // API de cotações), grava o valor estático em vez da fórmula — o preço persiste na
     // planilha mesmo quando o GOOGLEFINANCE falha.
     const usaGoogFinanceNaLinha =
       usaGoogFinance(posicao.categoria) && !precosAtuais.has(posicao.ticker)
