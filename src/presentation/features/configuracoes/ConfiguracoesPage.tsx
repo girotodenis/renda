@@ -535,7 +535,7 @@ function TokenIntegracaoCard({
             retorna preço.
           </p>
           <p className="text-xs text-slate-500">
-            <strong>Como obter:</strong> crie uma conta em{' '}
+            <strong>Como obter:</strong> acesse{' '}
             <a
               href={integracao.site}
               target="_blank"
@@ -543,9 +543,9 @@ function TokenIntegracaoCard({
               className="font-medium text-brand-600 underline"
             >
               {dominio}
-            </a>
-            , acesse o painel e copie o seu <em>token</em>. Deixe em branco para desativar o
-            fallback.
+            </a>{' '}
+            e {integracao.comoObter ?? 'copie o seu token no painel.'} Deixe em branco para
+            desativar o fallback.
           </p>
         </div>
       </div>

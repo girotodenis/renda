@@ -8,11 +8,20 @@ import { integracoesCotacao, provedorListaTickers } from '@/infrastructure/cotac
  */
 
 /** Dados de uma integração exibidos em Configurações → Integrações. */
-export type IntegracaoCotacaoInfo = Pick<IntegracaoCotacao, 'id' | 'nome' | 'site' | 'exigeToken'>
+export type IntegracaoCotacaoInfo = Pick<
+  IntegracaoCotacao,
+  'id' | 'nome' | 'site' | 'exigeToken' | 'comoObter'
+>
 
 /** Integrações de cotação registradas, em ordem de prioridade. */
 export function listarIntegracoesCotacao(): IntegracaoCotacaoInfo[] {
-  return integracoesCotacao.map(({ id, nome, site, exigeToken }) => ({ id, nome, site, exigeToken }))
+  return integracoesCotacao.map(({ id, nome, site, exigeToken, comoObter }) => ({
+    id,
+    nome,
+    site,
+    exigeToken,
+    comoObter,
+  }))
 }
 
 /** Limpa o cache local de todas as integrações (ex.: após trocar tokens). */

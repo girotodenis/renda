@@ -20,6 +20,7 @@ export const integracaoBrapi: IntegracaoCotacao = {
   site: 'https://brapi.dev',
   exigeToken: true,
   dicaTesouroSemCotacao: 'Os preços do Tesouro Direto exigem o plano Pro da Brapi.',
+  comoObter: 'copie o token no painel (conta gratuita).',
   b3: {
     lerCache: lerCotacaoCache,
     atualizar: (tickers, { tokens, forceRefresh }) =>

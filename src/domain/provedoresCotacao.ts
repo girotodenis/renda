@@ -92,6 +92,8 @@ export interface IntegracaoCotacao {
   exigeToken: boolean
   /** Dica exibida quando títulos do Tesouro ficam sem cotação (ex.: plano pago). */
   dicaTesouroSemCotacao?: string
+  /** Instrução de "como obter o token" exibida em Configurações. */
+  comoObter?: string
   b3?: ProvedorCotacoesB3
   tesouro?: ProvedorCotacoesTesouro
   tickers?: ProvedorListaTickers

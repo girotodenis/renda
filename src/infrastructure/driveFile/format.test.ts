@@ -11,6 +11,7 @@ import {
 } from '@/infrastructure/driveFile/format'
 import type { DatabaseSheets } from '@/infrastructure/driveFile/format'
 import type { CellValue } from '@/infrastructure/sheets/sheetCells'
+import { configDeRegistros, registrosDeConfig } from '@/domain/configuracoes'
 
 const encoder = new TextEncoder()
 
@@ -68,6 +69,23 @@ describe('encodeDatabaseFile + decodeDatabaseFile', () => {
 
     expect(decodificado.version).toBe(1)
     expect(decodificado.sheets.Historico).toEqual(sheets.Historico)
+  })
+
+  it('preserva os tokens de todas as integrações na aba Configuracoes do banco JSON', async () => {
+    const tokens = { brapi: 'token-brapi', maisretorno: 'mr_abc_123' }
+    const sheets = sheetsWith({
+      Configuracoes: [
+        [...SHEET_HEADERS.Configuracoes],
+        ...registrosDeConfig({ tokens }).map(({ chave, valor }) => [chave, valor]),
+      ],
+    })
+
+    const decodificado = await decodeDatabaseFile(await encodeDatabaseFile(sheets))
+    const registros = decodificado.sheets.Configuracoes
+      .slice(1)
+      .map(([chave, valor]) => ({ chave: String(chave), valor: String(valor) }))
+
+    expect(configDeRegistros(registros).tokens).toEqual(tokens)
   })
 
   it('lança DatabaseFileError em JSON inválido', async () => {

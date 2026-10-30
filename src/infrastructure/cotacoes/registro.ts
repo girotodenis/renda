@@ -5,6 +5,7 @@ import {
 } from '@/domain/provedoresCotacao'
 import type { IntegracaoCotacao } from '@/domain/provedoresCotacao'
 import { integracaoBrapi } from '@/infrastructure/cotacoes/brapi'
+import { integracaoMaisRetorno } from '@/infrastructure/cotacoes/maisRetorno'
 
 /**
  * **Composição** das integrações de cotação.
@@ -14,7 +15,10 @@ import { integracaoBrapi } from '@/infrastructure/cotacoes/brapi'
  * prioridade (fallback): cada integração só consulta o que as anteriores não
  * cotaram. O token aparece automaticamente em Configurações → Integrações.
  */
-export const integracoesCotacao: readonly IntegracaoCotacao[] = [integracaoBrapi]
+export const integracoesCotacao: readonly IntegracaoCotacao[] = [
+  integracaoBrapi,
+  integracaoMaisRetorno,
+]
 
 export const provedorCotacoesB3 = cadeiaCotacoesB3(integracoesCotacao)
 export const provedorCotacoesTesouro = cadeiaCotacoesTesouro(integracoesCotacao)
