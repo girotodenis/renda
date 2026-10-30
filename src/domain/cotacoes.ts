@@ -1,4 +1,4 @@
-import { permiteMarcacaoManual, usaGoogFinance } from '@/domain/categoria'
+import { isTesouroDireto, permiteMarcacaoManual, usaGoogFinance } from '@/domain/categoria'
 import type { CategoriaAtivo, Operacao } from '@/domain/entities'
 import { round2 } from '@/domain/money'
 
@@ -11,7 +11,8 @@ import { round2 } from '@/domain/money'
  *
  * Ordem de preferência:
  * - Ação/FII/BDR/ETF: `GOOGLEFINANCE` (planilha) → Brapi (fallback) → preço médio.
- * - Tesouro Direto e Renda Fixa: marcação manual → estimativa → indisponível.
+ * - Tesouro Direto: Brapi (preço de resgate) → marcação manual → estimativa → indisponível.
+ * - Renda Fixa: marcação manual → estimativa → indisponível.
  */
 
 /** Fonte do preço atual de um ativo. */
@@ -30,7 +31,10 @@ export interface EntradaCotacao {
   precoMercado: number | null
   /** Preço de abertura do dia em **centavos**; `null` se ausente (mesma fonte de `precoMercado`). */
   precoAbertura?: number | null
-  /** Preço de mercado em **centavos** (Brapi); `null` se ausente (fallback do GOOGLEFINANCE). */
+  /**
+   * Preço de mercado em **centavos** (Brapi); `null` se ausente. Fallback do
+   * GOOGLEFINANCE na B3; no Tesouro Direto, prioridade sobre a marcação manual.
+   */
   precoBrapi?: number | null
   /** Marcação a mercado manual em **centavos** (`Valor Bruto Atual`); `null` se ausente. */
   precoManual: number | null
@@ -146,6 +150,22 @@ export function resolverCotacao(entrada: EntradaCotacao): CotacaoResolvida {
       }
     }
   } else if (permiteMarcacaoManual(categoria)) {
+    // Tesouro Direto: o preço de resgate publicado pelo Tesouro (via Brapi)
+    // tem prioridade; ele é persistido em `Valor Bruto Atual` e passa a valer
+    // como marcação quando a integração estiver indisponível.
+    if (isTesouroDireto(categoria) && precoValido(precoBrapi)) {
+      return {
+        ticker,
+        categoria,
+        precoAtual: precoBrapi,
+        precoAbertura: null,
+        variacaoDiaPercent: null,
+        fonte: 'brapi',
+        status: 'disponivel',
+        usandoFallback: false,
+        atualizadoEm,
+      }
+    }
     // Renda Fixa e Tesouro Direto são marcados manualmente (RF19): o valor
     // informado pelo usuário tem prioridade; na ausência, usamos o último
     // preço conhecido (planilha) como estimativa.

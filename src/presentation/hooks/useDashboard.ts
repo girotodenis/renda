@@ -43,12 +43,18 @@ export interface AvisoCotacoes {
 /**
  * Traduz o diagnóstico da Brapi em uma mensagem para o usuário.
  *
- * Só faz sentido quando algum ativo de Ação/FII/BDR/ETF estava elegível; nesse
+ * Só faz sentido quando algum ativo de Ação/FII/BDR/ETF/Tesouro estava elegível; nesse
  * caso sempre há uma mensagem — inclusive quando a integração não está
  * configurada ou não devolveu nenhum preço.
  */
 function descreverAtualizacaoCotacoes(info: DiagnosticoCotacoesBrapi | null): AvisoCotacoes | null {
   if (!info || info.total === 0) return null
+
+  // Tesouro Direto na Brapi é do plano Pro: com token válido e sem preço, avisa.
+  const dicaTesouro =
+    !info.semToken && (info.tesouroSemCotacao?.length ?? 0) > 0
+      ? ' Os preços do Tesouro Direto exigem o plano Pro da Brapi.'
+      : ''
 
   if (info.comCotacao === 0) {
     if (info.semToken) {
@@ -60,14 +66,14 @@ function descreverAtualizacaoCotacoes(info: DiagnosticoCotacoesBrapi | null): Av
     }
     return {
       tipo: 'error',
-      texto: `Não foi possível atualizar as cotações pela Brapi (${info.semCotacao.join(', ')}). Verifique o token em Configurações → Integrações e tente novamente.`,
+      texto: `Não foi possível atualizar as cotações pela Brapi (${info.semCotacao.join(', ')}). Verifique o token em Configurações → Integrações e tente novamente.${dicaTesouro}`,
     }
   }
 
   if (info.semCotacao.length > 0) {
     return {
       tipo: 'info',
-      texto: `Cotações atualizadas pela Brapi: ${info.comCotacao} de ${info.total} ativos. Sem cotação: ${info.semCotacao.join(', ')}.`,
+      texto: `Cotações atualizadas pela Brapi: ${info.comCotacao} de ${info.total} ativos. Sem cotação: ${info.semCotacao.join(', ')}.${dicaTesouro}`,
     }
   }
 

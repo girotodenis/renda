@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => ({
   isModoLocal: vi.fn(),
   atualizarCotacoesBrapi: vi.fn(),
   lerCotacaoCacheBrapi: vi.fn(),
+  atualizarCotacoesTesouroBrapi: vi.fn(),
+  lerCotacoesTesouroCache: vi.fn(),
   carregarConfiguracoes: vi.fn(),
   prefetchAllSheets: vi.fn(),
   operacoesReadCache: vi.fn(),
@@ -24,6 +26,11 @@ vi.mock('@/infrastructure/modoArmazenamento', () => ({
 vi.mock('@/infrastructure/brapi', () => ({
   atualizarCotacoesBrapi: mocks.atualizarCotacoesBrapi,
   lerCotacaoCache: mocks.lerCotacaoCacheBrapi,
+}))
+
+vi.mock('@/infrastructure/brapiTesouro', () => ({
+  atualizarCotacoesTesouroBrapi: mocks.atualizarCotacoesTesouroBrapi,
+  lerCotacoesTesouroCache: mocks.lerCotacoesTesouroCache,
 }))
 
 vi.mock('@/application/configuracoes', () => ({
@@ -86,6 +93,13 @@ describe('carregarDashboard — cotações Brapi no modo local', () => {
       consultouRede: true,
     })
     mocks.lerCotacaoCacheBrapi.mockReturnValue(null)
+    mocks.atualizarCotacoesTesouroBrapi.mockResolvedValue({
+      cotacoes: new Map(),
+      semCotacao: [],
+      semToken: false,
+      consultouRede: false,
+    })
+    mocks.lerCotacoesTesouroCache.mockReturnValue(new Map())
     mocks.carregarConfiguracoes.mockResolvedValue({ brapiToken: 'token-brapi' })
     mocks.operacoesReadCache.mockReturnValue([operacao])
     mocks.proventosReadCache.mockReturnValue([])
@@ -209,5 +223,47 @@ describe('carregarDashboard — cotações Brapi no modo local', () => {
       precoAtual: 12000,
       fonte: 'brapi',
     })
+  })
+
+  it('atualiza títulos do Tesouro pela Brapi com prioridade sobre a marcação manual', async () => {
+    const tesouro: Operacao = {
+      ...operacao,
+      id: 'operacao-tesouro',
+      categoria: CategoriaAtivo.TesouroDireto,
+      ticker: 'Tesouro Selic 2029',
+      quantidade: 0.5,
+      precoUnitario: 1700000,
+      vencimento: '2029-03-01',
+      valorBrutoAtual: 1750000,
+    }
+    mocks.operacoesReadCache.mockReturnValue([operacao, tesouro])
+    mocks.atualizarCotacoesTesouroBrapi.mockResolvedValue({
+      cotacoes: new Map([
+        [
+          'Tesouro Selic 2029',
+          { preco: 1800050, precoAbertura: null, atualizadoEm: '2026-10-28', fonte: 'api' },
+        ],
+      ]),
+      semCotacao: [],
+      semToken: false,
+      consultouRede: true,
+    })
+
+    const dashboard = await carregarDashboard({
+      accessToken: 'access-token',
+      spreadsheetId: 'planilha',
+    })
+
+    expect(mocks.atualizarCotacoesTesouroBrapi).toHaveBeenCalledWith(
+      [{ ticker: 'Tesouro Selic 2029', vencimento: '2029-03-01' }],
+      { token: 'token-brapi', forceRefresh: false },
+    )
+    expect(mocks.atualizarCotacoesBrapi).not.toHaveBeenCalled()
+    expect(dashboard.cotacoes.get('Tesouro Selic 2029')).toMatchObject({
+      precoAtual: 1800050,
+      fonte: 'brapi',
+      status: 'disponivel',
+    })
+    expect(dashboard.cotacoesBrapi).toMatchObject({ total: 1, comCotacao: 1, semCotacao: [] })
   })
 })

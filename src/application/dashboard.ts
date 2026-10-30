@@ -1,4 +1,4 @@
-import { usaGoogFinance } from '@/domain/categoria'
+import { isTesouroDireto, usaGoogFinance } from '@/domain/categoria'
 import { aplicarPrecosAtuais, calcularPosicoes, calcularResumo } from '@/domain/consolidado'
 import type { PosicaoConsolidada, ResumoCarteira } from '@/domain/consolidado'
 import {
@@ -20,6 +20,9 @@ import type { RepositoryContext } from '@/infrastructure/repositories'
 import { garantirColunasConsolidado, syncConsolidado } from '@/application/consolidado'
 import { registrarSnapshot } from '@/application/historico'
 import { atualizarCotacoesBrapi, lerCotacaoCache as lerCotacaoCacheBrapi } from '@/infrastructure/brapi'
+import type { BrapiCotacao } from '@/infrastructure/brapi'
+import { atualizarCotacoesTesouroBrapi, lerCotacoesTesouroCache } from '@/infrastructure/brapiTesouro'
+import type { TickerTesouroCarteira } from '@/infrastructure/brapiTesouro'
 import { carregarConfiguracoes } from '@/application/configuracoes'
 import { isModoLocal } from '@/infrastructure/modoArmazenamento'
 import type { Consolidado, Operacao, Provento, Snapshot, Valuation } from '@/domain/entities'
@@ -32,7 +35,8 @@ import type { Consolidado, Operacao, Provento, Snapshot, Valuation } from '@/dom
  * explícito. O consolidado é recalculado no app (`lib/consolidado`) com as
  * cotações resolvidas por categoria:
  * - Ação/FII/BDR: valor computado do `GOOGLEFINANCE` lido da aba `Consolidado`.
- * - Tesouro Direto / Renda Fixa: `Valor Bruto Atual` (marcação manual editável).
+ * - Tesouro Direto: preço de resgate via Brapi → `Valor Bruto Atual` (marcação manual).
+ * - Renda Fixa: `Valor Bruto Atual` (marcação manual editável).
  *
  * Quando não há cotação, o preço médio é usado como fallback — sem travar a UI
  * (RNF04) — e o status fica `indisponivel` para a interface sinalizar.
@@ -61,12 +65,14 @@ export interface DashboardData {
 
 /** Resumo do que a integração Brapi conseguiu (ou não) atualizar. */
 export interface DiagnosticoCotacoesBrapi {
-  /** Tickers elegíveis (Ação/FII/BDR/ETF com posição aberta). */
+  /** Tickers elegíveis (Ação/FII/BDR/ETF/Tesouro Direto com posição aberta). */
   total: number
   /** Quantos desses têm cotação Brapi disponível. */
   comCotacao: number
   /** Tickers sem cotação nesta consulta. */
   semCotacao: string[]
+  /** Subconjunto de `semCotacao` com títulos do Tesouro Direto (plano Pro da Brapi). */
+  tesouroSemCotacao?: string[]
   /** `true` quando não há token da Brapi configurado. */
   semToken: boolean
   /** `true` quando a consulta ignorou o cache (atualização manual). */
@@ -226,7 +232,10 @@ function montarDashboard(consulta: MontarConsulta): DashboardData {
   const precoManual = precosManuaisDeOperacoes(operacoes)
   const precoBrapi = new Map<string, number>()
   if (modoLocal) {
-    for (const [ticker, preco] of precoConsolidado) precoBrapi.set(ticker, preco)
+    for (const posicao of posicoes) {
+      const preco = precoConsolidado.get(posicao.ticker)
+      if (preco !== undefined && usaGoogFinance(posicao.categoria)) precoBrapi.set(posicao.ticker, preco)
+    }
   }
   for (const [ticker, preco] of cotacoesBrapi) precoBrapi.set(ticker, preco)
 
@@ -345,14 +354,50 @@ function tickersBrapi(
     .map((posicao) => posicao.ticker)
 }
 
+/**
+ * Títulos do Tesouro Direto com posição aberta, com o vencimento registrado
+ * nas operações (refina o casamento com a Brapi quando o ticker traz só o ano).
+ */
+function tickersTesouro(
+  operacoes: readonly Operacao[],
+  posicoes: readonly PosicaoConsolidada[],
+): TickerTesouroCarteira[] {
+  const vencimentos = new Map<string, string>()
+  for (const operacao of operacoes) {
+    const ticker = operacao.ticker.trim()
+    if (isTesouroDireto(operacao.categoria) && operacao.vencimento && !vencimentos.has(ticker)) {
+      vencimentos.set(ticker, operacao.vencimento)
+    }
+  }
+  return posicoes
+    .filter((posicao) => isTesouroDireto(posicao.categoria) && posicao.quantidadeAtual > 0)
+    .map((posicao) => ({
+      ticker: posicao.ticker,
+      vencimento: vencimentos.get(posicao.ticker) ?? null,
+    }))
+}
+
+/** Acumula preços (+ aberturas) das cotações Brapi nos mapas informados. */
+function acumularCotacoes(
+  cotacoes: ReadonlyMap<string, BrapiCotacao>,
+  precos: Map<string, number>,
+  aberturas: Map<string, number>,
+): void {
+  for (const [ticker, cotacao] of cotacoes) {
+    precos.set(ticker, cotacao.preco)
+    if (cotacao.precoAbertura !== null) aberturas.set(ticker, cotacao.precoAbertura)
+  }
+}
+
 /** Cotações Brapi do cache local (preços + aberturas) para os tickers elegíveis. */
 function cotacoesBrapiDoCache(
   operacoes: readonly Operacao[],
   linhasConsolidado: readonly Consolidado[],
   atualizarMesmoComPreco: boolean,
 ): { precos: Map<string, number>; aberturas: Map<string, number> } {
+  const posicoes = calcularPosicoes(operacoes)
   const tickers = tickersBrapi(
-    calcularPosicoes(operacoes),
+    posicoes,
     precosDoConsolidado(linhasConsolidado, atualizarMesmoComPreco),
     atualizarMesmoComPreco,
   )
@@ -364,16 +409,19 @@ function cotacoesBrapiDoCache(
     precos.set(ticker, cache.preco)
     if (cache.precoAbertura !== null) aberturas.set(ticker, cache.precoAbertura)
   }
+  acumularCotacoes(lerCotacoesTesouroCache(tickersTesouro(operacoes, posicoes)), precos, aberturas)
   return { precos, aberturas }
 }
 
 /**
- * Obtém cotações B3 via Brapi (centavos) para posições de Ação/FII/BDR/ETF.
+ * Obtém cotações via Brapi (centavos) para posições de Ação/FII/BDR/ETF e
+ * Tesouro Direto.
  *
- * No modo local e na atualização explícita (`forceRefresh`), consulta **todas**
- * as posições abertas — o `Consolidado` pode conter preços estáticos (modo local
- * e banco JSON, sem `GOOGLEFINANCE`). Fora isso, apenas as posições sem preço
- * na planilha. No modo offline usa somente o cache local (RNF08).
+ * B3: no modo local e na atualização explícita (`forceRefresh`), consulta
+ * **todas** as posições abertas — o `Consolidado` pode conter preços estáticos
+ * (modo local e banco JSON, sem `GOOGLEFINANCE`). Fora isso, apenas as posições
+ * sem preço na planilha. Tesouro Direto: sempre todas as posições abertas
+ * (cache-first). No modo offline usa somente o cache local (RNF08).
  */
 async function resolverCotacoesBrapi(
   operacoes: readonly Operacao[],
@@ -383,45 +431,55 @@ async function resolverCotacoesBrapi(
   atualizarMesmoComPreco: boolean,
   forceRefresh: boolean,
 ): Promise<ResolucaoBrapi> {
+  const posicoes = calcularPosicoes(operacoes)
   const tickers = tickersBrapi(
-    calcularPosicoes(operacoes),
+    posicoes,
     precosDoConsolidado(linhasConsolidado, atualizarMesmoComPreco),
     atualizarMesmoComPreco,
   )
-  if (tickers.length === 0) {
+  const titulos = tickersTesouro(operacoes, posicoes)
+  const total = tickers.length + titulos.length
+  if (total === 0) {
     return { precos: new Map(), aberturas: new Map(), diagnostico: null }
   }
 
   if (offline) {
     const cache = cotacoesBrapiDoCache(operacoes, linhasConsolidado, atualizarMesmoComPreco)
+    const todos = [...tickers, ...titulos.map(({ ticker }) => ticker)]
     return {
       ...cache,
       diagnostico: {
-        total: tickers.length,
+        total,
         comCotacao: cache.precos.size,
-        semCotacao: tickers.filter((ticker) => !cache.precos.has(ticker)),
+        semCotacao: todos.filter((ticker) => !cache.precos.has(ticker)),
+        tesouroSemCotacao: titulos
+          .map(({ ticker }) => ticker)
+          .filter((ticker) => !cache.precos.has(ticker)),
         semToken: token.trim().length === 0,
         forcado: false,
       },
     }
   }
 
-  const resultado = await atualizarCotacoesBrapi(tickers, { token, forceRefresh })
+  const semB3 = { cotacoes: new Map<string, BrapiCotacao>(), semCotacao: [], semToken: false }
+  const [b3, tesouro] = await Promise.all([
+    tickers.length > 0 ? atualizarCotacoesBrapi(tickers, { token, forceRefresh }) : semB3,
+    atualizarCotacoesTesouroBrapi(titulos, { token, forceRefresh }),
+  ])
   const precos = new Map<string, number>()
   const aberturas = new Map<string, number>()
-  for (const [ticker, cotacao] of resultado.cotacoes) {
-    precos.set(ticker, cotacao.preco)
-    if (cotacao.precoAbertura !== null) aberturas.set(ticker, cotacao.precoAbertura)
-  }
+  acumularCotacoes(b3.cotacoes, precos, aberturas)
+  acumularCotacoes(tesouro.cotacoes, precos, aberturas)
 
   return {
     precos,
     aberturas,
     diagnostico: {
-      total: tickers.length,
+      total,
       comCotacao: precos.size,
-      semCotacao: resultado.semCotacao,
-      semToken: resultado.semToken,
+      semCotacao: [...b3.semCotacao, ...tesouro.semCotacao],
+      tesouroSemCotacao: tesouro.semCotacao,
+      semToken: b3.semToken || tesouro.semToken,
       forcado: forceRefresh,
     },
   }

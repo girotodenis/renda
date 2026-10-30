@@ -4,8 +4,9 @@ import type { RepositoryContext } from '@/infrastructure/repositories'
 import type { Operacao } from '@/domain/entities'
 
 /**
- * Persistência das cotações B3 obtidas via Brapi na planilha (fallback do
- * `GOOGLEFINANCE`), usando o mesmo fluxo da marcação manual (RF19):
+ * Persistência das cotações obtidas via Brapi na planilha (fallback do
+ * `GOOGLEFINANCE` na B3 e preço de resgate do Tesouro Direto), usando o mesmo
+ * fluxo da marcação manual (RF19):
  *
  * 1. grava o preço em `Operacao.valorBrutoAtual` da operação mais recente de
  *    cada ticker;
@@ -32,6 +33,9 @@ export async function persistirCotacoesBrapi(
   precos: ReadonlyMap<string, number>,
 ): Promise<number> {
   if (precos.size === 0) return 0
+  // Tickers do Tesouro têm caixa mista (`Tesouro Selic 2029`): compara sem caixa.
+  const precoPorTicker = new Map<string, number>()
+  for (const [ticker, preco] of precos) precoPorTicker.set(ticker.trim().toUpperCase(), preco)
 
   const operacoes = await operacoesRepo.refresh(context)
   const recentePorTicker = new Map<string, Operacao>()
@@ -45,7 +49,7 @@ export async function persistirCotacoesBrapi(
   let alteradas = 0
   const proximas = operacoes.map((operacao) => {
     const ticker = operacao.ticker.trim().toUpperCase()
-    const preco = precos.get(ticker)
+    const preco = precoPorTicker.get(ticker)
     if (preco === undefined) return operacao
     const recente = recentePorTicker.get(ticker)
     if (!recente || recente.id !== operacao.id) return operacao

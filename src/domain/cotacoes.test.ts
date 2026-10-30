@@ -204,6 +204,33 @@ describe('resolverCotacao — Tesouro Direto (marcação manual)', () => {
     })
     expect(cotacao).toMatchObject({ status: 'indisponivel', usandoFallback: true, precoAtual: 1000 })
   })
+
+  it('prioriza o preço da Brapi sobre a marcação manual', () => {
+    const cotacao = resolverCotacao({
+      ticker: 'Tesouro Selic 2029',
+      categoria: CategoriaAtivo.TesouroDireto,
+      ...base,
+      precoManual: 340000,
+      precoBrapi: 1800050,
+    })
+    expect(cotacao).toMatchObject({
+      precoAtual: 1800050,
+      fonte: 'brapi',
+      status: 'disponivel',
+      variacaoDiaPercent: null,
+    })
+  })
+
+  it('ignora a Brapi na Renda Fixa (somente marcação manual)', () => {
+    const cotacao = resolverCotacao({
+      ticker: 'CDB-BANCO',
+      categoria: CategoriaAtivo.RendaFixa,
+      ...base,
+      precoManual: 105000,
+      precoBrapi: 999999,
+    })
+    expect(cotacao).toMatchObject({ precoAtual: 105000, fonte: 'manual' })
+  })
 })
 
 describe('resolverCotacao — Renda Fixa (marcação a mercado/estimativa)', () => {

@@ -14,6 +14,7 @@ import { exportarPlanilhaOds } from '@/application/exportar'
 import { analisarOds, aplicarImportacao } from '@/application/importar'
 import type { AnaliseImportacao } from '@/application/importar'
 import { clearBrapiCache } from '@/infrastructure/brapi'
+import { clearBrapiTesouroCache } from '@/infrastructure/brapiTesouro'
 import { lerAbasOds } from '@/infrastructure/ods/odsReader'
 import { OdsFormatError } from '@/infrastructure/ods/zipReader'
 import { describeSheetsError } from '@/infrastructure/sheets/gateway'
@@ -89,6 +90,7 @@ export function ConfiguracoesPage() {
       )
       // Invalida o cache para que o novo token passe a valer já na próxima busca.
       clearBrapiCache()
+      clearBrapiTesouroCache()
       setNotice('Configurações salvas na planilha.')
     } catch (saveError) {
       setError(describeSheetsError(saveError))
