@@ -10,7 +10,7 @@ import {
   proventosRepo,
 } from '@/infrastructure/repositories'
 import type { RepositoryContext } from '@/infrastructure/repositories'
-import { getSheetsRequestCount, resetSheetsRequestCount } from '@/infrastructure/sheets/gateway'
+import { getSheetsRequestCount, resetSheetsRequestCount } from '@/infrastructure/sheets/gatewayRouter'
 import { CategoriaAtivo, OperacaoTipo, ProventoTipo } from '@/domain/entities'
 import type {
   Consolidado,
@@ -23,9 +23,14 @@ import type {
 /**
  * Diagnóstico da camada de dados (critério de conclusão da Etapa 2).
  *
- * Escreve uma linha em cada uma das 5 abas, faz **um** `batchGet` para atualizar
+ * Escreve uma linha em cada uma das abas, faz **um** `batchGet` para atualizar
  * o cache e relê do cache **sem novas chamadas** à API. Conta as requisições de
  * rede para comprovar o comportamento.
+ *
+ * Os contadores vêm do `gatewayRouter`, ou seja, do backend ativo: no modo
+ * Google com `VITE_GOOGLE_BACKEND=sheets` contam chamadas à API do Sheets; com
+ * `json`, contam chamadas à API de arquivos do Drive (onde cada escrita baixa e
+ * sobe o arquivo do banco).
  */
 
 /** Ticker marcador usado nas linhas de teste. */

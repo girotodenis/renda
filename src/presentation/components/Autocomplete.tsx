@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
-import type { KeyboardEvent } from 'react'
+import type { KeyboardEvent, Ref } from 'react'
 import { inputClassName } from '@/presentation/components/FormField'
 import { cn } from '@/presentation/cn'
 
@@ -20,6 +20,14 @@ interface AutocompleteProps {
   ariaLabel?: string
   /** Quantidade máxima de sugestões exibidas. */
   maxSugestoes?: number
+  /** Chamado quando o input perde o foco (ex.: `react-hook-form`). */
+  onBlur?: () => void
+  /** Ref do input (ex.: foco no campo com erro pelo `react-hook-form`). */
+  inputRef?: Ref<HTMLInputElement>
+  /** Indica que as sugestões ainda estão sendo carregadas. */
+  carregando?: boolean
+  /** Mensagem quando nada combina com o texto (`null` = não exibe). */
+  mensagemVazia?: string | null
 }
 
 interface Item {
@@ -42,6 +50,10 @@ export function Autocomplete({
   clearLabel,
   ariaLabel,
   maxSugestoes = 50,
+  onBlur,
+  inputRef,
+  carregando = false,
+  mensagemVazia = 'Nenhuma sugestão encontrada.',
 }: AutocompleteProps) {
   const generatedId = useId()
   const inputId = id ?? `autocomplete-${generatedId}`
@@ -52,7 +64,15 @@ export function Autocomplete({
 
   const itens = useMemo<Item[]>(() => {
     const termo = value.trim().toUpperCase()
-    const sugestoes = (termo ? options.filter((o) => o.toUpperCase().includes(termo)) : options)
+    const filtradas = termo ? options.filter((o) => o.toUpperCase().includes(termo)) : options
+    // Prioriza as opções que começam com o texto digitado (ordem original preservada).
+    const ordenadas = termo
+      ? [
+          ...filtradas.filter((o) => o.toUpperCase().startsWith(termo)),
+          ...filtradas.filter((o) => !o.toUpperCase().startsWith(termo)),
+        ]
+      : filtradas
+    const sugestoes = ordenadas
       .slice(0, maxSugestoes)
       .map<Item>((option) => ({ chave: option, label: option, valor: option }))
 
@@ -102,6 +122,7 @@ export function Autocomplete({
   return (
     <div ref={containerRef} className={cn('relative', className)}>
       <input
+        ref={inputRef}
         id={inputId}
         type="text"
         role="combobox"
@@ -119,6 +140,7 @@ export function Autocomplete({
           setHighlight(-1)
         }}
         onFocus={() => setOpen(true)}
+        onBlur={onBlur}
         onKeyDown={handleKeyDown}
         className={inputClassName}
       />
@@ -151,9 +173,9 @@ export function Autocomplete({
         </ul>
       ) : null}
 
-      {open && itens.length === 0 ? (
+      {open && itens.length === 0 && (carregando || mensagemVazia) ? (
         <div className="absolute z-20 mt-1 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-500 shadow-lg">
-          Nenhuma sugestão encontrada.
+          {carregando ? 'Carregando sugestões…' : mensagemVazia}
         </div>
       ) : null}
     </div>

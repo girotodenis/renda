@@ -32,6 +32,7 @@ afterEach(() => {
   clearLocalSheets()
   setModoArmazenamento(MODO_GOOGLE)
   vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
 })
 
 describe('ensureLocalSheetsWithHeaders', () => {
@@ -130,19 +131,27 @@ describe('roteamento por modo de armazenamento', () => {
   })
 
   it('no modo google continua chamando a API do Sheets', async () => {
-    const fetchMock = vi.fn(
-      async () =>
-        new Response(JSON.stringify({ values: [['do-google']] }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        }),
-    )
-    vi.stubGlobal('fetch', fetchMock)
-    setModoArmazenamento(MODO_GOOGLE)
+    // Backend explícito: o `.env` de quem roda os testes pode estar em `json`.
+    vi.stubEnv('VITE_GOOGLE_BACKEND', 'sheets')
+    vi.resetModules()
+    const router = await import('@/infrastructure/sheets/gatewayRouter')
+    const modo = await import('@/infrastructure/modoArmazenamento')
+    modo.setModoArmazenamento(MODO_GOOGLE)
 
-    const values = await getValues('token', 'planilha-1', "'Operacoes'!A1:A")
+    const chamadas: string[] = []
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      chamadas.push(String(input))
+      return new Response(JSON.stringify({ values: [['do-google']] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const values = await router.getValues('token', 'planilha-1', "'Operacoes'!A1:A")
 
     expect(values).toEqual([['do-google']])
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(chamadas).toHaveLength(1)
+    expect(chamadas[0]).toContain('sheets.googleapis.com')
   })
 })

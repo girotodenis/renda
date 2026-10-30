@@ -130,12 +130,15 @@ export function resolverCotacao(entrada: EntradaCotacao): CotacaoResolvida {
       }
     }
     if (precoValido(precoBrapi)) {
+      // A Brapi devolve a abertura do dia na mesma resposta: com ela a coluna
+      // "Variação Dia (%)" continua preenchida sem depender do `GOOGLEFINANCE`.
+      const abertura = precoValido(precoAbertura) ? precoAbertura : null
       return {
         ticker,
         categoria,
         precoAtual: precoBrapi,
-        precoAbertura: null,
-        variacaoDiaPercent: null,
+        precoAbertura: abertura,
+        variacaoDiaPercent: calcularVariacaoDiaPercent(precoBrapi, abertura),
         fonte: 'brapi',
         status: 'disponivel',
         usandoFallback: false,

@@ -3,8 +3,8 @@ import type { ReactNode } from 'react'
 import { AuthContext } from '@/presentation/app/providers/authContext'
 import type {
   AuthContextValue,
-  OpcoesCriarPlanilha,
-  ResultadoCriacaoPlanilha,
+  OpcoesCriarBanco,
+  ResultadoCriacaoBanco,
 } from '@/presentation/app/providers/authContext'
 import { isOnline } from '@/application/online'
 import {
@@ -25,6 +25,7 @@ import {
   findSpreadsheetsByName,
   GoogleDriveError,
   GooglePickerError,
+  listAppSpreadsheets,
   moveFileToFolder,
   pickSpreadsheet,
 } from '@/infrastructure/drive'
@@ -32,6 +33,7 @@ import {
   GOOGLE_SCOPES,
   googleConfig,
   isGoogleConfigured,
+  isJsonBackend,
   isSpreadsheetPickerConfigured,
   MISSING_CLIENT_ID_MESSAGE,
   MISSING_PICKER_KEY_MESSAGE,
@@ -47,26 +49,29 @@ import {
 import {
   abrirWorkspace,
   criarWorkspace,
+  listarBancosDisponiveis,
+  listarBancosExistentes,
   prepararWorkspaceLocal,
   SheetsApiError,
 } from '@/infrastructure/sheets/gatewayRouter'
-import type { AuthStatus, SpreadsheetWorkspace } from '@/domain/workspace'
+import type { AuthStatus, PlanilhaExistente, SpreadsheetWorkspace } from '@/domain/workspace'
 
 interface AuthProviderProps {
   children: ReactNode
 }
 
 /**
- * Move uma planilha recém-criada para a pasta padrão do app (`minhasacoe_app`),
- * criando a pasta se necessário. Best-effort: usa apenas o escopo `drive.file`
- * (sem novas permissões) e, se falhar, a planilha permanece válida na raiz.
+ * Move o banco recém-criado (planilha ou arquivo JSON) para a pasta padrão do app
+ * (`minhasacoe_app`), criando a pasta se necessário. Best-effort: usa apenas o
+ * escopo `drive.file` (sem novas permissões) e, se falhar, o banco permanece
+ * válido na raiz do Drive.
  */
 async function organizarNaPastaDoApp(accessToken: string, spreadsheetId: string): Promise<void> {
   try {
     const folderId = await ensureAppFolder(accessToken)
     await moveFileToFolder(accessToken, spreadsheetId, folderId)
   } catch {
-    // Organização é cosmética; qualquer falha não impede o uso da planilha.
+    // Organização é cosmética; qualquer falha não impede o uso do banco.
   }
 }
 
@@ -87,10 +92,11 @@ function describeError(error: unknown): string {
   if (error instanceof SheetsApiError) {
     if (error.status === 401) return 'Sessão expirada. Faça login novamente.'
     if (error.status === 403) {
-      return 'Permissão negada pelo Google. Verifique se as APIs Sheets/Drive estão habilitadas e se os escopos foram autorizados.'
+      return 'Permissão negada pelo Google. Verifique se as APIs necessárias estão habilitadas e se os escopos foram autorizados.'
     }
     if (error.status === 429) return 'Cota da API do Google excedida. Tente novamente em instantes.'
-    return `Erro na API do Google Sheets: ${error.message}`
+    if (error.status === 412) return error.message
+    return error.message.length > 0 ? error.message : 'Erro ao acessar o banco de dados no Google.'
   }
   if (error instanceof GooglePickerError || error instanceof GoogleAuthError || error instanceof GoogleDriveError) {
     return error.message
@@ -102,8 +108,9 @@ function describeError(error: unknown): string {
 }
 
 /**
- * Provider de sessão: gerencia login OAuth (GIS), a planilha ativa e o **modo
- * de armazenamento** (Google Sheets ou banco local do navegador). O token é
+ * Provider de sessão: gerencia login OAuth (GIS), o banco ativo e o **modo de
+ * armazenamento** (nuvem — planilha do Sheets ou arquivo JSON no Drive,
+ * conforme `VITE_GOOGLE_BACKEND` — ou banco local do navegador). O token é
  * renovado **sob demanda** — apenas quando uma operação precisa da rede — sem
  * renovação em segundo plano (que abria o login do Google periodicamente).
  * Com planilha persistida, o app abre em modo local (cache) sem acionar o
@@ -253,6 +260,24 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
       }
       setStatus('authenticated')
+
+      // Backend JSON: se ainda não há banco ativo neste navegador e existe
+      // exatamente um banco no Drive, abre-o automaticamente. Com 0 ou 2+,
+      // o usuário escolhe na tela de criação/abertura (lista de bancos).
+      const token = tokenRef.current
+      if (isJsonBackend() && token && !workspaceStorage.load()) {
+        try {
+          const bancos = await listarBancosDisponiveis(token)
+          const unico = bancos.length === 1 ? bancos[0] : undefined
+          if (unico) {
+            const carregado = await abrirWorkspace(token, unico.spreadsheetId)
+            workspaceStorage.save(carregado)
+            setWorkspace(carregado)
+          }
+        } catch {
+          // Sem abrir automaticamente: a tela de criação/abertura continua disponível.
+        }
+      }
     } catch (loginError) {
       setStatus(workspaceStorage.load() ? 'local' : 'unauthenticated')
       if (!isUserCancellation(loginError)) {
@@ -318,11 +343,41 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setWorkspace(loaded)
   }, [])
 
-  const selecionarPlanilha = useCallback(async () => {
+  const listarBancos = useCallback(async (): Promise<PlanilhaExistente[]> => {
     setError(null)
     if (isModoLocal()) {
       setError(
-        'Você está no modo local (sem Google). Saia do modo local para usar uma planilha do Google.',
+        'Você está no modo local (sem Google). Saia do modo local para usar um banco de dados no Google.',
+      )
+      return []
+    }
+
+    const token = await ensureAccessToken()
+    if (!token) {
+      // Sem token: `ensureAccessToken` já ajustou o status (modo local quando
+      // há banco persistido); basta avisar o usuário.
+      setError('Sessão expirada. Faça login novamente.')
+      return []
+    }
+
+    setIsBusy(true)
+    try {
+      return isJsonBackend()
+        ? await listarBancosDisponiveis(token)
+        : await listAppSpreadsheets(token)
+    } catch (listError) {
+      setError(describeError(listError))
+      return []
+    } finally {
+      setIsBusy(false)
+    }
+  }, [ensureAccessToken])
+
+  const abrirPlanilhaNoPicker = useCallback(async () => {
+    setError(null)
+    if (isModoLocal()) {
+      setError(
+        'Você está no modo local (sem Google). Saia do modo local para usar um banco de dados no Google.',
       )
       return
     }
@@ -333,8 +388,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     const token = await ensureAccessToken()
     if (!token) {
-      // Sem token: `ensureAccessToken` já ajustou o status (modo local quando
-      // há planilha persistida); basta avisar o usuário.
       setError('Sessão expirada. Faça login novamente.')
       return
     }
@@ -353,12 +406,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }, [ensureAccessToken, salvarWorkspace])
 
-  const abrirPlanilha = useCallback(
+  const abrirBancoPorId = useCallback(
     async (spreadsheetId: string) => {
       setError(null)
       if (isModoLocal()) {
         setError(
-          'Você está no modo local (sem Google). Saia do modo local para usar uma planilha do Google.',
+          'Você está no modo local (sem Google). Saia do modo local para usar um banco de dados no Google.',
         )
         return
       }
@@ -381,12 +434,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
     [ensureAccessToken, salvarWorkspace],
   )
 
-  const criarPlanilha = useCallback(
-    async (title?: string, options?: OpcoesCriarPlanilha): Promise<ResultadoCriacaoPlanilha> => {
+  const criarBanco = useCallback(
+    async (title?: string, options?: OpcoesCriarBanco): Promise<ResultadoCriacaoBanco> => {
       setError(null)
       if (isModoLocal()) {
         setError(
-          'Você está no modo local (sem Google). Saia do modo local para usar uma planilha do Google.',
+          'Você está no modo local (sem Google). Saia do modo local para usar um banco de dados no Google.',
         )
         return { status: 'error' }
       }
@@ -401,12 +454,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const trimmed = title?.trim() ?? ''
         if (!options?.force && trimmed.length > 0) {
           try {
-            const existentes = await findSpreadsheetsByName(token, trimmed)
+            const existentes = isJsonBackend()
+              ? await listarBancosExistentes(token, trimmed)
+              : await findSpreadsheetsByName(token, trimmed)
             const [existente] = existentes
             if (existente) return { status: 'duplicate', existente }
           } catch {
-            // Falha na verificação (rede/quota): segue com a criação. O Sheets
-            // aceita títulos duplicados e bloquear o usuário seria pior.
+            // Falha na verificação (rede/quota): segue com a criação. Os dois
+            // backends aceitam nomes duplicados e bloquear o usuário seria pior.
           }
         }
 
@@ -440,24 +495,26 @@ export function AuthProvider({ children }: AuthProviderProps) {
       login,
       logout,
       usarModoLocal,
-      selecionarPlanilha,
-      criarPlanilha,
-      abrirPlanilha,
+      listarBancos,
+      abrirPlanilhaNoPicker,
+      criarBanco,
+      abrirBancoPorId,
       ensureAccessToken,
       clearError,
     }),
     [
-      abrirPlanilha,
+      abrirBancoPorId,
+      abrirPlanilhaNoPicker,
       accessToken,
       clearError,
-      criarPlanilha,
+      criarBanco,
       ensureAccessToken,
       error,
       isBusy,
+      listarBancos,
       login,
       logout,
       modo,
-      selecionarPlanilha,
       status,
       usarModoLocal,
       workspace,

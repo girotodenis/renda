@@ -10,6 +10,7 @@ import { operacoesRepo } from '@/infrastructure/repositories'
 import type { RepositoryContext } from '@/infrastructure/repositories'
 import { describeSheetsError } from '@/infrastructure/sheets/gateway'
 import type { CategoriaAtivo } from '@/domain/entities'
+import type { TickerConhecido } from '@/domain/tickers'
 import { sincronizarConsolidadoESnapshot } from '@/application/escritasAtivo'
 
 interface NovaOperacaoModalProps {
@@ -22,6 +23,8 @@ interface NovaOperacaoModalProps {
   onClose: () => void
   /** Recarrega os dados do dashboard após registrar a operação. */
   onSaved: () => Promise<void>
+  /** Tickers da carteira (priorizados no autocomplete do ticker). */
+  tickersConhecidos?: readonly TickerConhecido[]
 }
 
 /**
@@ -32,7 +35,12 @@ interface NovaOperacaoModalProps {
  * Após salvar, o consolidado é recalculado, um snapshot é registrado e o
  * dashboard é recarregado (`onSaved`).
  */
-export function NovaOperacaoModal({ categoria, onClose, onSaved }: NovaOperacaoModalProps) {
+export function NovaOperacaoModal({
+  categoria,
+  onClose,
+  onSaved,
+  tickersConhecidos,
+}: NovaOperacaoModalProps) {
   const { workspace, ensureAccessToken } = useAuth()
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -87,6 +95,7 @@ export function NovaOperacaoModal({ categoria, onClose, onSaved }: NovaOperacaoM
             key={categoria}
             categoriaPadrao={categoria}
             travarCategoria
+            tickersConhecidos={tickersConhecidos}
             isSaving={isSaving}
             onSubmit={handleSubmit}
             onCancel={onClose}

@@ -149,6 +149,24 @@ async function sheetsRequest<T>(accessToken: string, path: string, init?: Reques
   }
 }
 
+/**
+ * Agrupamento de escritas em lote (no-op neste backend).
+ *
+ * Existe para manter a mesma superfície do gateway JSON (`driveFile/gateway.ts`),
+ * onde N mutações custam uma única leitura + uma única escrita do arquivo. Na
+ * API do Sheets cada operação já é uma chamada própria, então o lote apenas
+ * executa `fn`.
+ */
+export async function executarEmLote<T>(
+  accessToken: string,
+  spreadsheetId: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  void accessToken
+  void spreadsheetId
+  return fn()
+}
+
 /** Converte um índice de coluna (1-based) na letra A1 (ex.: 12 → "L"). */
 export function columnLetter(count: number): string {
   let letters = ''

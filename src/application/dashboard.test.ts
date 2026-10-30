@@ -5,7 +5,7 @@ import { carregarDashboard } from '@/application/dashboard'
 
 const mocks = vi.hoisted(() => ({
   isModoLocal: vi.fn(),
-  buscarCotacoesBrapi: vi.fn(),
+  atualizarCotacoesBrapi: vi.fn(),
   lerCotacaoCacheBrapi: vi.fn(),
   carregarConfiguracoes: vi.fn(),
   prefetchAllSheets: vi.fn(),
@@ -22,7 +22,7 @@ vi.mock('@/infrastructure/modoArmazenamento', () => ({
 }))
 
 vi.mock('@/infrastructure/brapi', () => ({
-  buscarCotacoesBrapi: mocks.buscarCotacoesBrapi,
+  atualizarCotacoesBrapi: mocks.atualizarCotacoesBrapi,
   lerCotacaoCache: mocks.lerCotacaoCacheBrapi,
 }))
 
@@ -79,7 +79,12 @@ describe('carregarDashboard — cotações Brapi no modo local', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.isModoLocal.mockReturnValue(false)
-    mocks.buscarCotacoesBrapi.mockResolvedValue(new Map())
+    mocks.atualizarCotacoesBrapi.mockResolvedValue({
+      cotacoes: new Map(),
+      semCotacao: [],
+      semToken: false,
+      consultouRede: true,
+    })
     mocks.lerCotacaoCacheBrapi.mockReturnValue(null)
     mocks.carregarConfiguracoes.mockResolvedValue({ brapiToken: 'token-brapi' })
     mocks.operacoesReadCache.mockReturnValue([operacao])
@@ -96,7 +101,7 @@ describe('carregarDashboard — cotações Brapi no modo local', () => {
       spreadsheetId: 'planilha',
     })
 
-    expect(mocks.buscarCotacoesBrapi).not.toHaveBeenCalled()
+    expect(mocks.atualizarCotacoesBrapi).not.toHaveBeenCalled()
     expect(dashboard.cotacoes.get('PETR4')).toMatchObject({
       precoAtual: 12000,
       fonte: 'googlefinance',
@@ -105,20 +110,87 @@ describe('carregarDashboard — cotações Brapi no modo local', () => {
 
   it('atualiza pela Brapi mesmo quando o Consolidado local já tem um preço estático', async () => {
     mocks.isModoLocal.mockReturnValue(true)
-    mocks.buscarCotacoesBrapi.mockResolvedValue(new Map([['PETR4', 15500]]))
+    mocks.atualizarCotacoesBrapi.mockResolvedValue({
+      cotacoes: new Map([
+        ['PETR4', { preco: 15500, precoAbertura: 15000, atualizadoEm: null, fonte: 'api' }],
+      ]),
+      semCotacao: [],
+      semToken: false,
+      consultouRede: true,
+    })
 
     const dashboard = await carregarDashboard({
       accessToken: 'local',
       spreadsheetId: 'local',
     })
 
-    expect(mocks.buscarCotacoesBrapi).toHaveBeenCalledWith(['PETR4'], {
+    expect(mocks.atualizarCotacoesBrapi).toHaveBeenCalledWith(['PETR4'], {
       token: 'token-brapi',
+      forceRefresh: false,
     })
     expect(dashboard.cotacoes.get('PETR4')).toMatchObject({
       precoAtual: 15500,
       fonte: 'brapi',
     })
+  })
+
+  it('no refresh explícito consulta a Brapi para todos os ativos e prioriza o preço novo', async () => {
+    mocks.atualizarCotacoesBrapi.mockResolvedValue({
+      cotacoes: new Map([
+        ['PETR4', { preco: 13000, precoAbertura: 12500, atualizadoEm: null, fonte: 'api' }],
+      ]),
+      semCotacao: [],
+      semToken: false,
+      consultouRede: true,
+    })
+
+    const dashboard = await carregarDashboard(
+      { accessToken: 'access-token', spreadsheetId: 'planilha' },
+      { forceRefresh: true },
+    )
+
+    // O Consolidado já tem preço (12000), mas a atualização manual busca de novo.
+    expect(mocks.atualizarCotacoesBrapi).toHaveBeenCalledWith(['PETR4'], {
+      token: 'token-brapi',
+      forceRefresh: true,
+    })
+    expect(dashboard.cotacoes.get('PETR4')).toMatchObject({
+      precoAtual: 13000,
+      precoAbertura: 12500,
+      variacaoDiaPercent: 4,
+      fonte: 'brapi',
+    })
+    expect(dashboard.cotacoesBrapi).toMatchObject({
+      total: 1,
+      comCotacao: 1,
+      semCotacao: [],
+      semToken: false,
+      forcado: true,
+    })
+  })
+
+  it('sem token da Brapi, informa a integração desligada no diagnóstico', async () => {
+    mocks.carregarConfiguracoes.mockResolvedValue({ brapiToken: '' })
+    mocks.consolidadoReadCache.mockReturnValue([])
+    mocks.atualizarCotacoesBrapi.mockResolvedValue({
+      cotacoes: new Map(),
+      semCotacao: ['PETR4'],
+      semToken: true,
+      consultouRede: false,
+    })
+
+    const dashboard = await carregarDashboard(
+      { accessToken: 'access-token', spreadsheetId: 'planilha' },
+      { forceRefresh: true },
+    )
+
+    expect(dashboard.cotacoesBrapi).toMatchObject({
+      total: 1,
+      comCotacao: 0,
+      semCotacao: ['PETR4'],
+      semToken: true,
+    })
+    expect(dashboard.cotacoes.get('PETR4')).toMatchObject({ status: 'indisponivel' })
   })
 
   it('preserva o último preço local se a Brapi não retornar uma cotação', async () => {
@@ -129,8 +201,9 @@ describe('carregarDashboard — cotações Brapi no modo local', () => {
       spreadsheetId: 'local',
     })
 
-    expect(mocks.buscarCotacoesBrapi).toHaveBeenCalledWith(['PETR4'], {
+    expect(mocks.atualizarCotacoesBrapi).toHaveBeenCalledWith(['PETR4'], {
       token: 'token-brapi',
+      forceRefresh: false,
     })
     expect(dashboard.cotacoes.get('PETR4')).toMatchObject({
       precoAtual: 12000,
