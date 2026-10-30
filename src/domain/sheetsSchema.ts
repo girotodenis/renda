@@ -12,6 +12,7 @@ export const SHEET_NAMES = [
   'Metas_Rebalanceamento',
   'Historico',
   'Valuation',
+  'Ativos',
   'Configuracoes',
 ] as const
 
@@ -83,5 +84,6 @@ export const SHEET_HEADERS: Record<SheetName, readonly string[]> = {
     'LPA (R$)',
     'VPA (R$)',
   ],
+  Ativos: ['Ticker', 'Categoria', 'Setor'],
   Configuracoes: ['Chave', 'Valor'],
 }

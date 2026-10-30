@@ -10,6 +10,7 @@ import {
   lerCotacoesTesouroCache,
 } from '@/infrastructure/cotacoes/brapi/tesouro'
 import { listarTickersBrapi } from '@/infrastructure/cotacoes/brapi/tickers'
+import { clearBrapiSetorCache, provedorSetoresBrapi } from '@/infrastructure/cotacoes/brapi/perfil'
 
 export const BRAPI_ID = 'brapi'
 
@@ -32,8 +33,10 @@ export const integracaoBrapi: IntegracaoCotacao = {
       atualizarCotacoesTesouroBrapi(titulos, { token: tokens[BRAPI_ID], forceRefresh }),
   },
   tickers: { listar: listarTickersBrapi },
+  setores: provedorSetoresBrapi,
   limparCache() {
     clearBrapiCache()
     clearBrapiTesouroCache()
+    clearBrapiSetorCache()
   },
 }

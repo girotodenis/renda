@@ -259,7 +259,7 @@ export async function getSpreadsheetLocale(
 
 
 /**
- * Cria uma planilha padrão com as 5 abas da especificação, cabeçalhos já
+ * Cria uma planilha padrão com as abas da especificação, cabeçalhos já
  * escritos e linha de cabeçalho congelada (RF02).
  */
 export async function createDefaultSpreadsheet(
@@ -293,7 +293,7 @@ export async function createDefaultSpreadsheet(
 }
 
 /**
- * Carrega os metadados de uma planilha existente e garante que as 5 abas
+ * Carrega os metadados de uma planilha existente e garante que as abas do
  * existam (criando as ausentes com seus cabeçalhos).
  */
 export async function loadSpreadsheetWorkspace(

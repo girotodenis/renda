@@ -64,8 +64,8 @@ O modo com login Google tem **dois backends**, escolhidos em tempo de **build** 
 
 | Backend | Escopos OAuth | Onde os dados ficam | Criar | Abrir existente | Link |
 | --- | --- | --- | --- | --- | --- |
-| `sheets` (padrão) | `spreadsheets` + `drive.file` | planilha do Google Sheets | planilha nova (7 abas) | lista as planilhas visíveis (Picker opcional) | `docs.google.com/spreadsheets/d/…` |
-| `json` | **`drive.file`** | um arquivo `*.json.gz` no Drive (pasta `minhasacoe_app`) | arquivo novo com as 7 abas vazias | lista os bancos criados pelo app | `drive.google.com/file/d/…` |
+| `sheets` (padrão) | `spreadsheets` + `drive.file` | planilha do Google Sheets | planilha nova (abas do schema) | lista as planilhas visíveis (Picker opcional) | `docs.google.com/spreadsheets/d/…` |
+| `json` | **`drive.file`** | um arquivo `*.json.gz` no Drive (pasta `minhasacoe_app`) | arquivo novo com as abas vazias | lista os bancos criados pelo app | `drive.google.com/file/d/…` |
 
 - O backend `json` usa apenas o escopo **`drive.file`**, que **não é sensível**: dispensa a verificação OAuth do Google (e o vídeo de demonstração) para publicar o app.
 - Em **Abrir banco existente** aparece a lista dos bancos já existentes (nome + última modificação); basta escolher um para carregar. No backend `sheets`, o Google Picker continua disponível como ação secundária para abrir uma planilha que o app ainda não conhece.
@@ -99,6 +99,7 @@ O app é um **PWA instalável** (manifest + service worker via `vite-plugin-pwa`
 - **Escrita offline:** operações e proventos lançados sem rede ficam numa fila local (outbox) e são reaplicados no banco da nuvem automaticamente ao reconectar.
 - **Sincronização:** ocorre ao abrir o app, a cada reconexão e por retry periódico; um indicador no cabeçalho mostra o estado (offline / pendências / sincronizado) e permite forçar a sincronização.
 - **Atualizar cotações:** o botão **Atualizar** do dashboard relê os dados e busca os preços atuais de Ação/FII/BDR/ETF nas APIs de cotação configuradas — **Brapi** e, se ela não devolver o preço (ou não estiver configurada), **Mais Retorno** — ignorando o cache local, e os grava na carteira. Os tokens são informados dentro do app, em **Configurações → Integrações** (não vão no `.env`) e ficam salvos na própria planilha/banco JSON. Se a integração não estiver configurada (token ausente) ou não devolver preço, o dashboard exibe um aviso com o motivo.
+- **Setor de atuação:** o setor de cada ticker é buscado nas mesmas integrações (**Brapi** `/stocks/profile` e, como fallback, **Mais Retorno** `/asset-info`), gravado na aba **`Ativos`** (sheet e JSON) e usado no gráfico **Alocação da carteira → Por setor**. Ativos sem setor conhecido ficam fora desse gráfico.
 - O service worker é habilitado apenas no **build de produção** (`npm run build` + `npm run preview`); em desenvolvimento (`npm run dev`) ele fica desligado.
 
 ## Privacidade

@@ -13,7 +13,7 @@ const destaques: { icon: LucideIcon; titulo: string; descricao: string }[] = [
     icon: BarChart3,
     titulo: 'Dashboard inteligente',
     descricao:
-      'Preço médio, lucro, alocação por ativo e categoria, e evolução patrimonial calculados automaticamente.',
+      'Preço médio, lucro, alocação por categoria, setor e ativo, e evolução patrimonial calculados automaticamente.',
   },
   {
     icon: Download,

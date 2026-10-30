@@ -21,7 +21,7 @@ function sheetsWith(overrides: Partial<DatabaseSheets> = {}): DatabaseSheets {
 }
 
 describe('emptyDatabase', () => {
-  it('cria as 7 abas do schema só com a linha de cabeçalho', () => {
+  it('cria as abas do schema só com a linha de cabeçalho', () => {
     const banco = emptyDatabase()
 
     expect(banco.version).toBe(DATABASE_FILE_VERSION)

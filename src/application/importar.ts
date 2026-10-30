@@ -27,6 +27,7 @@ export const ABAS_IMPORTAVEIS: readonly SheetName[] = [
   'Metas_Rebalanceamento',
   'Historico',
   'Valuation',
+  'Ativos',
   'Configuracoes',
 ]
 

@@ -84,7 +84,7 @@ function stubDrive() {
   return { chamadas }
 }
 
-/** Stub mínimo da API do Sheets, com as 7 abas do schema (garante o padrão). */
+/** Stub mínimo da API do Sheets, com as abas do schema (garante o padrão). */
 function stubSheets() {
   const chamadas: string[] = []
   const metadados = {

@@ -13,7 +13,13 @@ import { TabelaAtivos } from '@/presentation/features/dashboard/TabelaAtivos'
 import { ValorManualModal } from '@/presentation/features/dashboard/ValorManualModal'
 import type { AlvoValorManual } from '@/presentation/features/dashboard/ValorManualModal'
 import { useDashboard } from '@/presentation/hooks/useDashboard'
-import { alocacaoPorAtivo, alocacaoPorCategoria, serieEvolucao, tickersParaNavegacao } from '@/domain/dashboard'
+import {
+  alocacaoPorAtivo,
+  alocacaoPorCategoria,
+  alocacaoPorSetor,
+  serieEvolucao,
+  tickersParaNavegacao,
+} from '@/domain/dashboard'
 import { precosManuaisDeOperacoes } from '@/domain/cotacoes'
 import { toISO } from '@/domain/dates'
 import { calcularDetalheAtivo } from '@/domain/detalheAtivo'
@@ -51,7 +57,7 @@ export function DashboardPage() {
         <header className="space-y-1">
           <h1 className="text-xl font-semibold text-slate-900">Configurar planilha</h1>
           <p className="text-sm text-slate-500">
-            Escolha uma planilha existente no Drive ou crie a planilha padrão com as 5 abas.
+            Escolha uma planilha existente no Drive ou crie a planilha padrão com as abas do app.
           </p>
         </header>
         {error ? <Alert variant="error">{error}</Alert> : null}
@@ -81,6 +87,11 @@ function DashboardContent() {
   const consolidado = useMemo(() => data?.consolidado ?? [], [data])
   const porCategoria = useMemo(() => alocacaoPorCategoria(consolidado), [consolidado])
   const porAtivo = useMemo(() => alocacaoPorAtivo(consolidado), [consolidado])
+  // Setores vêm da aba `Ativos` (Brapi → Mais Retorno); ativos sem setor ficam fora.
+  const porSetor = useMemo(
+    () => alocacaoPorSetor(consolidado, data?.setores ?? new Map<string, string>()),
+    [consolidado, data],
+  )
   const serie = useMemo(() => serieEvolucao(data?.historico ?? []), [data])
   const [ativoSelecionado, setAtivoSelecionado] = useState<string | null>(null)
   const [categoriaNovaOperacao, setCategoriaNovaOperacao] = useState<CategoriaAtivo | null>(null)
@@ -251,7 +262,11 @@ function DashboardContent() {
           <div className="grid gap-4 lg:grid-cols-2">
             <ErrorBoundary title="Alocação indisponível">
               <Suspense fallback={<ChartFallback titulo="Carregando alocação…" />}>
-                <AlocacaoChart porCategoria={porCategoria} porAtivo={porAtivo} />
+                <AlocacaoChart
+                  porCategoria={porCategoria}
+                  porSetor={porSetor}
+                  porAtivo={porAtivo}
+                />
               </Suspense>
             </ErrorBoundary>
             <ErrorBoundary title="Evolução indisponível">

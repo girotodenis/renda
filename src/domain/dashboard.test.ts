@@ -8,6 +8,7 @@ import {
   agruparProventosPorTipo,
   alocacaoPorAtivo,
   alocacaoPorCategoria,
+  alocacaoPorSetor,
   anosComProventos,
   ativosParaTabela,
   filtrarProventos,
@@ -211,6 +212,57 @@ describe('alocação (RF08)', () => {
     expect(resultado).toHaveLength(2)
     expect(resultado.map((item) => item.chave)).toEqual(['PETR4', 'MXRF11'])
     expect(resultado[0].percentual).toBe(50)
+  })
+
+  it('agrupa por setor somando os ativos do mesmo setor', () => {
+    const linhas = [
+      consolidado({ ticker: 'PETR4', valorAtual: 60000 }),
+      consolidado({ ticker: 'VALE3', valorAtual: 20000 }),
+      consolidado({ ticker: 'ITUB4', valorAtual: 20000 }),
+    ]
+    const setores = new Map([
+      ['PETR4', 'Energia'],
+      ['VALE3', 'Materiais Básicos'],
+      ['ITUB4', 'Energia'],
+    ])
+
+    const resultado = alocacaoPorSetor(linhas, setores)
+
+    expect(resultado.map((item) => item.rotulo)).toEqual(['Energia', 'Materiais Básicos'])
+    expect(resultado[0]).toMatchObject({ valor: 80000, percentual: 80 })
+    expect(resultado[1]).toMatchObject({ valor: 20000, percentual: 20 })
+  })
+
+  it('omite ativos sem setor — inclusive do denominador do percentual', () => {
+    const linhas = [
+      consolidado({ ticker: 'PETR4', valorAtual: 50000 }),
+      consolidado({ ticker: 'SEMSETOR', valorAtual: 50000 }),
+    ]
+
+    const resultado = alocacaoPorSetor(linhas, new Map([['PETR4', 'Energia']]))
+
+    expect(resultado).toHaveLength(1)
+    expect(resultado[0]).toMatchObject({ chave: 'energia', rotulo: 'Energia', valor: 50000 })
+    expect(resultado[0].percentual).toBe(100)
+  })
+
+  it('ignora posições zeradas e setores em branco', () => {
+    const linhas = [
+      consolidado({ ticker: 'PETR4', valorAtual: 0, quantidadeAtual: 0 }),
+      consolidado({ ticker: 'VALE3', valorAtual: 10000 }),
+    ]
+    const resultado = alocacaoPorSetor(
+      linhas,
+      new Map([
+        ['PETR4', 'Energia'],
+        ['VALE3', '   '],
+      ]),
+    )
+    expect(resultado).toEqual([])
+  })
+
+  it('devolve lista vazia sem mapa de setores', () => {
+    expect(alocacaoPorSetor([consolidado({ ticker: 'PETR4' })], new Map())).toEqual([])
   })
 })
 

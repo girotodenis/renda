@@ -17,6 +17,10 @@ const mocks = vi.hoisted(() => ({
   historicoReadCache: vi.fn(),
   valuationReadCache: vi.fn(),
   valuationList: vi.fn(),
+  ativosReadCache: vi.fn(),
+  ativosList: vi.fn(),
+  ativosReplaceAll: vi.fn(),
+  atualizarSetores: vi.fn(),
 }))
 
 vi.mock('@/infrastructure/modoArmazenamento', () => ({
@@ -40,6 +44,10 @@ vi.mock('@/infrastructure/cotacoes/registro', () => ({
     atualizar: mocks.atualizarCotacoesTesouro,
     lerCache: mocks.lerCotacoesTesouroCache,
   },
+  provedorSetores: {
+    atualizar: mocks.atualizarSetores,
+    lerCache: () => new Map<string, string>(),
+  },
 }))
 
 vi.mock('@/application/configuracoes', () => ({
@@ -51,6 +59,10 @@ vi.mock('@/application/consolidado', () => ({
   syncConsolidado: vi.fn(),
 }))
 
+vi.mock('@/infrastructure/sheets/gatewayRouter', () => ({
+  ensureRequiredSheets: vi.fn().mockResolvedValue(0),
+}))
+
 vi.mock('@/infrastructure/repositories', () => ({
   consolidadoRepo: { readCache: mocks.consolidadoReadCache },
   historicoRepo: { readCache: mocks.historicoReadCache },
@@ -60,6 +72,11 @@ vi.mock('@/infrastructure/repositories', () => ({
   valuationRepo: {
     readCache: mocks.valuationReadCache,
     list: mocks.valuationList,
+  },
+  ativosRepo: {
+    readCache: mocks.ativosReadCache,
+    list: mocks.ativosList,
+    replaceAll: mocks.ativosReplaceAll,
   },
 }))
 
@@ -116,6 +133,15 @@ describe('carregarDashboard — cotações Brapi no modo local', () => {
     mocks.historicoReadCache.mockReturnValue([])
     mocks.valuationReadCache.mockReturnValue([])
     mocks.valuationList.mockResolvedValue([])
+    mocks.ativosReadCache.mockReturnValue([])
+    mocks.ativosList.mockResolvedValue([])
+    mocks.ativosReplaceAll.mockResolvedValue(undefined)
+    mocks.atualizarSetores.mockResolvedValue({
+      setores: new Map(),
+      semSetor: [],
+      semToken: false,
+      consultouRede: false,
+    })
   })
 
   it('usa o valor do GoogleFinance sem consultar Brapi no modo Google', async () => {

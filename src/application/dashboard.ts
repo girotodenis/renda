@@ -9,6 +9,7 @@ import {
 } from '@/domain/cotacoes'
 import type { CotacaoResolvida, EntradaCotacao } from '@/domain/cotacoes'
 import {
+  ativosRepo,
   consolidadoRepo,
   historicoRepo,
   operacoesRepo,
@@ -17,6 +18,8 @@ import {
   valuationRepo,
 } from '@/infrastructure/repositories'
 import type { RepositoryContext } from '@/infrastructure/repositories'
+import { carregarSetores, garantirAbasDoSchema, mapaDeSetores } from '@/application/setores'
+import type { TickerCategoria } from '@/application/setores'
 import { garantirColunasConsolidado, syncConsolidado } from '@/application/consolidado'
 import { registrarSnapshot } from '@/application/historico'
 import {
@@ -57,6 +60,11 @@ export interface DashboardData {
   historico: Snapshot[]
   /** Análises de valuation por ticker (aba `Valuation` — alerta de oportunidade). */
   valuation: Valuation[]
+  /**
+   * Setor de atuação por ticker (aba `Ativos` + integrações). Tickers sem setor
+   * ficam fora do mapa — o gráfico "Por setor" os omite.
+   */
+  setores: Map<string, string>
   /** Cotações resolvidas por ticker (fonte + status — RF19/RNF04). */
   cotacoes: Map<string, CotacaoResolvida>
   /**
@@ -188,6 +196,8 @@ interface MontarConsulta {
   proventos: readonly Provento[]
   historico: readonly Snapshot[]
   valuation: readonly Valuation[]
+  /** Setores já resolvidos (aba `Ativos` + integrações), por ticker. */
+  setores?: ReadonlyMap<string, string>
   /** Preços de mercado obtidos das APIs (centavos), fallback do `GOOGLEFINANCE`. */
   cotacoesApi: ReadonlyMap<string, number>
   /** Aberturas do dia obtidas das APIs (centavos), por ticker. */
@@ -209,6 +219,7 @@ function montarDashboard(consulta: MontarConsulta): DashboardData {
     proventos,
     historico,
     valuation,
+    setores = new Map<string, string>(),
     cotacoesApi,
     aberturasApi = new Map(),
     forcarApi = false,
@@ -220,6 +231,7 @@ function montarDashboard(consulta: MontarConsulta): DashboardData {
     proventos: [...proventos],
     historico: [...historico],
     valuation: [...valuation],
+    setores: new Map(setores),
     cotacoesApi: null,
     carregadoEm: new Date().toISOString(),
   }
@@ -291,6 +303,11 @@ export async function carregarDashboard(
 ): Promise<DashboardData> {
   const { spreadsheetId } = context
 
+  // Planilhas abertas antes de uma aba nova entrar no schema: cria as ausentes
+  // antes de ler cabeçalhos — sem isso, o `batchGet` de `ensureSheetHeaders`
+  // falharia por intervalo inexistente.
+  if (!options.offline) await garantirAbasDoSchema(context)
+
   if (!options.offline) await migrarColunasConsolidado(context)
 
   const cacheCompleto = temCacheCompleto(spreadsheetId)
@@ -307,14 +324,22 @@ export async function carregarDashboard(
   const config = await carregarConfiguracoes(context, options.offline === true)
   const modoLocal = isModoLocal()
   const forceRefresh = options.forceRefresh === true
-  const api = await resolverCotacoesApi(
-    operacoes,
-    linhasConsolidado,
-    options.offline === true,
-    config.tokens,
-    modoLocal || forceRefresh,
-    forceRefresh,
-  )
+  // Cotações e setores são consultas independentes: vão juntas para não somar
+  // latências (o setor só usa a rede para tickers ainda desconhecidos).
+  const [api, setores] = await Promise.all([
+    resolverCotacoesApi(
+      operacoes,
+      linhasConsolidado,
+      options.offline === true,
+      config.tokens,
+      modoLocal || forceRefresh,
+      forceRefresh,
+    ),
+    carregarSetores(context, posicoesParaSetor(operacoes, linhasConsolidado), {
+      tokens: config.tokens,
+      offline: options.offline === true,
+    }),
+  ])
 
   const dados = montarDashboard({
     operacoes,
@@ -322,6 +347,7 @@ export async function carregarDashboard(
     proventos,
     historico,
     valuation,
+    setores,
     cotacoesApi: api.precos,
     aberturasApi: api.aberturas,
     forcarApi: forceRefresh,
@@ -346,6 +372,26 @@ async function carregarValuations(
   } catch {
     return valuationRepo.readCache(context.spreadsheetId) ?? []
   }
+}
+
+/**
+ * Posições abertas (ticker + categoria) usadas para resolver o setor de
+ * atuação. Usa as operações quando existem; senão, a própria aba `Consolidado`.
+ */
+function posicoesParaSetor(
+  operacoes: readonly Operacao[],
+  linhasConsolidado: readonly Consolidado[],
+): TickerCategoria[] {
+  const posicoes = calcularPosicoes(operacoes).filter(
+    (posicao) => posicao.quantidadeAtual > 0,
+  )
+  const origem: readonly TickerCategoria[] =
+    posicoes.length > 0
+      ? posicoes
+      : linhasConsolidado
+          .filter((linha) => linha.quantidadeAtual > 0 && linha.ticker.trim().length > 0)
+          .map((linha) => ({ ticker: linha.ticker, categoria: linha.categoria }))
+  return origem.map(({ ticker, categoria }) => ({ ticker, categoria }))
 }
 
 /** Posições B3 abertas sem preço GoogleFinance (ou todas no modo local). */
@@ -542,6 +588,7 @@ export function lerDashboardDoCache(spreadsheetId: string): DashboardData | null
     proventos: proventosRepo.readCache(spreadsheetId) ?? [],
     historico: historicoRepo.readCache(spreadsheetId) ?? [],
     valuation: valuationRepo.readCache(spreadsheetId) ?? [],
+    setores: mapaDeSetores(ativosRepo.readCache(spreadsheetId) ?? []),
     cotacoesApi: precos,
     aberturasApi: aberturas,
     modoLocal,

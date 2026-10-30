@@ -40,7 +40,7 @@ export function TrocarPlanilhaModal({ open, onClose }: TrocarPlanilhaModalProps)
   return (
     <Modal open={open} onClose={onClose} titulo="Trocar banco de dados" className="max-w-xl">
       <p className="mb-4 text-sm text-slate-500">
-        Abra outro banco já existente ou crie um novo com as 7 abas do app. Nada é apagado: cada
+        Abra outro banco já existente ou crie um novo com as abas do app. Nada é apagado: cada
         banco continua salvo no seu Drive.
       </p>
       <WorkspaceSetup />

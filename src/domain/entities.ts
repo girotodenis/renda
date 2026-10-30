@@ -222,6 +222,22 @@ export interface Snapshot {
 }
 
 /**
+ * Cadastro de um ativo — aba `Ativos`.
+ *
+ * Guarda metadados **por ticker** (não por operação) que não vêm das cotações,
+ * como o setor de atuação usado no gráfico de alocação do dashboard. É escrito
+ * por `application/setores.ts` a partir das integrações (Brapi → Mais Retorno)
+ * e reaproveitado nas próximas cargas (dado quase estático).
+ */
+export interface Ativo {
+  /** Ticker canônico (`PETR4`). */
+  ticker: string
+  categoria: CategoriaAtivo
+  /** Setor de atuação (`''` quando nenhuma integração devolveu o dado). */
+  setor: string
+}
+
+/**
  * Parâmetro de configuração persistido na aba `Configuracoes` (chave/valor).
  *
  * Guarda ajustes do usuário **na própria planilha** (em vez de variáveis de
