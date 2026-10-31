@@ -33,15 +33,22 @@ export const integracaoMaisRetorno: IntegracaoCotacao = {
     'gere a sua api-key (cada consulta de cotação consome 1 crédito do plano).',
   b3: {
     lerCache: lerCotacaoCache,
-    atualizar: (tickers, { tokens, forceRefresh }) =>
-      atualizarCotacoesMaisRetorno(tickers, { token: tokens[MAIS_RETORNO_ID], forceRefresh }),
+    atualizar: (tickers, { tokens, forceRefresh, aoConsultar, signal }) =>
+      atualizarCotacoesMaisRetorno(tickers, {
+        token: tokens[MAIS_RETORNO_ID],
+        forceRefresh,
+        onTicker: (ticker) => aoConsultar?.(`ticker ${ticker}`),
+        signal,
+      }),
   },
   tesouro: {
     lerCache: lerCotacoesTesouroCache,
-    atualizar: (titulos, { tokens, forceRefresh }) =>
+    atualizar: (titulos, { tokens, forceRefresh, aoConsultar, signal }) =>
       atualizarCotacoesTesouroMaisRetorno(titulos, {
         token: tokens[MAIS_RETORNO_ID],
         forceRefresh,
+        onTicker: (titulo) => aoConsultar?.(`título ${titulo}`),
+        signal,
       }),
   },
   setores: provedorSetoresMaisRetorno,

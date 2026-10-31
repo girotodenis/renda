@@ -5,6 +5,8 @@ import type { DashboardData, DiagnosticoCotacoesApi } from '@/application/dashbo
 import { persistirESincronizarCotacoesApi } from '@/application/cotacoesApi'
 import { jaTemSnapshotDeHoje, registrarSnapshot, upsertHistorico } from '@/application/historico'
 import type { RepositoryContext } from '@/infrastructure/repositories'
+import { isAtualizacaoCancelada } from '@/domain/progresso'
+import type { AoProgredir, ProgressoAtualizacao } from '@/domain/progresso'
 import { isModoLocal } from '@/infrastructure/modoArmazenamento'
 import { describeSheetsError } from '@/infrastructure/sheets/gateway'
 import { useOnlineStatus } from '@/presentation/hooks/useOnlineStatus'
@@ -41,14 +43,38 @@ export interface AvisoCotacoes {
 }
 
 /**
+ * `true` quando as integrações de cotação são apenas um **extra opcional**.
+ *
+ * É o caso do banco Google (planilha com `GOOGLEFINANCE`): o preço já é
+ * calculado pelo próprio banco, então — desde que nenhum ativo tenha ficado sem
+ * cotação — a ausência de token não deve virar aviso na tela.
+ */
+function integracaoOpcional(data: DashboardData | null): boolean {
+  if (isModoLocal()) return false
+  for (const cotacao of data?.cotacoes.values() ?? []) {
+    if (cotacao.status === 'indisponivel') return false
+  }
+  return true
+}
+
+/**
  * Traduz o diagnóstico das APIs de cotação em uma mensagem para o usuário.
  *
  * Só faz sentido quando algum ativo de Ação/FII/BDR/ETF/Tesouro estava elegível; nesse
  * caso sempre há uma mensagem — inclusive quando a integração não está
  * configurada ou não devolveu nenhum preço.
+ *
+ * Exceção: quando a carteira está no Google (planilha com `GOOGLEFINANCE`) e
+ * **todos** os ativos já têm preço, a integração é apenas um extra opcional — a
+ * falta de token não vira aviso.
  */
-function descreverAtualizacaoCotacoes(info: DiagnosticoCotacoesApi | null): AvisoCotacoes | null {
+function descreverAtualizacaoCotacoes(
+  info: DiagnosticoCotacoesApi | null,
+  /** `true` quando o banco já fornece todos os preços (integração é opcional). */
+  integracaoEhOpcional: boolean,
+): AvisoCotacoes | null {
   if (!info || info.total === 0) return null
+  if (integracaoEhOpcional && info.semToken) return null
 
   const nomes = info.provedores.length > 0 ? info.provedores.join(' / ') : 'API de cotações'
   // Algumas APIs só cotam o Tesouro em planos pagos: com token e sem preço, avisa.
@@ -97,10 +123,21 @@ export interface UseDashboardResult {
   avisoCotacoes: AvisoCotacoes | null
   /**
    * Relê os dados da API e **atualiza as cotações B3 pelas APIs** (ignorando o
-   * cache local). Quando a integração não está configurada ou não devolve
-   * preço, `avisoCotacoes` traz a mensagem para a UI.
+   * cache local). Quando a integração não devolve preço, `avisoCotacoes` traz a
+   * mensagem para a UI — exceto no banco Google, onde o `GOOGLEFINANCE` já
+   * fornece os preços e a integração é apenas um extra opcional.
    */
   refresh: () => Promise<void>
+  /**
+   * Atualização explícita de cotações com barra de progresso (botão "Atualizar"):
+   * expõe `progressoAtualizacao` enquanto roda e pode ser interrompida por
+   * `cancelarAtualizacao`.
+   */
+  atualizarComProgresso: () => Promise<void>
+  /** Progresso da atualização em andamento (`null` quando não há nenhuma). */
+  progressoAtualizacao: ProgressoAtualizacao | null
+  /** Interrompe a atualização em andamento (nada é gravado no banco). */
+  cancelarAtualizacao: () => void
   /** Grava um snapshot manual no `Historico` (Seção 2). */
   registrarSnapshotManual: () => Promise<void>
 }
@@ -124,7 +161,10 @@ export function useDashboard(): UseDashboardResult {
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [avisoCotacoes, setAvisoCotacoes] = useState<AvisoCotacoes | null>(null)
+  const [progressoAtualizacao, setProgressoAtualizacao] =
+    useState<ProgressoAtualizacao | null>(null)
   const autoSnapshotRef = useRef(false)
+  const cancelamentoRef = useRef<AbortController | null>(null)
 
   const resolveContext = useCallback(async (): Promise<RepositoryContext | null> => {
     if (!workspace) {
@@ -140,10 +180,24 @@ export function useDashboard(): UseDashboardResult {
   }, [workspace, ensureAccessToken])
 
   const load = useCallback(
-    async (forceRefresh: boolean): Promise<DashboardData | null> => {
+    async (
+      forceRefresh: boolean,
+      extras: { onProgress?: AoProgredir; signal?: AbortSignal } = {},
+    ): Promise<DashboardData | null> => {
       if (forceRefresh) setIsRefreshing(true)
       else setIsLoading(true)
       setError(null)
+
+      // O total de etapas só é conhecido depois de ler a carteira; guardamos o
+      // maior valor recebido para fechar a barra no passo de sincronização.
+      let totalEtapas = 0
+      const reportar: AoProgredir | undefined = extras.onProgress
+        ? (progresso) => {
+            totalEtapas = Math.max(totalEtapas, progresso.total)
+            extras.onProgress?.(progresso)
+          }
+        : undefined
+
       try {
         if (!workspace) {
           setError('Configure uma planilha para visualizar o dashboard.')
@@ -169,14 +223,29 @@ export function useDashboard(): UseDashboardResult {
           }
           return null
         }
-        const resultado = await carregarDashboard(context, { forceRefresh })
+        const resultado = await carregarDashboard(context, {
+          forceRefresh,
+          onProgress: reportar,
+          signal: extras.signal,
+        })
         setData(resultado)
         setIsOffline(false)
         // Persistência best-effort das cotações das APIs usadas como fallback:
         // grava o preço na planilha (mesmo fluxo da marcação manual).
-        void persistirCotacoesApiDoDashboard(context, resultado)
+        reportar?.({
+          etapa: 'Sincronizando com o banco',
+          atual: totalEtapas,
+          total: totalEtapas,
+        })
+        await persistirCotacoesApiDoDashboard(context, resultado)
         return resultado
       } catch (loadError) {
+        // Cancelamento do usuário não é falha: mantém os dados atuais e não
+        // grava nada no banco (a gravação só acontece após a consulta).
+        if (isAtualizacaoCancelada(loadError)) {
+          setNotice('Atualização cancelada.')
+          return null
+        }
         const cache = workspace ? lerDashboardDoCache(workspace.spreadsheetId) : null
         if (cache) {
           setData(cache)
@@ -221,8 +290,39 @@ export function useDashboard(): UseDashboardResult {
   const refresh = useCallback(async () => {
     setAvisoCotacoes(null)
     const resultado = await load(true)
-    setAvisoCotacoes(descreverAtualizacaoCotacoes(resultado?.cotacoesApi ?? null))
+    setAvisoCotacoes(
+      descreverAtualizacaoCotacoes(resultado?.cotacoesApi ?? null, integracaoOpcional(resultado)),
+    )
   }, [load])
+
+  const atualizarComProgresso = useCallback(async () => {
+    // Uma atualização por vez: o botão fica desabilitado e a modal aberta.
+    if (cancelamentoRef.current) return
+    const controller = new AbortController()
+    cancelamentoRef.current = controller
+    setAvisoCotacoes(null)
+    setNotice(null)
+    setProgressoAtualizacao({ etapa: 'Iniciando atualização', atual: 0, total: 0 })
+    try {
+      const resultado = await load(true, {
+        signal: controller.signal,
+        onProgress: setProgressoAtualizacao,
+      })
+      setAvisoCotacoes(
+        descreverAtualizacaoCotacoes(
+          resultado?.cotacoesApi ?? null,
+          integracaoOpcional(resultado),
+        ),
+      )
+    } finally {
+      cancelamentoRef.current = null
+      setProgressoAtualizacao(null)
+    }
+  }, [load])
+
+  const cancelarAtualizacao = useCallback(() => {
+    cancelamentoRef.current?.abort()
+  }, [])
 
   const registrarSnapshotManual = useCallback(async () => {
     if (!data) return
@@ -254,6 +354,9 @@ export function useDashboard(): UseDashboardResult {
     notice,
     avisoCotacoes,
     refresh,
+    atualizarComProgresso,
+    progressoAtualizacao,
+    cancelarAtualizacao,
     registrarSnapshotManual,
   }
 }

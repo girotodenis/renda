@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '@/presentation/app/providers/authContext'
 import { Alert } from '@/presentation/components/Alert'
 import { ErrorBoundary } from '@/presentation/components/ErrorBoundary'
+import { ProgressoModal } from '@/presentation/components/ProgressoModal'
 import { TrocarPlanilhaModal } from '@/presentation/features/auth/TrocarPlanilhaModal'
 import { WorkspaceSetup } from '@/presentation/features/auth/WorkspaceSetup'
 import { DetalheAtivoModal } from '@/presentation/features/dashboard/DetalheAtivoModal'
@@ -81,6 +82,9 @@ function DashboardContent() {
     notice,
     avisoCotacoes,
     refresh,
+    atualizarComProgresso,
+    progressoAtualizacao,
+    cancelarAtualizacao,
     registrarSnapshotManual,
   } = useDashboard()
 
@@ -205,7 +209,7 @@ function DashboardContent() {
           )}
           <button
             type="button"
-            onClick={() => void refresh()}
+            onClick={() => void atualizarComProgresso()}
             disabled={isRefreshing}
             className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
           >
@@ -315,6 +319,11 @@ function DashboardContent() {
       <TrocarPlanilhaModal
         open={trocarPlanilhaAberto}
         onClose={() => setTrocarPlanilhaAberto(false)}
+      />
+      <ProgressoModal
+        open={progressoAtualizacao !== null}
+        progresso={progressoAtualizacao}
+        onCancelar={cancelarAtualizacao}
       />
     </section>
   )

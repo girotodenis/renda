@@ -1,4 +1,6 @@
 import { isTesouroDireto, usaGoogFinance } from '@/domain/categoria'
+import { garantirNaoCancelado } from '@/domain/progresso'
+import type { AoProgredir } from '@/domain/progresso'
 import { aplicarPrecosAtuais, calcularPosicoes, calcularResumo } from '@/domain/consolidado'
 import type { PosicaoConsolidada, ResumoCarteira } from '@/domain/consolidado'
 import {
@@ -102,6 +104,10 @@ export interface CarregarDashboardOptions {
   forceRefresh?: boolean
   /** Não usa a rede (modo offline — RNF08): apenas cache local. */
   offline?: boolean
+  /** Recebe o progresso da atualização (barra de progresso da UI). */
+  onProgress?: AoProgredir
+  /** Cancela a atualização em andamento (botão Cancelar da UI). */
+  signal?: AbortSignal
 }
 
 function temCacheCompleto(spreadsheetId: string): boolean {
@@ -302,11 +308,39 @@ export async function carregarDashboard(
   options: CarregarDashboardOptions = {},
 ): Promise<DashboardData> {
   const { spreadsheetId } = context
+  const { onProgress, signal } = options
+
+  // Progresso e cancelamento da atualização manual: `atual` conta as etapas
+  // concluídas (leitura dos dados + um item por cotação + sincronização).
+  let totalEtapas = 0
+  let concluidas = 0
+  const vistos = new Set<string>()
+
+  const reportar = (etapa: string) => onProgress?.({ etapa, atual: concluidas, total: totalEtapas })
+
+  const aoConsultar = (descricao: string) => {
+    if (!onProgress) return
+    if (!vistos.has(descricao)) {
+      vistos.add(descricao)
+      concluidas += 1
+    }
+    reportar(`Atualizando ${descricao}`)
+  }
+
+  const aoDefinirTotal = (itens: number) => {
+    // Leitura dos dados + cada item consultado + sincronização com o banco.
+    totalEtapas = itens + 2
+    concluidas = 1
+    reportar('Consultando cotações')
+  }
+
+  if (onProgress && !options.offline) reportar('Lendo dados do banco')
 
   // Planilhas abertas antes de uma aba nova entrar no schema: cria as ausentes
   // antes de ler cabeçalhos — sem isso, o `batchGet` de `ensureSheetHeaders`
   // falharia por intervalo inexistente.
   if (!options.offline) await garantirAbasDoSchema(context)
+  garantirNaoCancelado(signal)
 
   if (!options.offline) await migrarColunasConsolidado(context)
 
@@ -315,6 +349,7 @@ export async function carregarDashboard(
   if (!options.offline && (options.forceRefresh || !cacheCompleto)) {
     await prefetchAllSheets(context)
   }
+  garantirNaoCancelado(signal)
 
   const operacoes = operacoesRepo.readCache(spreadsheetId) ?? []
   const linhasConsolidado = consolidadoRepo.readCache(spreadsheetId) ?? []
@@ -326,6 +361,7 @@ export async function carregarDashboard(
   const forceRefresh = options.forceRefresh === true
   // Cotações e setores são consultas independentes: vão juntas para não somar
   // latências (o setor só usa a rede para tickers ainda desconhecidos).
+  garantirNaoCancelado(signal)
   const [api, setores] = await Promise.all([
     resolverCotacoesApi(
       operacoes,
@@ -334,12 +370,14 @@ export async function carregarDashboard(
       config.tokens,
       modoLocal || forceRefresh,
       forceRefresh,
+      { aoConsultar: onProgress ? aoConsultar : undefined, onTotal: aoDefinirTotal, signal },
     ),
     carregarSetores(context, posicoesParaSetor(operacoes, linhasConsolidado), {
       tokens: config.tokens,
       offline: options.offline === true,
     }),
   ])
+  garantirNaoCancelado(signal)
 
   const dados = montarDashboard({
     operacoes,
@@ -486,6 +524,7 @@ async function resolverCotacoesApi(
   tokens: TokensProvedores,
   atualizarMesmoComPreco: boolean,
   forceRefresh: boolean,
+  consulta: ConsultaCotacoes = {},
 ): Promise<ResolucaoApi> {
   const posicoes = calcularPosicoes(operacoes)
   const tickers = tickersB3(
@@ -495,6 +534,7 @@ async function resolverCotacoesApi(
   )
   const titulos = tickersTesouro(operacoes, posicoes)
   const total = tickers.length + titulos.length
+  consulta.onTotal?.(total)
   if (total === 0) {
     return { precos: new Map(), aberturas: new Map(), diagnostico: null }
   }
@@ -518,7 +558,12 @@ async function resolverCotacoesApi(
   }
 
   const semB3 = { cotacoes: new Map<string, CotacaoMercado>(), semCotacao: [], semToken: false }
-  const opcoes = { tokens, forceRefresh }
+  const opcoes = {
+    tokens,
+    forceRefresh,
+    aoConsultar: consulta.aoConsultar,
+    signal: consulta.signal,
+  }
   const [b3, tesouro] = await Promise.all([
     tickers.length > 0 ? provedorCotacoesB3.atualizar(tickers, opcoes) : semB3,
     provedorCotacoesTesouro.atualizar(titulos, opcoes),
@@ -557,6 +602,16 @@ function metadadosIntegracoes(
       exigemToken.length > 0 &&
       exigemToken.every((integracao) => (tokens[integracao.id] ?? '').trim().length === 0),
   }
+}
+
+/** Acompanhamento opcional da consulta de cotações (progresso e cancelamento). */
+interface ConsultaCotacoes {
+  /** Avisa cada item que está sendo consultado (ex.: `ticker PETR4`). */
+  aoConsultar?: (descricao: string) => void
+  /** Informa quantos itens serão consultados (base do contador da barra). */
+  onTotal?: (itens: number) => void
+  /** Cancela a consulta em andamento. */
+  signal?: AbortSignal
 }
 
 /** Cotações das APIs resolvidas (+ aberturas) e o diagnóstico da consulta. */

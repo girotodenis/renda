@@ -62,6 +62,13 @@ export interface OpcoesConsultaCotacoes {
   tokens: TokensProvedores
   /** Ignora o cache local e consulta a API (atualização manual). */
   forceRefresh?: boolean
+  /**
+   * Avisa o item que está sendo consultado (ex.: `ticker PETR4`), para a barra
+   * de progresso da atualização manual.
+   */
+  aoConsultar?: (descricao: string) => void
+  /** Interrompe a consulta quando o usuário cancela a atualização. */
+  signal?: AbortSignal
 }
 
 /** Título do Tesouro da carteira a cotar (ticker + vencimento da operação). */

@@ -113,6 +113,9 @@ cabeçalhos, valores tipados) nunca vaze para o domínio:
   capacidades que ela suporta e inclua-o em `integracoesCotacao`. O token
   (`<id>_token` na aba `Configuracoes`) e o card em Configurações aparecem
   automaticamente. A UI acessa tudo via `application/integracoesCotacao.ts`.
+  `OpcoesConsultaCotacoes` aceita ainda `aoConsultar` (avisa cada item
+  consultado) e `signal` (cancelamento) — usados pela modal de progresso do
+  botão **Atualizar** (`ProgressoModal` + `useDashboard.atualizarComProgresso`).
 - `storage.ts` — `localStorage` para token/workspace/consent (RNF05).
 - `db.ts` + `kvStore.ts` — IndexedDB (stores `sheets`/`outbox`) com espelho em
   memória para leitura síncrona e migração única do `localStorage`.

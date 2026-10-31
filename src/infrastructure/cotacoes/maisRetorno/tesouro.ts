@@ -118,10 +118,39 @@ export function clearMaisRetornoTesouroCache(): void {
 }
 
 /** Busca (best-effort) os títulos com cotação. Falhas retornam `null`. */
-async function baixarTitulos(token: string): Promise<TituloTesouro[] | null> {
+/** Opções da atualização dos preços do Tesouro (Mais Retorno). */
+export interface BuscarTesouroMaisRetornoOptions {
+  /** api-key da Mais Retorno (vazio = integração desligada). */
+  token?: string
+  /** Ignora o cache local e consulta a API (atualização manual). */
+  forceRefresh?: boolean
+  /** Notifica o título que está sendo processado (barra de progresso). */
+  onTicker?: (ticker: string) => void
+  /** Interrompe a atualização quando o usuário cancela a operação. */
+  signal?: AbortSignal
+}
+
+/** Avisa cada título uma única vez — base do contador da barra de progresso. */
+function notificarTitulos(
+  tickers: readonly TituloTesouroCarteira[],
+  onTicker?: (ticker: string) => void,
+): void {
+  if (!onTicker) return
+  const vistos = new Set<string>()
+  for (const { ticker } of tickers) {
+    if (vistos.has(ticker)) continue
+    vistos.add(ticker)
+    onTicker(ticker)
+  }
+}
+
+async function baixarTitulos(token: string, signal?: AbortSignal): Promise<TituloTesouro[] | null> {
   if (typeof fetch !== 'function' || typeof AbortController !== 'function') return null
+  if (signal?.aborted) return null
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  const cancelar = () => controller.abort()
+  signal?.addEventListener('abort', cancelar, { once: true })
   try {
     const response = await fetch(`${BASE_URL}/search/tesouro?has_quotes=true`, {
       signal: controller.signal,
@@ -136,14 +165,22 @@ async function baixarTitulos(token: string): Promise<TituloTesouro[] | null> {
     return null
   } finally {
     clearTimeout(timeout)
+    signal?.removeEventListener('abort', cancelar)
   }
 }
 
 /** Preço (PU) de um título via `/quotes`; `null` em qualquer falha. */
-async function buscarCotacao(symbol: string, token: string): Promise<CotacaoMercado | null> {
+async function buscarCotacao(
+  symbol: string,
+  token: string,
+  signal?: AbortSignal,
+): Promise<CotacaoMercado | null> {
   if (typeof fetch !== 'function' || typeof AbortController !== 'function') return null
+  if (signal?.aborted) return null
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  const cancelar = () => controller.abort()
+  signal?.addEventListener('abort', cancelar, { once: true })
   const inicio = new Date()
   inicio.setUTCDate(inicio.getUTCDate() - 20)
   const params = new URLSearchParams({
@@ -167,6 +204,7 @@ async function buscarCotacao(symbol: string, token: string): Promise<CotacaoMerc
     return null
   } finally {
     clearTimeout(timeout)
+    signal?.removeEventListener('abort', cancelar)
   }
 }
 
@@ -204,7 +242,7 @@ export function lerCotacoesTesouroCache(
  */
 export async function atualizarCotacoesTesouroMaisRetorno(
   tickers: readonly TituloTesouroCarteira[],
-  options: { token?: string; forceRefresh?: boolean } = {},
+  options: BuscarTesouroMaisRetornoOptions = {},
 ): Promise<ResultadoCotacoes> {
   const token = typeof options.token === 'string' ? options.token.trim() : ''
   const semToken = token.length === 0
@@ -212,13 +250,15 @@ export async function atualizarCotacoesTesouroMaisRetorno(
     return { cotacoes: new Map(), semCotacao: [], semToken, consultouRede: false }
   }
 
+  notificarTitulos(tickers, options.onTicker)
+
   const doCache = options.forceRefresh ? null : titulosDoCache()
   if (!doCache && semToken) {
     const semCotacao = [...new Set(tickers.map(({ ticker }) => ticker))]
     return { cotacoes: new Map(), semCotacao, semToken, consultouRede: false }
   }
 
-  const titulos = doCache ?? (await baixarTitulos(token))
+  const titulos = doCache ?? (await baixarTitulos(token, options.signal))
   const consultouRedeNaLista = doCache === null
   if (!titulos) {
     const semCotacao = [...new Set(tickers.map(({ ticker }) => ticker))]
@@ -231,6 +271,7 @@ export async function atualizarCotacoesTesouroMaisRetorno(
   let consultouRede = consultouRedeNaLista
 
   for (const { ticker } of tickers) {
+    if (options.signal?.aborted) break
     if (cotacoes.has(ticker) || semCotacao.includes(ticker)) continue
     const titulo = casados.get(ticker)
     if (!titulo) {
@@ -247,7 +288,7 @@ export async function atualizarCotacoesTesouroMaisRetorno(
       continue
     }
     consultouRede = true
-    const cotacao = await buscarCotacao(titulo.symbol, token)
+    const cotacao = await buscarCotacao(titulo.symbol, token, options.signal)
     if (!cotacao) {
       semCotacao.push(ticker)
       continue
