@@ -43,14 +43,38 @@ export interface AvisoCotacoes {
 }
 
 /**
+ * `true` quando as integrações de cotação são apenas um **extra opcional**.
+ *
+ * É o caso do banco Google (planilha com `GOOGLEFINANCE`): o preço já é
+ * calculado pelo próprio banco, então — desde que nenhum ativo tenha ficado sem
+ * cotação — a ausência de token não deve virar aviso na tela.
+ */
+function integracaoOpcional(data: DashboardData | null): boolean {
+  if (isModoLocal()) return false
+  for (const cotacao of data?.cotacoes.values() ?? []) {
+    if (cotacao.status === 'indisponivel') return false
+  }
+  return true
+}
+
+/**
  * Traduz o diagnóstico das APIs de cotação em uma mensagem para o usuário.
  *
  * Só faz sentido quando algum ativo de Ação/FII/BDR/ETF/Tesouro estava elegível; nesse
  * caso sempre há uma mensagem — inclusive quando a integração não está
  * configurada ou não devolveu nenhum preço.
+ *
+ * Exceção: quando a carteira está no Google (planilha com `GOOGLEFINANCE`) e
+ * **todos** os ativos já têm preço, a integração é apenas um extra opcional — a
+ * falta de token não vira aviso.
  */
-function descreverAtualizacaoCotacoes(info: DiagnosticoCotacoesApi | null): AvisoCotacoes | null {
+function descreverAtualizacaoCotacoes(
+  info: DiagnosticoCotacoesApi | null,
+  /** `true` quando o banco já fornece todos os preços (integração é opcional). */
+  integracaoEhOpcional: boolean,
+): AvisoCotacoes | null {
   if (!info || info.total === 0) return null
+  if (integracaoEhOpcional && info.semToken) return null
 
   const nomes = info.provedores.length > 0 ? info.provedores.join(' / ') : 'API de cotações'
   // Algumas APIs só cotam o Tesouro em planos pagos: com token e sem preço, avisa.
@@ -99,8 +123,9 @@ export interface UseDashboardResult {
   avisoCotacoes: AvisoCotacoes | null
   /**
    * Relê os dados da API e **atualiza as cotações B3 pelas APIs** (ignorando o
-   * cache local). Quando a integração não está configurada ou não devolve
-   * preço, `avisoCotacoes` traz a mensagem para a UI.
+   * cache local). Quando a integração não devolve preço, `avisoCotacoes` traz a
+   * mensagem para a UI — exceto no banco Google, onde o `GOOGLEFINANCE` já
+   * fornece os preços e a integração é apenas um extra opcional.
    */
   refresh: () => Promise<void>
   /**
@@ -265,7 +290,9 @@ export function useDashboard(): UseDashboardResult {
   const refresh = useCallback(async () => {
     setAvisoCotacoes(null)
     const resultado = await load(true)
-    setAvisoCotacoes(descreverAtualizacaoCotacoes(resultado?.cotacoesApi ?? null))
+    setAvisoCotacoes(
+      descreverAtualizacaoCotacoes(resultado?.cotacoesApi ?? null, integracaoOpcional(resultado)),
+    )
   }, [load])
 
   const atualizarComProgresso = useCallback(async () => {
@@ -281,7 +308,12 @@ export function useDashboard(): UseDashboardResult {
         signal: controller.signal,
         onProgress: setProgressoAtualizacao,
       })
-      setAvisoCotacoes(descreverAtualizacaoCotacoes(resultado?.cotacoesApi ?? null))
+      setAvisoCotacoes(
+        descreverAtualizacaoCotacoes(
+          resultado?.cotacoesApi ?? null,
+          integracaoOpcional(resultado),
+        ),
+      )
     } finally {
       cancelamentoRef.current = null
       setProgressoAtualizacao(null)
