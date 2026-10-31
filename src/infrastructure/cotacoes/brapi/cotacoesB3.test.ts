@@ -162,6 +162,30 @@ describe('atualizarCotacoesBrapi', () => {
     expect(forcado.cotacoes.get('PETR4')).toMatchObject({ preco: 2500, fonte: 'api' })
   })
 
+  it('notifica cada ticker e para as requisições quando o sinal é cancelado', async () => {
+    instalarLocalStorage()
+    const controller = new AbortController()
+    const fetchMock = vi.fn(async () => {
+      controller.abort()
+      return new Response(
+        JSON.stringify({ results: [{ symbol: 'PETR4', regularMarketPrice: 20 }] }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } },
+      )
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const vistos: string[] = []
+    await atualizarCotacoesBrapi(['PETR4', 'VALE3'], {
+      token: 'tk',
+      signal: controller.signal,
+      onTicker: (ticker) => vistos.push(ticker),
+    })
+
+    expect(vistos).toEqual(['PETR4', 'VALE3'])
+    // O cancelamento durante a 1ª requisição impede a consulta dos demais.
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
   it('buscarCotacoesBrapi continua devolvendo apenas os preços', async () => {
     vi.stubGlobal(
       'fetch',

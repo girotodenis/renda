@@ -24,13 +24,23 @@ export const integracaoBrapi: IntegracaoCotacao = {
   comoObter: 'copie o token no painel (conta gratuita).',
   b3: {
     lerCache: lerCotacaoCache,
-    atualizar: (tickers, { tokens, forceRefresh }) =>
-      atualizarCotacoesBrapi(tickers, { token: tokens[BRAPI_ID], forceRefresh }),
+    atualizar: (tickers, { tokens, forceRefresh, aoConsultar, signal }) =>
+      atualizarCotacoesBrapi(tickers, {
+        token: tokens[BRAPI_ID],
+        forceRefresh,
+        onTicker: (ticker) => aoConsultar?.(`ticker ${ticker}`),
+        signal,
+      }),
   },
   tesouro: {
     lerCache: lerCotacoesTesouroCache,
-    atualizar: (titulos, { tokens, forceRefresh }) =>
-      atualizarCotacoesTesouroBrapi(titulos, { token: tokens[BRAPI_ID], forceRefresh }),
+    atualizar: (titulos, { tokens, forceRefresh, aoConsultar, signal }) =>
+      atualizarCotacoesTesouroBrapi(titulos, {
+        token: tokens[BRAPI_ID],
+        forceRefresh,
+        onTicker: (ticker) => aoConsultar?.(`título ${ticker}`),
+        signal,
+      }),
   },
   tickers: { listar: listarTickersBrapi },
   setores: provedorSetoresBrapi,

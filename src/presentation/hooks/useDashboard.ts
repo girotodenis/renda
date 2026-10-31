@@ -5,6 +5,8 @@ import type { DashboardData, DiagnosticoCotacoesApi } from '@/application/dashbo
 import { persistirESincronizarCotacoesApi } from '@/application/cotacoesApi'
 import { jaTemSnapshotDeHoje, registrarSnapshot, upsertHistorico } from '@/application/historico'
 import type { RepositoryContext } from '@/infrastructure/repositories'
+import { isAtualizacaoCancelada } from '@/domain/progresso'
+import type { AoProgredir, ProgressoAtualizacao } from '@/domain/progresso'
 import { isModoLocal } from '@/infrastructure/modoArmazenamento'
 import { describeSheetsError } from '@/infrastructure/sheets/gateway'
 import { useOnlineStatus } from '@/presentation/hooks/useOnlineStatus'
@@ -101,6 +103,16 @@ export interface UseDashboardResult {
    * preço, `avisoCotacoes` traz a mensagem para a UI.
    */
   refresh: () => Promise<void>
+  /**
+   * Atualização explícita de cotações com barra de progresso (botão "Atualizar"):
+   * expõe `progressoAtualizacao` enquanto roda e pode ser interrompida por
+   * `cancelarAtualizacao`.
+   */
+  atualizarComProgresso: () => Promise<void>
+  /** Progresso da atualização em andamento (`null` quando não há nenhuma). */
+  progressoAtualizacao: ProgressoAtualizacao | null
+  /** Interrompe a atualização em andamento (nada é gravado no banco). */
+  cancelarAtualizacao: () => void
   /** Grava um snapshot manual no `Historico` (Seção 2). */
   registrarSnapshotManual: () => Promise<void>
 }
@@ -124,7 +136,10 @@ export function useDashboard(): UseDashboardResult {
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [avisoCotacoes, setAvisoCotacoes] = useState<AvisoCotacoes | null>(null)
+  const [progressoAtualizacao, setProgressoAtualizacao] =
+    useState<ProgressoAtualizacao | null>(null)
   const autoSnapshotRef = useRef(false)
+  const cancelamentoRef = useRef<AbortController | null>(null)
 
   const resolveContext = useCallback(async (): Promise<RepositoryContext | null> => {
     if (!workspace) {
@@ -140,10 +155,24 @@ export function useDashboard(): UseDashboardResult {
   }, [workspace, ensureAccessToken])
 
   const load = useCallback(
-    async (forceRefresh: boolean): Promise<DashboardData | null> => {
+    async (
+      forceRefresh: boolean,
+      extras: { onProgress?: AoProgredir; signal?: AbortSignal } = {},
+    ): Promise<DashboardData | null> => {
       if (forceRefresh) setIsRefreshing(true)
       else setIsLoading(true)
       setError(null)
+
+      // O total de etapas só é conhecido depois de ler a carteira; guardamos o
+      // maior valor recebido para fechar a barra no passo de sincronização.
+      let totalEtapas = 0
+      const reportar: AoProgredir | undefined = extras.onProgress
+        ? (progresso) => {
+            totalEtapas = Math.max(totalEtapas, progresso.total)
+            extras.onProgress?.(progresso)
+          }
+        : undefined
+
       try {
         if (!workspace) {
           setError('Configure uma planilha para visualizar o dashboard.')
@@ -169,14 +198,29 @@ export function useDashboard(): UseDashboardResult {
           }
           return null
         }
-        const resultado = await carregarDashboard(context, { forceRefresh })
+        const resultado = await carregarDashboard(context, {
+          forceRefresh,
+          onProgress: reportar,
+          signal: extras.signal,
+        })
         setData(resultado)
         setIsOffline(false)
         // Persistência best-effort das cotações das APIs usadas como fallback:
         // grava o preço na planilha (mesmo fluxo da marcação manual).
-        void persistirCotacoesApiDoDashboard(context, resultado)
+        reportar?.({
+          etapa: 'Sincronizando com o banco',
+          atual: totalEtapas,
+          total: totalEtapas,
+        })
+        await persistirCotacoesApiDoDashboard(context, resultado)
         return resultado
       } catch (loadError) {
+        // Cancelamento do usuário não é falha: mantém os dados atuais e não
+        // grava nada no banco (a gravação só acontece após a consulta).
+        if (isAtualizacaoCancelada(loadError)) {
+          setNotice('Atualização cancelada.')
+          return null
+        }
         const cache = workspace ? lerDashboardDoCache(workspace.spreadsheetId) : null
         if (cache) {
           setData(cache)
@@ -224,6 +268,30 @@ export function useDashboard(): UseDashboardResult {
     setAvisoCotacoes(descreverAtualizacaoCotacoes(resultado?.cotacoesApi ?? null))
   }, [load])
 
+  const atualizarComProgresso = useCallback(async () => {
+    // Uma atualização por vez: o botão fica desabilitado e a modal aberta.
+    if (cancelamentoRef.current) return
+    const controller = new AbortController()
+    cancelamentoRef.current = controller
+    setAvisoCotacoes(null)
+    setNotice(null)
+    setProgressoAtualizacao({ etapa: 'Iniciando atualização', atual: 0, total: 0 })
+    try {
+      const resultado = await load(true, {
+        signal: controller.signal,
+        onProgress: setProgressoAtualizacao,
+      })
+      setAvisoCotacoes(descreverAtualizacaoCotacoes(resultado?.cotacoesApi ?? null))
+    } finally {
+      cancelamentoRef.current = null
+      setProgressoAtualizacao(null)
+    }
+  }, [load])
+
+  const cancelarAtualizacao = useCallback(() => {
+    cancelamentoRef.current?.abort()
+  }, [])
+
   const registrarSnapshotManual = useCallback(async () => {
     if (!data) return
     setIsSavingSnapshot(true)
@@ -254,6 +322,9 @@ export function useDashboard(): UseDashboardResult {
     notice,
     avisoCotacoes,
     refresh,
+    atualizarComProgresso,
+    progressoAtualizacao,
+    cancelarAtualizacao,
     registrarSnapshotManual,
   }
 }

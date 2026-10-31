@@ -30,6 +30,10 @@ export interface BuscarBrapiOptions {
   token?: string
   /** Ignora o cache local e consulta a API (atualização manual do dashboard). */
   forceRefresh?: boolean
+  /** Notifica o ticker que está sendo processado (barra de progresso). */
+  onTicker?: (ticker: string) => void
+  /** Interrompe a atualização quando o usuário cancela a operação. */
+  signal?: AbortSignal
 }
 
 /** Normaliza o token recebido; vazio quando não configurado. */
@@ -136,6 +140,7 @@ export async function atualizarCotacoesBrapi(
     const normalizado = ticker.trim().toUpperCase()
     if (normalizado.length === 0 || consultados.has(normalizado)) continue
     consultados.add(normalizado)
+    options.onTicker?.(normalizado)
 
     const cache = options.forceRefresh ? null : lerCotacaoCache(normalizado)
     if (cache) cotacoes.set(normalizado, cache)
@@ -153,8 +158,9 @@ export async function atualizarCotacoesBrapi(
   // um ticker por vez. Falhas individuais são registradas (best-effort).
   let consultouRede = false
   for (const ticker of pendentes) {
+    if (options.signal?.aborted) break
     consultouRede = true
-    const cotacao = await buscarCotacao(ticker, token)
+    const cotacao = await buscarCotacao(ticker, token, options.signal)
     if (!cotacao) {
       semCotacao.push(ticker)
       continue
@@ -186,10 +192,13 @@ export async function buscarCotacoesBrapi(
 async function buscarCotacao(
   ticker: string,
   token: string,
+  signal?: AbortSignal,
 ): Promise<CotacaoMercado | null> {
-  if (typeof AbortController !== 'function') return null
+  if (typeof AbortController !== 'function' || signal?.aborted) return null
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  const cancelar = () => controller.abort()
+  signal?.addEventListener('abort', cancelar, { once: true })
   try {
     const url = `${DEFAULT_BRAPI_API_URL}/${encodeURIComponent(ticker)}?token=${encodeURIComponent(token)}`
     const response = await fetch(url, {
@@ -203,5 +212,6 @@ async function buscarCotacao(
     return null
   } finally {
     clearTimeout(timeout)
+    signal?.removeEventListener('abort', cancelar)
   }
 }

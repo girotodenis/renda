@@ -89,13 +89,17 @@ export function extrairTitulosTesouro(payload: unknown): TituloTesouro[] {
 }
 
 /** Baixa todas as páginas da listagem; `null` em qualquer falha. */
-async function baixarTitulos(token: string): Promise<TituloTesouro[] | null> {
+async function baixarTitulos(token: string, signal?: AbortSignal): Promise<TituloTesouro[] | null> {
   if (typeof fetch !== 'function' || typeof AbortController !== 'function') return null
+  if (signal?.aborted) return null
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  const cancelar = () => controller.abort()
+  signal?.addEventListener('abort', cancelar, { once: true })
   try {
     const titulos: TituloTesouro[] = []
     for (let pagina = 1; pagina <= MAX_PAGINAS; pagina += 1) {
+      if (signal?.aborted) return null
       const url =
         `${BRAPI_TREASURY_LIST_URL}?page=${pagina}&limit=${LIMITE_POR_PAGINA}` +
         `&token=${encodeURIComponent(token)}`
@@ -114,6 +118,33 @@ async function baixarTitulos(token: string): Promise<TituloTesouro[] | null> {
     return null
   } finally {
     clearTimeout(timeout)
+    signal?.removeEventListener('abort', cancelar)
+  }
+}
+
+/** Opções da atualização dos preços do Tesouro (Brapi). */
+export interface BuscarTesouroBrapiOptions {
+  /** Token da Brapi.dev (vazio = integração desligada). */
+  token?: string
+  /** Ignora o cache local e consulta a API (atualização manual). */
+  forceRefresh?: boolean
+  /** Notifica o título que está sendo processado (barra de progresso). */
+  onTicker?: (ticker: string) => void
+  /** Interrompe a atualização quando o usuário cancela a operação. */
+  signal?: AbortSignal
+}
+
+/** Avisa cada título uma única vez — base do contador da barra de progresso. */
+function notificarTitulos(
+  tickers: readonly TituloTesouroCarteira[],
+  onTicker?: (ticker: string) => void,
+): void {
+  if (!onTicker) return
+  const vistos = new Set<string>()
+  for (const { ticker } of tickers) {
+    if (vistos.has(ticker)) continue
+    vistos.add(ticker)
+    onTicker(ticker)
   }
 }
 
@@ -153,13 +184,15 @@ export function lerCotacoesTesouroCache(
  */
 export async function atualizarCotacoesTesouroBrapi(
   tickers: readonly TituloTesouroCarteira[],
-  options: { token?: string; forceRefresh?: boolean } = {},
+  options: BuscarTesouroBrapiOptions = {},
 ): Promise<ResultadoCotacoes> {
   const token = typeof options.token === 'string' ? options.token.trim() : ''
   const semToken = token.length === 0
   if (tickers.length === 0) {
     return { cotacoes: new Map(), semCotacao: [], semToken, consultouRede: false }
   }
+
+  notificarTitulos(tickers, options.onTicker)
 
   const cache = options.forceRefresh ? null : titulosDoCache()
   if (cache) return { ...cotarTickers(tickers, cache, 'cache'), semToken, consultouRede: false }
@@ -169,7 +202,7 @@ export async function atualizarCotacoesTesouroBrapi(
     return { cotacoes: new Map(), semCotacao, semToken, consultouRede: false }
   }
 
-  const titulos = await baixarTitulos(token)
+  const titulos = await baixarTitulos(token, options.signal)
   if (!titulos) {
     const semCotacao = [...new Set(tickers.map(({ ticker }) => ticker))]
     return { cotacoes: new Map(), semCotacao, semToken, consultouRede: true }

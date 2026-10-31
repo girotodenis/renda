@@ -31,6 +31,18 @@ const JANELA_DIAS = 20
 
 const CACHE_PREFIX = 'minhaacoes.maisRetorno.v1.'
 
+/** Opções da busca de cotações B3 via Mais Retorno. */
+export interface BuscarMaisRetornoOptions {
+  /** api-key da Mais Retorno (vazio = integração desligada). */
+  token?: string
+  /** Ignora o cache local e consulta a API (atualização manual). */
+  forceRefresh?: boolean
+  /** Notifica o ticker que está sendo processado (barra de progresso). */
+  onTicker?: (ticker: string) => void
+  /** Interrompe a atualização quando o usuário cancela a operação. */
+  signal?: AbortSignal
+}
+
 /** Identifier da API para um ticker da B3 (`PETR4` → `petr4:b3`). */
 export function identificadorB3(ticker: string): string {
   return `${ticker.trim().toLowerCase()}:b3`
@@ -133,10 +145,17 @@ export function urlCotacao(identifier: string, agora = new Date()): string {
 }
 
 /** Busca (best-effort) a cotação de um único ticker. Falhas retornam `null`. */
-async function buscarCotacao(ticker: string, token: string): Promise<CotacaoMercado | null> {
+async function buscarCotacao(
+  ticker: string,
+  token: string,
+  signal?: AbortSignal,
+): Promise<CotacaoMercado | null> {
   if (typeof fetch !== 'function' || typeof AbortController !== 'function') return null
+  if (signal?.aborted) return null
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  const cancelar = () => controller.abort()
+  signal?.addEventListener('abort', cancelar, { once: true })
   try {
     const response = await fetch(urlCotacao(identificadorB3(ticker)), {
       signal: controller.signal,
@@ -148,6 +167,7 @@ async function buscarCotacao(ticker: string, token: string): Promise<CotacaoMerc
     return null
   } finally {
     clearTimeout(timeout)
+    signal?.removeEventListener('abort', cancelar)
   }
 }
 
@@ -158,7 +178,7 @@ async function buscarCotacao(ticker: string, token: string): Promise<CotacaoMerc
  */
 export async function atualizarCotacoesMaisRetorno(
   tickers: readonly string[],
-  options: { token?: string; forceRefresh?: boolean } = {},
+  options: BuscarMaisRetornoOptions = {},
 ): Promise<ResultadoCotacoes> {
   const cotacoes = new Map<string, CotacaoMercado>()
   const semCotacao: string[] = []
@@ -169,6 +189,7 @@ export async function atualizarCotacoesMaisRetorno(
     const normalizado = ticker.trim().toUpperCase()
     if (normalizado.length === 0 || consultados.has(normalizado)) continue
     consultados.add(normalizado)
+    options.onTicker?.(normalizado)
     const cache = options.forceRefresh ? null : lerCotacaoCache(normalizado)
     if (cache) cotacoes.set(normalizado, cache)
     else pendentes.push(normalizado)
@@ -183,8 +204,9 @@ export async function atualizarCotacoesMaisRetorno(
 
   let consultouRede = false
   for (const ticker of pendentes) {
+    if (options.signal?.aborted) break
     consultouRede = true
-    const cotacao = await buscarCotacao(ticker, token)
+    const cotacao = await buscarCotacao(ticker, token, options.signal)
     if (!cotacao) {
       semCotacao.push(ticker)
       continue

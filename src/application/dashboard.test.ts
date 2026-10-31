@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { CategoriaAtivo, OperacaoTipo } from '@/domain/entities'
 import type { Consolidado, Operacao } from '@/domain/entities'
 import { carregarDashboard } from '@/application/dashboard'
+import { AtualizacaoCanceladaError } from '@/domain/progresso'
+import type { ProgressoAtualizacao } from '@/domain/progresso'
 
 const mocks = vi.hoisted(() => ({
   isModoLocal: vi.fn(),
@@ -301,5 +303,51 @@ describe('carregarDashboard — cotações Brapi no modo local', () => {
       status: 'disponivel',
     })
     expect(dashboard.cotacoesApi).toMatchObject({ total: 1, comCotacao: 1, semCotacao: [] })
+  })
+
+  it('reporta o progresso da atualização manual com a etapa e o contador', async () => {
+    mocks.atualizarCotacoesB3.mockImplementation(
+      async (
+        _tickers: readonly string[],
+        opcoes: { aoConsultar?: (descricao: string) => void },
+      ) => {
+        opcoes.aoConsultar?.('ticker PETR4')
+        return {
+          cotacoes: new Map([
+            ['PETR4', { preco: 13000, precoAbertura: null, atualizadoEm: null, fonte: 'api' }],
+          ]),
+          semCotacao: [],
+          semToken: false,
+          consultouRede: true,
+        }
+      },
+    )
+
+    const eventos: ProgressoAtualizacao[] = []
+    await carregarDashboard(
+      { accessToken: 'access-token', spreadsheetId: 'planilha' },
+      { forceRefresh: true, onProgress: (progresso) => eventos.push(progresso) },
+    )
+
+    // Leitura dos dados sem total conhecido (barra indeterminada).
+    expect(eventos[0]).toEqual({ etapa: 'Lendo dados do banco', atual: 0, total: 0 })
+    // Total = leitura + 1 ticker + sincronização.
+    expect(eventos).toContainEqual({ etapa: 'Consultando cotações', atual: 1, total: 3 })
+    expect(eventos).toContainEqual({ etapa: 'Atualizando ticker PETR4', atual: 2, total: 3 })
+  })
+
+  it('interrompe a atualização (sem montar dados) quando o usuário cancela', async () => {
+    const controller = new AbortController()
+    mocks.atualizarCotacoesB3.mockImplementation(async () => {
+      controller.abort()
+      return { cotacoes: new Map(), semCotacao: [], semToken: false, consultouRede: false }
+    })
+
+    await expect(
+      carregarDashboard(
+        { accessToken: 'access-token', spreadsheetId: 'planilha' },
+        { forceRefresh: true, signal: controller.signal },
+      ),
+    ).rejects.toBeInstanceOf(AtualizacaoCanceladaError)
   })
 })
