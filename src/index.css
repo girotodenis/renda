@@ -64,17 +64,20 @@
 /* --- Status (tint leves para fundo escuro) --- */
 [data-tema='propaganda'] .bg-emerald-50 { background-color: rgba(16, 185, 129, 0.12); }
 [data-tema='propaganda'] .bg-amber-50 { background-color: rgba(245, 158, 11, 0.12); }
+[data-tema='propaganda'] .bg-amber-100 { background-color: rgba(245, 158, 11, 0.2); }
 [data-tema='propaganda'] .bg-red-50 { background-color: rgba(239, 68, 68, 0.12); }
 [data-tema='propaganda'] .bg-sky-50 { background-color: rgba(14, 165, 233, 0.12); }
 
 /* --- Texto --- */
 [data-tema='propaganda'] .text-slate-900 { color: #e8eefb; }
+[data-tema='propaganda'] .text-slate-800 { color: #dbe4f5; }
 [data-tema='propaganda'] .text-slate-700 { color: #cbd6ec; }
 [data-tema='propaganda'] .text-slate-600 { color: #b7c6e3; }
 [data-tema='propaganda'] .text-slate-500 { color: #9fb0cf; }
 [data-tema='propaganda'] .text-slate-400 { color: #7e91b5; }
 [data-tema='propaganda'] .text-brand-600 { color: #22c55e; }
 [data-tema='propaganda'] .text-brand-700 { color: #4ade80; }
+[data-tema='propaganda'] .text-emerald-600 { color: #34d399; }
 [data-tema='propaganda'] .text-emerald-700 { color: #4ade80; }
 [data-tema='propaganda'] .text-emerald-800 { color: #4ade80; }
 [data-tema='propaganda'] .text-amber-600 { color: #fbbf24; }
@@ -84,6 +87,7 @@
 [data-tema='propaganda'] .text-red-700 { color: #f87171; }
 [data-tema='propaganda'] .text-red-800 { color: #f87171; }
 [data-tema='propaganda'] .text-sky-700 { color: #7dd3fc; }
+[data-tema='propaganda'] .text-sky-800 { color: #7dd3fc; }
 
 /* --- Bordas --- */
 [data-tema='propaganda'] .border-slate-100 { border-color: rgba(255, 255, 255, 0.06); }
@@ -91,6 +95,11 @@
 [data-tema='propaganda'] .border-slate-200\/70 { border-color: rgba(255, 255, 255, 0.08); }
 [data-tema='propaganda'] .border-slate-300 { border-color: rgba(255, 255, 255, 0.16); }
 [data-tema='propaganda'] .border-brand-100 { border-color: rgba(34, 197, 94, 0.3); }
+[data-tema='propaganda'] .border-brand-400 { border-color: rgba(34, 197, 94, 0.5); }
+[data-tema='propaganda'] .border-brand-500 { border-color: rgba(34, 197, 94, 0.6); }
+[data-tema='propaganda'] .divide-slate-200 > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgba(255, 255, 255, 0.08);
+}
 [data-tema='propaganda'] .border-emerald-200 { border-color: rgba(16, 185, 129, 0.3); }
 [data-tema='propaganda'] .border-amber-200 { border-color: rgba(245, 158, 11, 0.3); }
 [data-tema='propaganda'] .border-red-200 { border-color: rgba(239, 68, 68, 0.3); }
@@ -108,6 +117,9 @@
 
 /* --- Ring/focus --- */
 [data-tema='propaganda'] .ring-brand-500\/30 { --tw-ring-color: rgba(34, 197, 94, 0.3); }
+[data-tema='propaganda'] .ring-brand-100 { --tw-ring-color: rgba(34, 197, 94, 0.35); }
+[data-tema='propaganda'] .focus\:ring-brand-100:focus { --tw-ring-color: rgba(34, 197, 94, 0.35); }
+[data-tema='propaganda'] .focus\:bg-brand-600:focus { background-color: #16a34a; }
 [data-tema='propaganda'] .focus\:border-brand-500:focus { border-color: #22c55e; }
 [data-tema='propaganda'] .focus\:ring-brand-500\/30:focus { --tw-ring-color: rgba(34, 197, 94, 0.3); }
 [data-tema='propaganda'] .focus\:ring-brand-500\/40:focus { --tw-ring-color: rgba(34, 197, 94, 0.4); }
@@ -115,10 +127,46 @@
 
 /* --- Hover (estados mais usados) --- */
 [data-tema='propaganda'] .hover\:bg-slate-100:hover { background-color: #111a2e; }
+[data-tema='propaganda'] .hover\:bg-slate-50:hover { background-color: #101a2f; }
 [data-tema='propaganda'] .hover\:bg-brand-700:hover { background-color: #15803d; }
+[data-tema='propaganda'] .hover\:bg-brand-50:hover { background-color: rgba(34, 197, 94, 0.12); }
+[data-tema='propaganda'] .hover\:bg-red-50:hover { background-color: rgba(239, 68, 68, 0.16); }
 [data-tema='propaganda'] .hover\:bg-white\/70:hover { background-color: rgba(255, 255, 255, 0.08); }
 [data-tema='propaganda'] .hover\:text-slate-900:hover { color: #e8eefb; }
 [data-tema='propaganda'] .hover\:text-slate-700:hover { color: #cbd6ec; }
+[data-tema='propaganda'] .hover\:text-brand-700:hover { color: #4ade80; }
+[data-tema='propaganda'] .hover\:text-red-700:hover { color: #f87171; }
 [data-tema='propaganda'] .hover\:border-brand-300:hover { border-color: rgba(34, 197, 94, 0.4); }
 [data-tema='propaganda'] .hover\:border-brand-400:hover { border-color: rgba(34, 197, 94, 0.5); }
 [data-tema='propaganda'] .hover\:bg-brand-50\/40:hover { background-color: rgba(34, 197, 94, 0.12); }
+
+/* --- Controles desabilitados ---
+ * As variantes `disabled:` do Tailwind (ex.: `disabled:bg-slate-50`) não são
+ * cobertas pelos overrides acima, porque o seletor real é
+ * `.disabled\:bg-slate-50:disabled`. Sem isso, o campo bloqueado ficava com fundo
+ * claro e texto claro (ilegível). Aqui o fundo vira escuro e o texto, um cinza
+ * azulado com contraste >= 7:1 sobre o fundo. */
+[data-tema='propaganda'] .disabled\:bg-slate-50:disabled,
+[data-tema='propaganda'] .disabled\:bg-slate-100:disabled,
+[data-tema='propaganda'] input:disabled:not([type='checkbox']):not([type='radio']),
+[data-tema='propaganda'] select:disabled,
+[data-tema='propaganda'] textarea:disabled {
+  background-color: #131d33;
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #a9bad8;
+  opacity: 1;
+  -webkit-text-fill-color: #a9bad8;
+}
+
+[data-tema='propaganda'] select:disabled option,
+[data-tema='propaganda'] select:disabled optgroup {
+  background-color: #16223c;
+  color: #cbd6ec;
+}
+
+[data-tema='propaganda'] .disabled\:bg-slate-50:disabled::placeholder,
+[data-tema='propaganda'] input:disabled::placeholder,
+[data-tema='propaganda'] textarea:disabled::placeholder {
+  color: #7e91b5;
+  -webkit-text-fill-color: #7e91b5;
+}
