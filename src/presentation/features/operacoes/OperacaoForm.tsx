@@ -4,7 +4,7 @@ import { Controller, useForm } from 'react-hook-form'
 import { Autocomplete } from '@/presentation/components/Autocomplete'
 import { FormField, inputClassName } from '@/presentation/components/FormField'
 import { useSugestoesTicker } from '@/presentation/hooks/useSugestoesTicker'
-import { CATEGORIA_ATIVO_LABELS, isRendaFixa, isTesouroDireto } from '@/domain/categoria'
+import { CATEGORIA_ATIVO_LABELS, isCripto, isRendaFixa, isTesouroDireto } from '@/domain/categoria'
 import type { Operacao } from '@/domain/entities'
 import type { TickerConhecido } from '@/domain/tickers'
 import { CategoriaAtivo, IndexadorRendaFixa, OPERACAO_MOVIMENTO_TIPOS, OperacaoTipo } from '@/domain/entities'
@@ -152,7 +152,13 @@ export function OperacaoForm({
                   options={sugestoesTicker}
                   carregando={carregandoTickers}
                   mensagemVazia={null}
-                  placeholder={isTesouroDireto(categoria) ? 'Ex.: Tesouro Selic 2029' : 'Ex.: PETR4'}
+                  placeholder={
+                    isTesouroDireto(categoria)
+                      ? 'Ex.: Tesouro Selic 2029'
+                      : isCripto(categoria)
+                        ? 'Ex.: BTC'
+                        : 'Ex.: PETR4'
+                  }
                 />
               )}
             />

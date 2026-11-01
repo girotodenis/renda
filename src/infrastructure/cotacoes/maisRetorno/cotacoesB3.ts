@@ -6,6 +6,9 @@ import { clearStorageKeys, readStorageJson, writeStorageJson } from '@/infrastru
  * Cotação de **B3 (Ação/FII/BDR/ETF)** via Mais Retorno
  * (`/quotes/{identifier}`), usada como fallback na cadeia de integrações.
  *
+ * O mesmo endpoint cota **criptoativos** com o identifier `{sigla}:cc`
+ * (ex.: `btc:cc`), atendido por `atualizarCotacoesCriptoMaisRetorno`.
+ *
  * Estratégia:
  * - Endpoint autenticado por `X-Api-Key` (CORS liberado: `allow-origin: *`,
  *   preflight aceita o header `x-api-key`).
@@ -31,7 +34,10 @@ const JANELA_DIAS = 20
 
 const CACHE_PREFIX = 'minhaacoes.maisRetorno.v1.'
 
-/** Opções da busca de cotações B3 via Mais Retorno. */
+/** Prefixo do cache de cripto (separado do cache de B3). */
+const CACHE_PREFIX_CRIPTO = 'minhaacoes.maisRetornoCripto.v1.'
+
+/** Opções da busca de cotações via Mais Retorno. */
 export interface BuscarMaisRetornoOptions {
   /** api-key da Mais Retorno (vazio = integração desligada). */
   token?: string
@@ -46,6 +52,11 @@ export interface BuscarMaisRetornoOptions {
 /** Identifier da API para um ticker da B3 (`PETR4` → `petr4:b3`). */
 export function identificadorB3(ticker: string): string {
   return `${ticker.trim().toLowerCase()}:b3`
+}
+
+/** Identifier da API para uma criptomoeda (`BTC` → `btc:cc`). */
+export function identificadorCripto(ticker: string): string {
+  return `${ticker.trim().toLowerCase()}:cc`
 }
 
 function isRegistro(value: unknown): value is Record<string, unknown> {
@@ -103,28 +114,39 @@ export function extrairCotacao(payload: unknown): CotacaoMercado | null {
   }
 }
 
-function cacheKey(ticker: string): string {
-  return `${CACHE_PREFIX}${ticker.trim().toUpperCase()}`
+function cacheKey(prefix: string, ticker: string): string {
+  return `${prefix}${ticker.trim().toUpperCase()}`
 }
 
-function lerCache(ticker: string): { valor: CotacaoMercado; gravadoEm: number } | null {
-  const registro = readStorageJson<{ cotacao: CotacaoMercado; gravadoEm: number }>(cacheKey(ticker))
+function lerCache(prefix: string, ticker: string): { valor: CotacaoMercado; gravadoEm: number } | null {
+  const registro = readStorageJson<{ cotacao: CotacaoMercado; gravadoEm: number }>(
+    cacheKey(prefix, ticker),
+  )
   if (!registro || typeof registro.gravadoEm !== 'number') return null
   return { valor: registro.cotacao, gravadoEm: registro.gravadoEm }
 }
 
-function gravarCache(ticker: string, cotacao: CotacaoMercado): void {
-  writeStorageJson(cacheKey(ticker), { cotacao, gravadoEm: Date.now() })
+function gravarCache(prefix: string, ticker: string, cotacao: CotacaoMercado): void {
+  writeStorageJson(cacheKey(prefix, ticker), { cotacao, gravadoEm: Date.now() })
 }
 
-/** Remove as cotações B3 do cache local (ex.: após trocar o token). */
+/** Remove as cotações da Mais Retorno do cache local (ex.: após trocar o token). */
 export function clearMaisRetornoCache(): void {
   clearStorageKeys(CACHE_PREFIX)
+  clearStorageKeys(CACHE_PREFIX_CRIPTO)
 }
 
-/** Lê a cotação do cache local, quando ainda válida. */
+/** Lê a cotação de B3 do cache local, quando ainda válida. */
 export function lerCotacaoCache(ticker: string): CotacaoMercado | null {
-  const registro = lerCache(ticker)
+  const registro = lerCache(CACHE_PREFIX, ticker)
+  if (!registro) return null
+  if (Date.now() - registro.gravadoEm > CACHE_TTL_MS) return null
+  return { ...registro.valor, fonte: 'cache' }
+}
+
+/** Lê a cotação de cripto do cache local, quando ainda válida. */
+export function lerCotacaoCriptoCache(ticker: string): CotacaoMercado | null {
+  const registro = lerCache(CACHE_PREFIX_CRIPTO, ticker)
   if (!registro) return null
   if (Date.now() - registro.gravadoEm > CACHE_TTL_MS) return null
   return { ...registro.valor, fonte: 'cache' }
@@ -146,7 +168,7 @@ export function urlCotacao(identifier: string, agora = new Date()): string {
 
 /** Busca (best-effort) a cotação de um único ticker. Falhas retornam `null`. */
 async function buscarCotacao(
-  ticker: string,
+  identificador: string,
   token: string,
   signal?: AbortSignal,
 ): Promise<CotacaoMercado | null> {
@@ -157,7 +179,7 @@ async function buscarCotacao(
   const cancelar = () => controller.abort()
   signal?.addEventListener('abort', cancelar, { once: true })
   try {
-    const response = await fetch(urlCotacao(identificadorB3(ticker)), {
+    const response = await fetch(urlCotacao(identificador), {
       signal: controller.signal,
       headers: { Accept: 'application/json', 'X-Api-Key': token },
     })
@@ -171,14 +193,34 @@ async function buscarCotacao(
   }
 }
 
+/** Configuração de uma série de cotações (B3 ou cripto). */
+interface SerieCotacoes {
+  cachePrefix: string
+  lerCache(ticker: string): CotacaoMercado | null
+  identificador(ticker: string): string
+}
+
+const SERIE_B3: SerieCotacoes = {
+  cachePrefix: CACHE_PREFIX,
+  lerCache: lerCotacaoCache,
+  identificador: identificadorB3,
+}
+
+const SERIE_CRIPTO: SerieCotacoes = {
+  cachePrefix: CACHE_PREFIX_CRIPTO,
+  lerCache: lerCotacaoCriptoCache,
+  identificador: identificadorCripto,
+}
+
 /**
- * Atualiza as cotações B3 dos tickers informados (cache-first, ou direto na
- * API com `forceRefresh`). Nunca lança: devolve o que foi possível obter e **o
- * que faltou**, para a UI avisar o usuário.
+ * Atualiza as cotações de uma série (cache-first, ou direto na API com
+ * `forceRefresh`). Nunca lança: devolve o que foi possível obter e **o que
+ * faltou**, para a UI avisar o usuário.
  */
-export async function atualizarCotacoesMaisRetorno(
+async function atualizarCotacoesSerie(
   tickers: readonly string[],
-  options: BuscarMaisRetornoOptions = {},
+  options: BuscarMaisRetornoOptions,
+  serie: SerieCotacoes,
 ): Promise<ResultadoCotacoes> {
   const cotacoes = new Map<string, CotacaoMercado>()
   const semCotacao: string[] = []
@@ -190,7 +232,7 @@ export async function atualizarCotacoesMaisRetorno(
     if (normalizado.length === 0 || consultados.has(normalizado)) continue
     consultados.add(normalizado)
     options.onTicker?.(normalizado)
-    const cache = options.forceRefresh ? null : lerCotacaoCache(normalizado)
+    const cache = options.forceRefresh ? null : serie.lerCache(normalizado)
     if (cache) cotacoes.set(normalizado, cache)
     else pendentes.push(normalizado)
   }
@@ -206,14 +248,30 @@ export async function atualizarCotacoesMaisRetorno(
   for (const ticker of pendentes) {
     if (options.signal?.aborted) break
     consultouRede = true
-    const cotacao = await buscarCotacao(ticker, token, options.signal)
+    const cotacao = await buscarCotacao(serie.identificador(ticker), token, options.signal)
     if (!cotacao) {
       semCotacao.push(ticker)
       continue
     }
-    gravarCache(ticker, cotacao)
+    gravarCache(serie.cachePrefix, ticker, cotacao)
     cotacoes.set(ticker, cotacao)
   }
 
   return { cotacoes, semCotacao, semToken, consultouRede }
+}
+
+/** Atualiza as cotações **B3** dos tickers informados. */
+export function atualizarCotacoesMaisRetorno(
+  tickers: readonly string[],
+  options: BuscarMaisRetornoOptions = {},
+): Promise<ResultadoCotacoes> {
+  return atualizarCotacoesSerie(tickers, options, SERIE_B3)
+}
+
+/** Atualiza as cotações de **cripto** (`BTC` → `btc:cc`). */
+export function atualizarCotacoesCriptoMaisRetorno(
+  tickers: readonly string[],
+  options: BuscarMaisRetornoOptions = {},
+): Promise<ResultadoCotacoes> {
+  return atualizarCotacoesSerie(tickers, options, SERIE_CRIPTO)
 }

@@ -1,5 +1,6 @@
 import {
   cadeiaCotacoesB3,
+  cadeiaCotacoesCripto,
   cadeiaCotacoesTesouro,
   cadeiaListaTickers,
   cadeiaSetores,
@@ -22,6 +23,7 @@ export const integracoesCotacao: readonly IntegracaoCotacao[] = [
 ]
 
 export const provedorCotacoesB3 = cadeiaCotacoesB3(integracoesCotacao)
+export const provedorCotacoesCripto = cadeiaCotacoesCripto(integracoesCotacao)
 export const provedorCotacoesTesouro = cadeiaCotacoesTesouro(integracoesCotacao)
 export const provedorListaTickers = cadeiaListaTickers(integracoesCotacao)
 export const provedorSetores = cadeiaSetores(integracoesCotacao)

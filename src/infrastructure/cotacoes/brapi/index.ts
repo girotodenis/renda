@@ -5,6 +5,11 @@ import {
   lerCotacaoCache,
 } from '@/infrastructure/cotacoes/brapi/cotacoesB3'
 import {
+  atualizarCotacoesCriptoBrapi,
+  clearBrapiCriptoCache,
+  lerCotacaoCriptoCache,
+} from '@/infrastructure/cotacoes/brapi/cripto'
+import {
   atualizarCotacoesTesouroBrapi,
   clearBrapiTesouroCache,
   lerCotacoesTesouroCache,
@@ -21,6 +26,7 @@ export const integracaoBrapi: IntegracaoCotacao = {
   site: 'https://brapi.dev',
   exigeToken: true,
   dicaTesouroSemCotacao: 'Os preços do Tesouro Direto exigem o plano Pro da Brapi.',
+  dicaCriptoSemCotacao: 'As cotações de cripto da Brapi exigem os planos Startup ou Pro.',
   comoObter: 'copie o token no painel (conta gratuita).',
   b3: {
     lerCache: lerCotacaoCache,
@@ -29,6 +35,16 @@ export const integracaoBrapi: IntegracaoCotacao = {
         token: tokens[BRAPI_ID],
         forceRefresh,
         onTicker: (ticker) => aoConsultar?.(`ticker ${ticker}`),
+        signal,
+      }),
+  },
+  cripto: {
+    lerCache: lerCotacaoCriptoCache,
+    atualizar: (tickers, { tokens, forceRefresh, aoConsultar, signal }) =>
+      atualizarCotacoesCriptoBrapi(tickers, {
+        token: tokens[BRAPI_ID],
+        forceRefresh,
+        onTicker: (ticker) => aoConsultar?.(`cripto ${ticker}`),
         signal,
       }),
   },
@@ -46,6 +62,7 @@ export const integracaoBrapi: IntegracaoCotacao = {
   setores: provedorSetoresBrapi,
   limparCache() {
     clearBrapiCache()
+    clearBrapiCriptoCache()
     clearBrapiTesouroCache()
     clearBrapiSetorCache()
   },

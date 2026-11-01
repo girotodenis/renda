@@ -1,6 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Loader2 } from 'lucide-react'
+import { ArrowRight, Loader2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import type { ChangeEvent } from 'react'
 import { useForm } from 'react-hook-form'
 import { useAuth } from '@/presentation/app/providers/authContext'
 import { Accordion } from '@/presentation/components/Accordion'
@@ -9,6 +10,8 @@ import { FormField, inputClassName } from '@/presentation/components/FormField'
 import { salvarValuation } from '@/application/valuation'
 import { calcularFluxoDescontado } from '@/domain/dcf'
 import type { DcfResult } from '@/domain/dcf'
+import { calcularFluxoCaixaLivre } from '@/domain/fcl'
+import type { FclResult } from '@/domain/fcl'
 import { calcularPrecoGraham } from '@/domain/graham'
 import { limiteDeCompra, oportunidadeDeCompra } from '@/domain/valuation'
 import { formatarCentavos } from '@/presentation/features/dashboard/formatters'
@@ -18,6 +21,7 @@ import type { RepositoryContext } from '@/infrastructure/repositories'
 import type { CategoriaAtivo, Valuation } from '@/domain/entities'
 import {
   dcfFormSchema,
+  fclFormSchema,
   grahamFormSchema,
   valuationFormDefaults,
   valuationFormSchema,
@@ -54,6 +58,13 @@ export function DetalheAtivoValuation({
   const [notice, setNotice] = useState<string | null>(null)
   const [dcfError, setDcfError] = useState<string | null>(null)
   const [dcfResult, setDcfResult] = useState<DcfResult | null>(null)
+  const [fcdAberto, setFcdAberto] = useState(false)
+  const [fclError, setFclError] = useState<string | null>(null)
+  const [fclResult, setFclResult] = useState<FclResult | null>(null)
+  const [fclAplicado, setFclAplicado] = useState(false)
+  const [fclCaixaOperacional, setFclCaixaOperacional] = useState('')
+  const [fclCapexImobilizado, setFclCapexImobilizado] = useState('')
+  const [fclCapexIntangivel, setFclCapexIntangivel] = useState('')
   const [grahamError, setGrahamError] = useState<string | null>(null)
   const [grahamResult, setGrahamResult] = useState<number | null>(null)
 
@@ -91,6 +102,54 @@ export function DetalheAtivoValuation({
     const teto = toCentavos(tetoReais)
     return (precoAtual / teto) * 100
   }, [precoTetoRaw, precoAtual])
+
+  /**
+   * Atualiza um campo do calculador de FCL. O resultado anterior deixa de valer
+   * (evita enviar ao FCD um valor calculado com premissas antigas).
+   */
+  function aoEditarFcl(setter: (valor: string) => void) {
+    return (event: ChangeEvent<HTMLInputElement>) => {
+      setter(event.target.value)
+      setFclResult(null)
+      setFclError(null)
+      setFclAplicado(false)
+    }
+  }
+
+  /** Calcula o FCL (caixa operacional − capex) a partir da DFC. */
+  function handleCalcularFcl() {
+    setFclError(null)
+    setFclAplicado(false)
+
+    const parsed = fclFormSchema.safeParse({
+      caixaOperacional: fclCaixaOperacional,
+      capexImobilizado: fclCapexImobilizado,
+      capexIntangivel: fclCapexIntangivel,
+    })
+
+    if (!parsed.success) {
+      setFclError(parsed.error.issues[0]?.message ?? 'Revise os dados do FCL.')
+      setFclResult(null)
+      return
+    }
+
+    const resultado = calcularFluxoCaixaLivre(parsed.data)
+    if (resultado === null) {
+      setFclError('Informe um caixa operacional positivo e um capex válido (≥ 0).')
+      setFclResult(null)
+      return
+    }
+
+    setFclResult(resultado)
+  }
+
+  /** Envia o FCL calculado para a premissa do FCD e abre o acordeão do FCD. */
+  function handleAplicarFcl() {
+    if (fclResult === null || fclResult.fluxoCaixaLivre <= 0) return
+    setValue('fclAtual', formatMoneyInput(fclResult.fluxoCaixaLivre), { shouldValidate: true })
+    setFcdAberto(true)
+    setFclAplicado(true)
+  }
 
   /**
    * Calcula o preço justo pelo FCD e preenche o campo **Preço Teto** com o
@@ -270,8 +329,128 @@ export function DetalheAtivoValuation({
         </div>
 
         <Accordion
+          titulo="Fluxo de Caixa Livre (FCL)"
+          descricao="Calcule o FCL a partir da DFC e envie o valor para o FCD."
+        >
+          <div className="space-y-4">
+            <p className="text-sm text-slate-600">
+              <strong>
+                FCL = caixa líquido das atividades operacionais − aquisições de imobilizado −
+                aquisições de intangível.
+              </strong>{' '}
+              Use os valores dos últimos 12 meses da Demonstração do Fluxo de Caixa (DFC).
+            </p>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField
+                htmlFor="fcl-caixa-operacional"
+                label="Caixa Operacional (R$)"
+                hint="Caixa líquido das atividades operacionais (12 meses)."
+              >
+                <input
+                  id="fcl-caixa-operacional"
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="Ex.: 15.000.000.000,00"
+                  className={inputClassName}
+                  value={fclCaixaOperacional}
+                  onChange={aoEditarFcl(setFclCaixaOperacional)}
+                />
+              </FormField>
+
+              <FormField
+                htmlFor="fcl-capex-imobilizado"
+                label="Capex — Imobilizado (R$)"
+                hint="Aquisições de imobilizado; deixe vazio para zero."
+              >
+                <input
+                  id="fcl-capex-imobilizado"
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="Ex.: 3.000.000.000,00"
+                  className={inputClassName}
+                  value={fclCapexImobilizado}
+                  onChange={aoEditarFcl(setFclCapexImobilizado)}
+                />
+              </FormField>
+
+              <FormField
+                htmlFor="fcl-capex-intangivel"
+                label="Capex — Intangível (R$)"
+                hint="Aquisições de intangível; deixe vazio para zero."
+              >
+                <input
+                  id="fcl-capex-intangivel"
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="Ex.: 1.000.000.000,00"
+                  className={inputClassName}
+                  value={fclCapexIntangivel}
+                  onChange={aoEditarFcl(setFclCapexIntangivel)}
+                />
+              </FormField>
+            </div>
+
+            {fclError ? <Alert variant="error">{fclError}</Alert> : null}
+
+            {fclResult ? (
+              <div className="flex items-center justify-between gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3">
+                <div className="min-w-0 space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+                    Fluxo de caixa livre (12 meses)
+                  </p>
+                  <p className="text-lg font-semibold tabular-nums text-emerald-700">
+                    {formatarCentavos(fclResult.fluxoCaixaLivre)}
+                  </p>
+                  <p className="text-xs text-slate-600">
+                    Caixa operacional {formatarCentavos(fclResult.caixaOperacional)} − capex{' '}
+                    {formatarCentavos(fclResult.capexTotal)}
+                  </p>
+                  {fclAplicado ? (
+                    <p className="text-xs font-medium text-emerald-700">
+                      FCL aplicado ao campo do FCD.
+                    </p>
+                  ) : fclResult.fluxoCaixaLivre <= 0 ? (
+                    <p className="text-xs text-slate-600">
+                      O FCD exige um FCL positivo; revise o período ou o capex.
+                    </p>
+                  ) : null}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAplicarFcl}
+                  disabled={fclResult.fluxoCaixaLivre <= 0}
+                  aria-label="Usar o FCL calculado no FCD"
+                  title="Usar o FCL calculado no FCD"
+                  className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-emerald-600 text-white transition-colors hover:bg-emerald-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-600 disabled:cursor-not-allowed disabled:bg-slate-300"
+                >
+                  <ArrowRight className="h-4 w-4" aria-hidden />
+                </button>
+              </div>
+            ) : null}
+
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleCalcularFcl}
+                className="inline-flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+              >
+                Calcular FCL
+              </button>
+              {fclResult && fclResult.fluxoCaixaLivre > 0 && !fclAplicado ? (
+                <span className="text-xs text-slate-500">
+                  Use a seta para preencher o FCL do FCD.
+                </span>
+              ) : null}
+            </div>
+          </div>
+        </Accordion>
+
+        <Accordion
           titulo="Fluxo de Caixa Descontado (FCD)"
           descricao="Calcule o preço justo a partir do fluxo de caixa projetado."
+          aberto={fcdAberto}
+          onAbertoChange={setFcdAberto}
         >
           <div className="space-y-4">
             <p className="text-sm text-slate-600">
@@ -311,7 +490,7 @@ export function DetalheAtivoValuation({
               <FormField
                 htmlFor="valuation-fcl"
                 label="FCL Atual (R$)"
-                hint="Fluxo de caixa livre dos últimos 12 meses (em reais)."
+                hint="Fluxo de caixa livre dos últimos 12 meses (em reais). Calcule no acordeão acima se precisar."
                 error={errors.fclAtual?.message}
               >
                 <input

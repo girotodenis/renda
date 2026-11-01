@@ -12,6 +12,7 @@ export const CATEGORIA_ATIVO_LABELS: Record<CategoriaAtivo, string> = {
   [CategoriaAtivo.Fii]: 'FII',
   [CategoriaAtivo.Bdr]: 'BDR',
   [CategoriaAtivo.Etf]: 'ETF',
+  [CategoriaAtivo.Cripto]: 'Cripto',
   [CategoriaAtivo.TesouroDireto]: 'Tesouro Direto',
   [CategoriaAtivo.RendaFixa]: 'Renda Fixa',
 }
@@ -53,14 +54,19 @@ export function isTesouroDireto(categoria: CategoriaAtivo): boolean {
   return categoria === CategoriaAtivo.TesouroDireto
 }
 
+/** `true` para criptoativos (cotação pelas integrações de cripto, sem `GOOGLEFINANCE`). */
+export function isCripto(categoria: CategoriaAtivo): boolean {
+  return categoria === CategoriaAtivo.Cripto
+}
+
 /**
  * `true` para as categorias que aceitam **marcação manual do valor atual**
- * (RF19): Renda Fixa e Tesouro Direto. O valor informado pelo usuário é gravado
- * em `Operacao.valorBrutoAtual` e usado sempre que a integração não retornar
- * cotação — sem ser apagado por falhas de integração.
+ * (RF19): Renda Fixa, Tesouro Direto e Cripto. O valor informado pelo usuário é
+ * gravado em `Operacao.valorBrutoAtual` e usado sempre que a integração não
+ * retornar cotação — sem ser apagado por falhas de integração.
  */
 export function permiteMarcacaoManual(categoria: CategoriaAtivo): boolean {
-  return isRendaFixa(categoria) || isTesouroDireto(categoria)
+  return isRendaFixa(categoria) || isTesouroDireto(categoria) || isCripto(categoria)
 }
 
 /** `true` quando a cotação pode vir do `GOOGLEFINANCE` (Ação, FII, BDR, ETF). */

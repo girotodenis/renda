@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { CategoriaAtivo } from '@/domain/entities'
 import {
   cadeiaCotacoesB3,
+  cadeiaCotacoesCripto,
   cadeiaCotacoesTesouro,
   cadeiaListaTickers,
 } from '@/domain/provedoresCotacao'
@@ -101,6 +102,31 @@ describe('cadeiaCotacoesB3', () => {
       integracao('b', { b3: { atualizar: vi.fn(), lerCache: () => cotacao(300) } }),
     ])
     expect(cadeia.lerCache('PETR4')?.preco).toBe(300)
+  })
+})
+
+describe('cadeiaCotacoesCripto', () => {
+  it('encadeia apenas os provedores com suporte a cripto', async () => {
+    const atualizarCripto = vi.fn().mockResolvedValue(resultado([['BTC', 100]], []))
+    const cadeia = cadeiaCotacoesCripto([
+      integracao('sem-cripto', { b3: { atualizar: vi.fn(), lerCache: () => null } }),
+      integracao('com-cripto', {
+        cripto: { atualizar: atualizarCripto, lerCache: () => null },
+      }),
+    ])
+
+    const total = await cadeia.atualizar(['btc'], opcoes)
+
+    expect(atualizarCripto).toHaveBeenCalledWith(['btc'], opcoes)
+    expect([...total.cotacoes.keys()]).toEqual(['BTC'])
+  })
+
+  it('lê o cache do primeiro provedor de cripto que tiver a cotação', () => {
+    const cadeia = cadeiaCotacoesCripto([
+      integracao('a', { cripto: { atualizar: vi.fn(), lerCache: () => null } }),
+      integracao('b', { cripto: { atualizar: vi.fn(), lerCache: () => cotacao(300) } }),
+    ])
+    expect(cadeia.lerCache('BTC')?.preco).toBe(300)
   })
 })
 

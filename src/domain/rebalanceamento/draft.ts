@@ -14,6 +14,7 @@ export const CATEGORIAS_META: readonly CategoriaAtivo[] = [
   CategoriaAtivo.Bdr,
   CategoriaAtivo.Etf,
   CategoriaAtivo.Fii,
+  CategoriaAtivo.Cripto,
   CategoriaAtivo.TesouroDireto,
   CategoriaAtivo.RendaFixa,
 ]

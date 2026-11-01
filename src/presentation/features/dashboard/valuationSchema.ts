@@ -62,6 +62,21 @@ const fclOpcional = z
     'O fluxo de caixa livre deve ser maior que zero.',
   )
 
+/** Dinheiro opcional (R$) → centavos; vazio = 0; usado no capex do FCL (≥ 0). */
+const capexOpcional = z
+  .string()
+  .optional()
+  .transform((raw, ctx) => {
+    if (raw === undefined || raw.trim().length === 0) return 0
+    const value = parseBRL(raw)
+    if (value === null) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Informe um capex válido.' })
+      return z.NEVER
+    }
+    return toCentavos(value)
+  })
+  .refine((centavos) => centavos >= 0, 'O capex não pode ser negativo.')
+
 /** Dinheiro com sinal opcional (R$) → centavos; pode ser negativo (caixa líquido). */
 const dividaLiquidaOpcional = z.string().optional().transform((raw, ctx) => {
   if (raw === undefined || raw.trim().length === 0) return null
@@ -184,6 +199,18 @@ export const dcfFormSchema = z.object({
     (value): value is number => value !== null,
     'Informe o crescimento na perpetuidade (% a.a.).',
   ),
+})
+
+/** Schema do FCL usado pelo botão **Calcular** (caixa operacional obrigatório). */
+export const fclFormSchema = z.object({
+  caixaOperacional: dinheiroPositivoOpcional(
+    'Informe o caixa líquido das atividades operacionais.',
+  ).refine(
+    (value): value is number => value !== null,
+    'Informe o caixa líquido das atividades operacionais (DFC).',
+  ),
+  capexImobilizado: capexOpcional,
+  capexIntangivel: capexOpcional,
 })
 
 /** Schema do Graham usado pelo botão **Calcular** (LPA e VPA obrigatórios). */

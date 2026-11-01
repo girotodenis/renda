@@ -130,10 +130,10 @@ export async function syncConsolidado(
 }
 
 /**
- * Preços para as classes sem `GOOGLEFINANCE` (RF19): Renda Fixa e Tesouro Direto
- * usam a marcação manual (`Valor Bruto Atual`) e os ativos B3 podem ter preço
- * persistido via API de cotações (fallback do `GOOGLEFINANCE`). Sem preço, o
- * `writeConsolidado` cai no preço médio como fallback (RNF04).
+ * Preços para as classes sem `GOOGLEFINANCE` (RF19): Renda Fixa, Tesouro Direto
+ * e Cripto usam a marcação manual (`Valor Bruto Atual`) e os ativos B3 podem
+ * ter preço persistido via API de cotações (fallback do `GOOGLEFINANCE`). Sem
+ * preço, o `writeConsolidado` cai no preço médio como fallback (RNF04).
  */
 async function precosDaCarteira(
   operacoes: readonly Operacao[],

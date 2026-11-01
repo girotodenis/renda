@@ -102,6 +102,7 @@ describe('agruparAtivosParaTabela (abas Em carteira / Vendidos)', () => {
       CategoriaAtivo.Bdr,
       CategoriaAtivo.Etf,
       CategoriaAtivo.Fii,
+      CategoriaAtivo.Cripto,
       CategoriaAtivo.TesouroDireto,
       CategoriaAtivo.RendaFixa,
     ])
@@ -157,6 +158,7 @@ describe('agruparAtivosParaTabela (abas Em carteira / Vendidos)', () => {
       CategoriaAtivo.Bdr,
       CategoriaAtivo.Etf,
       CategoriaAtivo.Fii,
+      CategoriaAtivo.Cripto,
       CategoriaAtivo.TesouroDireto,
       CategoriaAtivo.RendaFixa,
     ])

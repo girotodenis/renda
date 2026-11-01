@@ -1,10 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  atualizarCotacoesCriptoMaisRetorno,
   atualizarCotacoesMaisRetorno,
   clearMaisRetornoCache,
   extrairCotacao,
   identificadorB3,
+  identificadorCripto,
   lerCotacaoCache,
+  lerCotacaoCriptoCache,
   urlCotacao,
 } from '@/infrastructure/cotacoes/maisRetorno/cotacoesB3'
 
@@ -175,5 +178,52 @@ describe('atualizarCotacoesMaisRetorno', () => {
     await atualizarCotacoesMaisRetorno(['PETR4'], { token: 'mr_abc' })
     clearMaisRetornoCache()
     expect(lerCotacaoCache('PETR4')).toBeNull()
+  })
+})
+
+describe('identificadorCripto', () => {
+  it('monta o identifier `sigla:cc` em minúsculas', () => {
+    expect(identificadorCripto(' BTC ')).toBe('btc:cc')
+  })
+})
+
+describe('atualizarCotacoesCriptoMaisRetorno', () => {
+  const respostaCripto = {
+    market: 'cc',
+    currency: 'BRL',
+    nicename: 'Bitcoin',
+    shortname: 'BTC',
+    quotes: [{ d: '2026-10-28', c: 350000 }],
+  }
+
+  it('consulta /quotes/btc:cc com X-Api-Key e devolve centavos', async () => {
+    const fetchSpy = stubFetch(() => ok(respostaCripto))
+
+    const resultado = await atualizarCotacoesCriptoMaisRetorno(['BTC'], { token: ' mr_abc ' })
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1)
+    const [url, init] = fetchSpy.mock.calls[0]!
+    expect(url).toContain('/quotes/btc%3Acc?')
+    expect((init?.headers as Record<string, string>)['X-Api-Key']).toBe('mr_abc')
+    expect(resultado.cotacoes.get('BTC')).toMatchObject({ preco: 35000000, fonte: 'api' })
+    expect(resultado).toMatchObject({ semCotacao: [], semToken: false, consultouRede: true })
+  })
+
+  it('mantém o cache de cripto separado do cache de B3', async () => {
+    stubFetch(() => ok(respostaCripto))
+
+    await atualizarCotacoesCriptoMaisRetorno(['BTC'], { token: 'mr_abc' })
+
+    expect(lerCotacaoCriptoCache('BTC')).not.toBeNull()
+    expect(lerCotacaoCache('BTC')).toBeNull()
+  })
+
+  it('clearMaisRetornoCache também limpa o cache de cripto', async () => {
+    stubFetch(() => ok(respostaCripto))
+    await atualizarCotacoesCriptoMaisRetorno(['BTC'], { token: 'mr_abc' })
+
+    clearMaisRetornoCache()
+
+    expect(lerCotacaoCriptoCache('BTC')).toBeNull()
   })
 })
