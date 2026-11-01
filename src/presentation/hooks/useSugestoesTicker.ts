@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
-import { isTesouroDireto } from '@/domain/categoria'
+import { isCripto, isTesouroDireto } from '@/domain/categoria'
 import type { CategoriaAtivo } from '@/domain/entities'
 import {
+  CATALOGO_CRIPTO,
   CATALOGO_TESOURO_DIRETO,
   categoriaListadaNaB3,
   montarSugestoesTicker,
@@ -39,9 +40,11 @@ export function useSugestoesTicker(
   const sugestoes = useMemo(() => {
     const externos = isTesouroDireto(categoria)
       ? CATALOGO_TESOURO_DIRETO
-      : remotos?.categoria === categoria
-        ? remotos.tickers
-        : []
+      : isCripto(categoria)
+        ? CATALOGO_CRIPTO
+        : remotos?.categoria === categoria
+          ? remotos.tickers
+          : []
     return montarSugestoesTicker(categoria, conhecidos, externos)
   }, [categoria, conhecidos, remotos])
 

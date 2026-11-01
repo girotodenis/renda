@@ -1,4 +1,4 @@
-import { isTesouroDireto, permiteMarcacaoManual, usaGoogFinance } from '@/domain/categoria'
+import { isCripto, isTesouroDireto, permiteMarcacaoManual, usaGoogFinance } from '@/domain/categoria'
 import type { CategoriaAtivo, Operacao } from '@/domain/entities'
 import { round2 } from '@/domain/money'
 
@@ -11,6 +11,7 @@ import { round2 } from '@/domain/money'
  *
  * Ordem de preferência:
  * - Ação/FII/BDR/ETF: `GOOGLEFINANCE` (planilha) → API de cotações (fallback) → preço médio.
+ * - Cripto: API de cotações → marcação manual → último preço conhecido → preço médio.
  * - Tesouro Direto: API de cotações (preço de resgate) → marcação manual → estimativa → indisponível.
  * - Renda Fixa: marcação manual → estimativa → indisponível.
  */
@@ -149,6 +150,49 @@ export function resolverCotacao(entrada: EntradaCotacao): CotacaoResolvida {
         atualizadoEm,
       }
     }
+  } else if (isCripto(categoria)) {
+    // Cripto: a cotação das integrações tem prioridade sobre a marcação
+    // manual; a abertura (24 h) permite preencher a variação do dia.
+    if (precoValido(precoApi)) {
+      const abertura = precoValido(precoAbertura) ? precoAbertura : null
+      return {
+        ticker,
+        categoria,
+        precoAtual: precoApi,
+        precoAbertura: abertura,
+        variacaoDiaPercent: calcularVariacaoDiaPercent(precoApi, abertura),
+        fonte: 'api',
+        status: 'disponivel',
+        usandoFallback: false,
+        atualizadoEm,
+      }
+    }
+    if (precoValido(precoManual)) {
+      return {
+        ticker,
+        categoria,
+        precoAtual: precoManual,
+        precoAbertura: null,
+        variacaoDiaPercent: null,
+        fonte: 'manual',
+        status: 'manual',
+        usandoFallback: false,
+        atualizadoEm,
+      }
+    }
+    if (precoValido(mercado)) {
+      return {
+        ticker,
+        categoria,
+        precoAtual: mercado,
+        precoAbertura: null,
+        variacaoDiaPercent: null,
+        fonte: 'estimada',
+        status: 'estimada',
+        usandoFallback: false,
+        atualizadoEm,
+      }
+    }
   } else if (permiteMarcacaoManual(categoria)) {
     // Tesouro Direto: o preço de resgate publicado pelo Tesouro (via API)
     // tem prioridade; ele é persistido em `Valor Bruto Atual` e passa a valer
@@ -241,7 +285,8 @@ export function precosDeCotacoes(
 
 /**
  * Extrai a marcação a mercado manual (`Valor Bruto Atual`) mais recente por
- * ticker, a partir das operações de **Renda Fixa** e **Tesouro Direto** (RF19).
+ * ticker, a partir das operações de **Renda Fixa**, **Tesouro Direto** e
+ * **Cripto** (RF19).
  *
  * O valor informado pelo usuário (via modal do ativo ou formulário de operação)
  * é a fonte usada sempre que a integração não retornar cotação — e nunca é

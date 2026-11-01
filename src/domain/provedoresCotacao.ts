@@ -1,8 +1,8 @@
 import type { CategoriaAtivo } from '@/domain/entities'
 
 /**
- * **Portas** das integrações de cotação (Ação/FII/BDR/ETF, Tesouro Direto e
- * lista de tickers para o autocomplete).
+ * **Portas** das integrações de cotação (Ação/FII/BDR/ETF, Cripto, Tesouro
+ * Direto e lista de tickers para o autocomplete).
  *
  * O domínio e a aplicação dependem só destas interfaces; cada API externa
  * (Brapi, ...) é um **adaptador** em `infrastructure/cotacoes/<provedor>`,
@@ -78,12 +78,18 @@ export interface TituloTesouroCarteira {
   vencimento: string | null
 }
 
-/** Cotações de B3 (Ação/FII/BDR/ETF) — fallback do `GOOGLEFINANCE`. */
-export interface ProvedorCotacoesB3 {
+/** Cotações por ticker (B3 ou cripto) — fallback do `GOOGLEFINANCE` e das APIs. */
+interface ProvedorCotacoesPorTicker {
   /** Cotação do cache local ainda válida (modo offline). */
   lerCache(ticker: string): CotacaoMercado | null
   atualizar(tickers: readonly string[], opcoes: OpcoesConsultaCotacoes): Promise<ResultadoCotacoes>
 }
+
+/** Cotações de B3 (Ação/FII/BDR/ETF) — fallback do `GOOGLEFINANCE`. */
+export type ProvedorCotacoesB3 = ProvedorCotacoesPorTicker
+
+/** Cotações de criptoativos — integrações com endpoint próprio de cripto. */
+export type ProvedorCotacoesCripto = ProvedorCotacoesPorTicker
 
 /** Preços de resgate do Tesouro Direto. */
 export interface ProvedorCotacoesTesouro {
@@ -129,9 +135,12 @@ export interface IntegracaoCotacao {
   exigeToken: boolean
   /** Dica exibida quando títulos do Tesouro ficam sem cotação (ex.: plano pago). */
   dicaTesouroSemCotacao?: string
+  /** Dica exibida quando criptoativos ficam sem cotação (ex.: plano pago). */
+  dicaCriptoSemCotacao?: string
   /** Instrução de "como obter o token" exibida em Configurações. */
   comoObter?: string
   b3?: ProvedorCotacoesB3
+  cripto?: ProvedorCotacoesCripto
   tesouro?: ProvedorCotacoesTesouro
   tickers?: ProvedorListaTickers
   setores?: ProvedorSetores
@@ -175,7 +184,23 @@ async function consultarEmCadeia<T>(
 
 /** Compõe os provedores B3 das integrações numa única porta (cadeia de fallback). */
 export function cadeiaCotacoesB3(integracoes: readonly IntegracaoCotacao[]): ProvedorCotacoesB3 {
-  const provedores = integracoes.flatMap((integracao) => (integracao.b3 ? [integracao.b3] : []))
+  return cadeiaCotacoesPorTicker(
+    integracoes.flatMap((integracao) => (integracao.b3 ? [integracao.b3] : [])),
+  )
+}
+
+/** Compõe os provedores de **cripto** das integrações numa única porta (fallback). */
+export function cadeiaCotacoesCripto(
+  integracoes: readonly IntegracaoCotacao[],
+): ProvedorCotacoesCripto {
+  return cadeiaCotacoesPorTicker(
+    integracoes.flatMap((integracao) => (integracao.cripto ? [integracao.cripto] : [])),
+  )
+}
+
+function cadeiaCotacoesPorTicker(
+  provedores: readonly ProvedorCotacoesPorTicker[],
+): ProvedorCotacoesPorTicker {
   return {
     lerCache(ticker) {
       for (const provedor of provedores) {

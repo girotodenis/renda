@@ -11,6 +11,8 @@ const mocks = vi.hoisted(() => ({
   lerCotacaoCacheB3: vi.fn(),
   atualizarCotacoesTesouro: vi.fn(),
   lerCotacoesTesouroCache: vi.fn(),
+  atualizarCotacoesCripto: vi.fn(),
+  lerCotacaoCacheCripto: vi.fn(),
   carregarConfiguracoes: vi.fn(),
   prefetchAllSheets: vi.fn(),
   operacoesReadCache: vi.fn(),
@@ -36,6 +38,7 @@ vi.mock('@/infrastructure/cotacoes/registro', () => ({
       nome: 'Brapi',
       exigeToken: true,
       dicaTesouroSemCotacao: 'Os preços do Tesouro Direto exigem o plano Pro da Brapi.',
+      dicaCriptoSemCotacao: 'As cotações de cripto da Brapi exigem os planos Startup ou Pro.',
     },
   ],
   provedorCotacoesB3: {
@@ -45,6 +48,10 @@ vi.mock('@/infrastructure/cotacoes/registro', () => ({
   provedorCotacoesTesouro: {
     atualizar: mocks.atualizarCotacoesTesouro,
     lerCache: mocks.lerCotacoesTesouroCache,
+  },
+  provedorCotacoesCripto: {
+    atualizar: mocks.atualizarCotacoesCripto,
+    lerCache: mocks.lerCotacaoCacheCripto,
   },
   provedorSetores: {
     atualizar: mocks.atualizarSetores,
@@ -128,6 +135,13 @@ describe('carregarDashboard — cotações Brapi no modo local', () => {
       consultouRede: false,
     })
     mocks.lerCotacoesTesouroCache.mockReturnValue(new Map())
+    mocks.atualizarCotacoesCripto.mockResolvedValue({
+      cotacoes: new Map(),
+      semCotacao: [],
+      semToken: false,
+      consultouRede: false,
+    })
+    mocks.lerCotacaoCacheCripto.mockReturnValue(null)
     mocks.carregarConfiguracoes.mockResolvedValue({ tokens: { brapi: 'token-brapi' } })
     mocks.operacoesReadCache.mockReturnValue([operacao])
     mocks.proventosReadCache.mockReturnValue([])
@@ -217,6 +231,99 @@ describe('carregarDashboard — cotações Brapi no modo local', () => {
       semCotacao: [],
       semToken: false,
       forcado: true,
+    })
+  })
+
+  it('atualiza cripto pela integração e usa a abertura para a variação do dia', async () => {
+    const operacaoCripto: Operacao = {
+      ...operacao,
+      id: 'operacao-btc',
+      categoria: CategoriaAtivo.Cripto,
+      ticker: 'BTC',
+      quantidade: 0.1,
+      precoUnitario: 30000000,
+    }
+    const consolidadoCripto: Consolidado = {
+      ...consolidado,
+      ticker: 'BTC',
+      categoria: CategoriaAtivo.Cripto,
+      quantidadeAtual: 0.1,
+      precoMedio: 30000000,
+      precoAtual: 32000000,
+      totalInvestido: 3000000,
+      valorAtual: 3200000,
+    }
+    mocks.operacoesReadCache.mockReturnValue([operacaoCripto])
+    mocks.consolidadoReadCache.mockReturnValue([consolidadoCripto])
+    mocks.atualizarCotacoesCripto.mockResolvedValue({
+      cotacoes: new Map([
+        ['BTC', { preco: 35000000, precoAbertura: 28000000, atualizadoEm: '2026-10-28', fonte: 'api' }],
+      ]),
+      semCotacao: [],
+      semToken: false,
+      consultouRede: true,
+    })
+
+    const dashboard = await carregarDashboard(
+      { accessToken: 'access-token', spreadsheetId: 'planilha' },
+      { forceRefresh: true },
+    )
+
+    expect(mocks.atualizarCotacoesB3).not.toHaveBeenCalled()
+    expect(mocks.atualizarCotacoesCripto).toHaveBeenCalledWith(['BTC'], {
+      tokens: { brapi: 'token-brapi' },
+      forceRefresh: true,
+    })
+    expect(dashboard.cotacoes.get('BTC')).toMatchObject({
+      precoAtual: 35000000,
+      precoAbertura: 28000000,
+      variacaoDiaPercent: 25,
+      fonte: 'api',
+      status: 'disponivel',
+    })
+    expect(dashboard.cotacoesApi).toMatchObject({
+      total: 1,
+      comCotacao: 1,
+      semCotacao: [],
+      criptoSemCotacao: [],
+      dicasCripto: ['As cotações de cripto da Brapi exigem os planos Startup ou Pro.'],
+    })
+  })
+
+  it('cripto sem cotação cai na marcação manual e é listada no diagnóstico', async () => {
+    const operacaoCripto: Operacao = {
+      ...operacao,
+      id: 'operacao-btc',
+      categoria: CategoriaAtivo.Cripto,
+      ticker: 'BTC',
+      quantidade: 0.1,
+      precoUnitario: 30000000,
+      valorBrutoAtual: 33000000,
+    }
+    mocks.operacoesReadCache.mockReturnValue([operacaoCripto])
+    mocks.consolidadoReadCache.mockReturnValue([])
+    mocks.atualizarCotacoesCripto.mockResolvedValue({
+      cotacoes: new Map(),
+      semCotacao: ['BTC'],
+      semToken: false,
+      consultouRede: true,
+    })
+
+    const dashboard = await carregarDashboard(
+      { accessToken: 'access-token', spreadsheetId: 'planilha' },
+      { forceRefresh: true },
+    )
+
+    expect(dashboard.cotacoes.get('BTC')).toMatchObject({
+      precoAtual: 33000000,
+      fonte: 'manual',
+      status: 'manual',
+    })
+    expect(dashboard.cotacoesApi).toMatchObject({
+      total: 1,
+      comCotacao: 0,
+      semCotacao: ['BTC'],
+      criptoSemCotacao: ['BTC'],
     })
   })
 

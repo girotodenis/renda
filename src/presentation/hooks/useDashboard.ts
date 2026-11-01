@@ -60,9 +60,9 @@ function integracaoOpcional(data: DashboardData | null): boolean {
 /**
  * Traduz o diagnóstico das APIs de cotação em uma mensagem para o usuário.
  *
- * Só faz sentido quando algum ativo de Ação/FII/BDR/ETF/Tesouro estava elegível; nesse
- * caso sempre há uma mensagem — inclusive quando a integração não está
- * configurada ou não devolveu nenhum preço.
+ * Só faz sentido quando algum ativo de Ação/FII/BDR/ETF/Cripto/Tesouro estava
+ * elegível; nesse caso sempre há uma mensagem — inclusive quando a integração
+ * não está configurada ou não devolveu nenhum preço.
  *
  * Exceção: quando a carteira está no Google (planilha com `GOOGLEFINANCE`) e
  * **todos** os ativos já têm preço, a integração é apenas um extra opcional — a
@@ -77,11 +77,12 @@ function descreverAtualizacaoCotacoes(
   if (integracaoEhOpcional && info.semToken) return null
 
   const nomes = info.provedores.length > 0 ? info.provedores.join(' / ') : 'API de cotações'
-  // Algumas APIs só cotam o Tesouro em planos pagos: com token e sem preço, avisa.
-  const dicaTesouro =
-    !info.semToken && (info.tesouroSemCotacao?.length ?? 0) > 0 && info.dicasTesouro.length > 0
-      ? ` ${info.dicasTesouro.join(' ')}`
-      : ''
+  // Algumas APIs só cotam Tesouro/cripto em planos pagos: com token e sem preço, avisa.
+  const dicas = [
+    ...((info.tesouroSemCotacao?.length ?? 0) > 0 ? info.dicasTesouro : []),
+    ...((info.criptoSemCotacao?.length ?? 0) > 0 ? info.dicasCripto : []),
+  ]
+  const dica = !info.semToken && dicas.length > 0 ? ` ${dicas.join(' ')}` : ''
 
   if (info.comCotacao === 0) {
     if (info.semToken) {
@@ -92,14 +93,14 @@ function descreverAtualizacaoCotacoes(
     }
     return {
       tipo: 'error',
-      texto: `Não foi possível atualizar as cotações pela ${nomes} (${info.semCotacao.join(', ')}). Verifique o token em Configurações → Integrações e tente novamente.${dicaTesouro}`,
+      texto: `Não foi possível atualizar as cotações pela ${nomes} (${info.semCotacao.join(', ')}). Verifique o token em Configurações → Integrações e tente novamente.${dica}`,
     }
   }
 
   if (info.semCotacao.length > 0) {
     return {
       tipo: 'info',
-      texto: `Cotações atualizadas pela ${nomes}: ${info.comCotacao} de ${info.total} ativos. Sem cotação: ${info.semCotacao.join(', ')}.${dicaTesouro}`,
+      texto: `Cotações atualizadas pela ${nomes}: ${info.comCotacao} de ${info.total} ativos. Sem cotação: ${info.semCotacao.join(', ')}.${dica}`,
     }
   }
 

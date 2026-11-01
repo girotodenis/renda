@@ -29,6 +29,7 @@ const CATEGORIAS_ORDEM: readonly CategoriaAtivo[] = [
   CategoriaAtivo.Bdr,
   CategoriaAtivo.Etf,
   CategoriaAtivo.Fii,
+  CategoriaAtivo.Cripto,
   CategoriaAtivo.TesouroDireto,
   CategoriaAtivo.RendaFixa,
 ]

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { CategoriaAtivo } from '@/domain/entities'
-import { CATALOGO_TESOURO_DIRETO, montarSugestoesTicker } from '@/domain/tickers'
+import { CATALOGO_CRIPTO, CATALOGO_TESOURO_DIRETO, montarSugestoesTicker } from '@/domain/tickers'
 
 describe('montarSugestoesTicker', () => {
   it('prioriza os tickers da carteira da mesma categoria e remove duplicatas', () => {
@@ -41,5 +41,22 @@ describe('CATALOGO_TESOURO_DIRETO', () => {
       ]),
     )
     expect(new Set(CATALOGO_TESOURO_DIRETO).size).toBe(CATALOGO_TESOURO_DIRETO.length)
+  })
+})
+
+describe('CATALOGO_CRIPTO', () => {
+  it('contém as principais siglas sem duplicatas', () => {
+    expect(CATALOGO_CRIPTO).toEqual(expect.arrayContaining(['BTC', 'ETH', 'USDT', 'SOL']))
+    expect(new Set(CATALOGO_CRIPTO).size).toBe(CATALOGO_CRIPTO.length)
+  })
+
+  it('mantém a grafia da carteira nas sugestões de cripto', () => {
+    const sugestoes = montarSugestoesTicker(
+      CategoriaAtivo.Cripto,
+      [{ ticker: 'btc', categoria: CategoriaAtivo.Cripto }],
+      CATALOGO_CRIPTO,
+    )
+    expect(sugestoes[0]).toBe('btc')
+    expect(sugestoes.filter((ticker) => ticker.toUpperCase() === 'BTC')).toEqual(['btc'])
   })
 })

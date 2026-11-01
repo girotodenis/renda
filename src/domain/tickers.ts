@@ -5,6 +5,7 @@ import { CategoriaAtivo } from '@/domain/entities'
  *
  * Fontes, por categoria:
  * - Ação/FII/BDR/ETF: tickers listados na B3 (API de cotações) + os da carteira.
+ * - Cripto: catálogo local de siglas + os da carteira (a listagem remota exige token).
  * - Tesouro Direto: catálogo local de títulos (não há API pública sem token).
  * - Renda Fixa: apenas os já usados na carteira (produtos não padronizados).
  */
@@ -42,6 +43,49 @@ const TESOURO_DIRETO_FAMILIAS: ReadonlyArray<{ nome: string; anos: readonly numb
 export const CATALOGO_TESOURO_DIRETO: readonly string[] = TESOURO_DIRETO_FAMILIAS.flatMap(
   ({ nome, anos }) => anos.map((ano) => `${nome} ${ano}`),
 )
+
+/**
+ * Siglas de criptomoedas sugeridas no cadastro (símbolo usado pelas APIs de
+ * cotação, ex.: `BTC`). É um catálogo local porque a listagem da Brapi exige
+ * token e plano pago; a carteira do usuário continua sendo a fonte principal.
+ */
+export const CATALOGO_CRIPTO: readonly string[] = [
+  'BTC',
+  'ETH',
+  'USDT',
+  'BNB',
+  'SOL',
+  'XRP',
+  'USDC',
+  'ADA',
+  'DOGE',
+  'AVAX',
+  'DOT',
+  'LINK',
+  'LTC',
+  'BCH',
+  'XLM',
+  'TRX',
+  'SHIB',
+  'UNI',
+  'ATOM',
+  'NEAR',
+  'MATIC',
+  'ICP',
+  'ETC',
+  'XMR',
+  'ARB',
+  'OP',
+  'APT',
+  'FIL',
+  'HBAR',
+  'VET',
+  'ALGO',
+  'AAVE',
+  'MKR',
+  'SUI',
+  'TON',
+]
 
 /** `true` quando a categoria tem lista de tickers na B3 (consultada nas APIs de cotação). */
 export function categoriaListadaNaB3(categoria: CategoriaAtivo): boolean {

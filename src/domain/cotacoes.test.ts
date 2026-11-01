@@ -233,6 +233,55 @@ describe('resolverCotacao — Tesouro Direto (marcação manual)', () => {
   })
 })
 
+describe('resolverCotacao — Cripto (API → marcação manual)', () => {
+  it('prioriza a cotação da API e usa a abertura para a variação do dia', () => {
+    const cotacao = resolverCotacao({
+      ticker: 'BTC',
+      categoria: CategoriaAtivo.Cripto,
+      ...base,
+      precoManual: 300000,
+      precoApi: 350000,
+      precoAbertura: 280000,
+    })
+    expect(cotacao).toMatchObject({
+      precoAtual: 350000,
+      precoAbertura: 280000,
+      fonte: 'api',
+      status: 'disponivel',
+      variacaoDiaPercent: 25,
+    })
+  })
+
+  it('usa a marcação manual quando a API não retorna preço', () => {
+    const cotacao = resolverCotacao({
+      ticker: 'BTC',
+      categoria: CategoriaAtivo.Cripto,
+      ...base,
+      precoManual: 300000,
+    })
+    expect(cotacao).toMatchObject({ precoAtual: 300000, fonte: 'manual', status: 'manual' })
+  })
+
+  it('usa o último preço conhecido como estimativa', () => {
+    const cotacao = resolverCotacao({
+      ticker: 'BTC',
+      categoria: CategoriaAtivo.Cripto,
+      ...base,
+      precoMercado: 320000,
+    })
+    expect(cotacao).toMatchObject({ precoAtual: 320000, fonte: 'estimada' })
+  })
+
+  it('entra em indisponível sem preço de API/manual/estimado', () => {
+    const cotacao = resolverCotacao({
+      ticker: 'BTC',
+      categoria: CategoriaAtivo.Cripto,
+      ...base,
+    })
+    expect(cotacao).toMatchObject({ status: 'indisponivel', usandoFallback: true, precoAtual: 1000 })
+  })
+})
+
 describe('resolverCotacao — Renda Fixa (marcação a mercado/estimativa)', () => {
   it('usa a marcação a mercado editável (Valor Bruto Atual)', () => {
     const cotacao = resolverCotacao({

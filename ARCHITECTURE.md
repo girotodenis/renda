@@ -106,9 +106,10 @@ cabeçalhos, valores tipados) nunca vaze para o domínio:
 - `compression.ts` — compactação gzip nativa (`CompressionStream`) do banco JSON.
 - `cotacoes/` — integrações de cotação (cache-first, nunca lançam). As portas
   ficam em `domain/provedoresCotacao.ts` (`ProvedorCotacoesB3`,
-  `ProvedorCotacoesTesouro`, `ProvedorListaTickers`, `IntegracaoCotacao`). Cada
-  API é um adaptador em `cotacoes/<provedor>/` (`brapi/` e `maisRetorno/`), e
-  `cotacoes/registro.ts` monta a cadeia de fallback em ordem de prioridade.
+  `ProvedorCotacoesCripto`, `ProvedorCotacoesTesouro`, `ProvedorListaTickers`,
+  `IntegracaoCotacao`). Cada API é um adaptador em `cotacoes/<provedor>/`
+  (`brapi/` e `maisRetorno/`), e `cotacoes/registro.ts` monta a cadeia de
+  fallback em ordem de prioridade.
   **Para adicionar uma API:** implemente um `IntegracaoCotacao` com as
   capacidades que ela suporta e inclua-o em `integracoesCotacao`. O token
   (`<id>_token` na aba `Configuracoes`) e o card em Configurações aparecem

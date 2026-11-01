@@ -75,9 +75,10 @@ const CONSOLIDADO_COLUMN_COUNT = SHEET_HEADERS.Consolidado.length
  * `Lucro/Prejuízo (%)`, `% da Carteira`, `Preço Abertura`, `Variação Dia (%)`.
  *
  * Colunas C e D são valores calculados no app; E e K são `GOOGLEFINANCE` (Ação/
- * FII/BDR) — ou valores estáticos quando há cotação persistida (Tesouro/Renda
- * Fixa/fallback da API de cotações); F–J e L são fórmulas que referenciam C/D/E/K e o total
- * da coluna G — preservando o comportamento reativo da planilha.
+ * FII/BDR/ETF) — ou valores estáticos quando há cotação persistida
+ * (Cripto/Tesouro/Renda Fixa/fallback da API de cotações); F–J e L são fórmulas que
+ * referenciam C/D/E/K e o total da coluna G — preservando o comportamento
+ * reativo da planilha.
  */
 export function buildConsolidadoRows(input: ConsolidadoSheetInput): CellValue[][] {
   const { posicoes, precosAtuais, separator } = input

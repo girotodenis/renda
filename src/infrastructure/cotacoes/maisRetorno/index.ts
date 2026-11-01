@@ -1,8 +1,10 @@
 import type { IntegracaoCotacao } from '@/domain/provedoresCotacao'
 import {
+  atualizarCotacoesCriptoMaisRetorno,
   atualizarCotacoesMaisRetorno,
   clearMaisRetornoCache,
   lerCotacaoCache,
+  lerCotacaoCriptoCache,
 } from '@/infrastructure/cotacoes/maisRetorno/cotacoesB3'
 import {
   atualizarCotacoesTesouroMaisRetorno,
@@ -38,6 +40,16 @@ export const integracaoMaisRetorno: IntegracaoCotacao = {
         token: tokens[MAIS_RETORNO_ID],
         forceRefresh,
         onTicker: (ticker) => aoConsultar?.(`ticker ${ticker}`),
+        signal,
+      }),
+  },
+  cripto: {
+    lerCache: lerCotacaoCriptoCache,
+    atualizar: (tickers, { tokens, forceRefresh, aoConsultar, signal }) =>
+      atualizarCotacoesCriptoMaisRetorno(tickers, {
+        token: tokens[MAIS_RETORNO_ID],
+        forceRefresh,
+        onTicker: (ticker) => aoConsultar?.(`cripto ${ticker}`),
         signal,
       }),
   },

@@ -36,8 +36,8 @@ interface ValorManualModalProps {
 }
 
 /**
- * Modal de **marcação manual do valor atual** de um ativo de Renda Fixa ou
- * Tesouro Direto (RF19).
+ * Modal de **marcação manual do valor atual** de um ativo de Renda Fixa,
+ * Tesouro Direto ou Cripto (RF19).
  *
  * O valor informado é gravado na operação mais recente do ticker
  * (`Valor Bruto Atual`) por `definirValorManualTicker` e passa a ser o preço

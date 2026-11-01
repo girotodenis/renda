@@ -1,4 +1,4 @@
-import { isTesouroDireto, usaGoogFinance } from '@/domain/categoria'
+import { isCripto, isTesouroDireto, usaGoogFinance } from '@/domain/categoria'
 import { garantirNaoCancelado } from '@/domain/progresso'
 import type { AoProgredir } from '@/domain/progresso'
 import { aplicarPrecosAtuais, calcularPosicoes, calcularResumo } from '@/domain/consolidado'
@@ -27,10 +27,13 @@ import { registrarSnapshot } from '@/application/historico'
 import {
   integracoesCotacao,
   provedorCotacoesB3,
+  provedorCotacoesCripto,
   provedorCotacoesTesouro,
 } from '@/infrastructure/cotacoes/registro'
 import type {
   CotacaoMercado,
+  ProvedorCotacoesB3,
+  ResultadoCotacoes,
   TituloTesouroCarteira,
   TokensProvedores,
 } from '@/domain/provedoresCotacao'
@@ -46,6 +49,7 @@ import type { Consolidado, Operacao, Provento, Snapshot, Valuation } from '@/dom
  * explícito. O consolidado é recalculado no app (`lib/consolidado`) com as
  * cotações resolvidas por categoria:
  * - Ação/FII/BDR: valor computado do `GOOGLEFINANCE` lido da aba `Consolidado`.
+ * - Cripto: cotação das integrações (Brapi/Mais Retorno) → marcação manual.
  * - Tesouro Direto: preço de resgate via API de cotações → `Valor Bruto Atual` (marcação manual).
  * - Renda Fixa: `Valor Bruto Atual` (marcação manual editável).
  *
@@ -81,7 +85,7 @@ export interface DashboardData {
 
 /** Resumo do que as integrações de cotação conseguiram (ou não) atualizar. */
 export interface DiagnosticoCotacoesApi {
-  /** Tickers elegíveis (Ação/FII/BDR/ETF/Tesouro Direto com posição aberta). */
+  /** Tickers elegíveis (Ação/FII/BDR/ETF/Cripto/Tesouro Direto com posição aberta). */
   total: number
   /** Quantos desses têm cotação disponível nas APIs. */
   comCotacao: number
@@ -89,12 +93,16 @@ export interface DiagnosticoCotacoesApi {
   semCotacao: string[]
   /** Subconjunto de `semCotacao` com títulos do Tesouro Direto. */
   tesouroSemCotacao?: string[]
+  /** Subconjunto de `semCotacao` com criptoativos. */
+  criptoSemCotacao?: string[]
   /** `true` quando nenhuma integração que exige token está configurada. */
   semToken: boolean
   /** Nomes das integrações de cotação ativas, em ordem de prioridade (`['Brapi']`). */
   provedores: string[]
   /** Dicas das integrações para títulos do Tesouro sem cotação (ex.: plano pago). */
   dicasTesouro: string[]
+  /** Dicas das integrações para criptoativos sem cotação (ex.: plano pago). */
+  dicasCripto: string[]
   /** `true` quando a consulta ignorou o cache (atualização manual). */
   forcado: boolean
 }
@@ -262,7 +270,11 @@ function montarDashboard(consulta: MontarConsulta): DashboardData {
   if (modoLocal) {
     for (const posicao of posicoes) {
       const preco = precoConsolidado.get(posicao.ticker)
-      if (preco !== undefined && usaGoogFinance(posicao.categoria)) precoApi.set(posicao.ticker, preco)
+      if (preco === undefined) continue
+      if (usaGoogFinance(posicao.categoria)) precoApi.set(posicao.ticker, preco)
+      // Cripto não tem `GOOGLEFINANCE`: o valor estático do `Consolidado` é o
+      // último preço conhecido e entra como estimativa.
+      else if (isCripto(posicao.categoria)) precoMercado.set(posicao.ticker, preco)
     }
   }
   for (const [ticker, preco] of cotacoesApi) precoApi.set(ticker, preco)
@@ -448,6 +460,22 @@ function tickersB3(
     .map((posicao) => posicao.ticker)
 }
 
+/** Posições de cripto abertas sem preço persistido (ou todas no modo local). */
+function tickersCripto(
+  posicoes: readonly PosicaoConsolidada[],
+  precoPlanilha: ReadonlyMap<string, number>,
+  atualizarMesmoComPreco: boolean,
+): string[] {
+  return posicoes
+    .filter(
+      (posicao) =>
+        isCripto(posicao.categoria) &&
+        posicao.quantidadeAtual > 0 &&
+        (atualizarMesmoComPreco || !precoPlanilha.has(posicao.ticker)),
+    )
+    .map((posicao) => posicao.ticker)
+}
+
 /**
  * Títulos do Tesouro Direto com posição aberta, com o vencimento registrado
  * nas operações (refina o casamento quando o ticker traz só o ano).
@@ -490,32 +518,37 @@ function cotacoesApiDoCache(
   atualizarMesmoComPreco: boolean,
 ): { precos: Map<string, number>; aberturas: Map<string, number> } {
   const posicoes = calcularPosicoes(operacoes)
-  const tickers = tickersB3(
-    posicoes,
-    precosDoConsolidado(linhasConsolidado, atualizarMesmoComPreco),
-    atualizarMesmoComPreco,
-  )
+  const precosConsolidado = precosDoConsolidado(linhasConsolidado, atualizarMesmoComPreco)
+  const tickers = tickersB3(posicoes, precosConsolidado, atualizarMesmoComPreco)
+  const cripto = tickersCripto(posicoes, precosConsolidado, atualizarMesmoComPreco)
   const precos = new Map<string, number>()
   const aberturas = new Map<string, number>()
-  for (const ticker of tickers) {
-    const cache = provedorCotacoesB3.lerCache(ticker)
-    if (!cache) continue
-    precos.set(ticker, cache.preco)
-    if (cache.precoAbertura !== null) aberturas.set(ticker, cache.precoAbertura)
+  const acumularCache = (
+    provedor: ProvedorCotacoesB3,
+    tickersParaCache: readonly string[],
+  ) => {
+    for (const ticker of tickersParaCache) {
+      const cache = provedor.lerCache(ticker)
+      if (!cache) continue
+      precos.set(ticker, cache.preco)
+      if (cache.precoAbertura !== null) aberturas.set(ticker, cache.precoAbertura)
+    }
   }
+  acumularCache(provedorCotacoesB3, tickers)
+  acumularCache(provedorCotacoesCripto, cripto)
   acumularCotacoes(provedorCotacoesTesouro.lerCache(tickersTesouro(operacoes, posicoes)), precos, aberturas)
   return { precos, aberturas }
 }
 
 /**
- * Obtém cotações das APIs (centavos, cadeia de integrações) para posições de Ação/FII/BDR/ETF e
- * Tesouro Direto.
+ * Obtém cotações das APIs (centavos, cadeia de integrações) para posições de
+ * Ação/FII/BDR/ETF, Cripto e Tesouro Direto.
  *
- * B3: no modo local e na atualização explícita (`forceRefresh`), consulta
- * **todas** as posições abertas — o `Consolidado` pode conter preços estáticos
- * (modo local e banco JSON, sem `GOOGLEFINANCE`). Fora isso, apenas as posições
- * sem preço na planilha. Tesouro Direto: sempre todas as posições abertas
- * (cache-first). No modo offline usa somente o cache local (RNF08).
+ * B3/Cripto: no modo local e na atualização explícita (`forceRefresh`),
+ * consulta **todas** as posições abertas — o `Consolidado` pode conter preços
+ * estáticos (modo local e banco JSON, sem `GOOGLEFINANCE`). Fora isso, apenas
+ * as posições sem preço na planilha. Tesouro Direto: sempre todas as posições
+ * abertas (cache-first). No modo offline usa somente o cache local (RNF08).
  */
 async function resolverCotacoesApi(
   operacoes: readonly Operacao[],
@@ -527,13 +560,11 @@ async function resolverCotacoesApi(
   consulta: ConsultaCotacoes = {},
 ): Promise<ResolucaoApi> {
   const posicoes = calcularPosicoes(operacoes)
-  const tickers = tickersB3(
-    posicoes,
-    precosDoConsolidado(linhasConsolidado, atualizarMesmoComPreco),
-    atualizarMesmoComPreco,
-  )
+  const precosConsolidado = precosDoConsolidado(linhasConsolidado, atualizarMesmoComPreco)
+  const tickers = tickersB3(posicoes, precosConsolidado, atualizarMesmoComPreco)
+  const tickersDeCripto = tickersCripto(posicoes, precosConsolidado, atualizarMesmoComPreco)
   const titulos = tickersTesouro(operacoes, posicoes)
-  const total = tickers.length + titulos.length
+  const total = tickers.length + tickersDeCripto.length + titulos.length
   consulta.onTotal?.(total)
   if (total === 0) {
     return { precos: new Map(), aberturas: new Map(), diagnostico: null }
@@ -541,7 +572,7 @@ async function resolverCotacoesApi(
 
   if (offline) {
     const cache = cotacoesApiDoCache(operacoes, linhasConsolidado, atualizarMesmoComPreco)
-    const todos = [...tickers, ...titulos.map(({ ticker }) => ticker)]
+    const todos = [...tickers, ...tickersDeCripto, ...titulos.map(({ ticker }) => ticker)]
     return {
       ...cache,
       diagnostico: {
@@ -551,26 +582,36 @@ async function resolverCotacoesApi(
         tesouroSemCotacao: titulos
           .map(({ ticker }) => ticker)
           .filter((ticker) => !cache.precos.has(ticker)),
+        criptoSemCotacao: tickersDeCripto.filter((ticker) => !cache.precos.has(ticker)),
         ...metadadosIntegracoes(tokens),
         forcado: false,
       },
     }
   }
 
-  const semB3 = { cotacoes: new Map<string, CotacaoMercado>(), semCotacao: [], semToken: false }
+  const semResultado: ResultadoCotacoes = {
+    cotacoes: new Map<string, CotacaoMercado>(),
+    semCotacao: [],
+    semToken: false,
+    consultouRede: false,
+  }
   const opcoes = {
     tokens,
     forceRefresh,
     aoConsultar: consulta.aoConsultar,
     signal: consulta.signal,
   }
-  const [b3, tesouro] = await Promise.all([
-    tickers.length > 0 ? provedorCotacoesB3.atualizar(tickers, opcoes) : semB3,
+  const [b3, cripto, tesouro] = await Promise.all([
+    tickers.length > 0 ? provedorCotacoesB3.atualizar(tickers, opcoes) : semResultado,
+    tickersDeCripto.length > 0
+      ? provedorCotacoesCripto.atualizar(tickersDeCripto, opcoes)
+      : semResultado,
     provedorCotacoesTesouro.atualizar(titulos, opcoes),
   ])
   const precos = new Map<string, number>()
   const aberturas = new Map<string, number>()
   acumularCotacoes(b3.cotacoes, precos, aberturas)
+  acumularCotacoes(cripto.cotacoes, precos, aberturas)
   acumularCotacoes(tesouro.cotacoes, precos, aberturas)
 
   return {
@@ -579,10 +620,11 @@ async function resolverCotacoesApi(
     diagnostico: {
       total,
       comCotacao: precos.size,
-      semCotacao: [...b3.semCotacao, ...tesouro.semCotacao],
+      semCotacao: [...b3.semCotacao, ...cripto.semCotacao, ...tesouro.semCotacao],
       tesouroSemCotacao: tesouro.semCotacao,
+      criptoSemCotacao: cripto.semCotacao,
       ...metadadosIntegracoes(tokens),
-      semToken: b3.semToken || tesouro.semToken,
+      semToken: b3.semToken || cripto.semToken || tesouro.semToken,
       forcado: forceRefresh,
     },
   }
@@ -591,12 +633,15 @@ async function resolverCotacoesApi(
 /** Nomes, dicas e estado dos tokens das integrações (para o diagnóstico). */
 function metadadosIntegracoes(
   tokens: TokensProvedores,
-): Pick<DiagnosticoCotacoesApi, 'provedores' | 'dicasTesouro' | 'semToken'> {
+): Pick<DiagnosticoCotacoesApi, 'provedores' | 'dicasTesouro' | 'dicasCripto' | 'semToken'> {
   const exigemToken = integracoesCotacao.filter((integracao) => integracao.exigeToken)
   return {
     provedores: integracoesCotacao.map((integracao) => integracao.nome),
     dicasTesouro: integracoesCotacao.flatMap((integracao) =>
       integracao.dicaTesouroSemCotacao ? [integracao.dicaTesouroSemCotacao] : [],
+    ),
+    dicasCripto: integracoesCotacao.flatMap((integracao) =>
+      integracao.dicaCriptoSemCotacao ? [integracao.dicaCriptoSemCotacao] : [],
     ),
     semToken:
       exigemToken.length > 0 &&
