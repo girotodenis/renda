@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Minhas Ações é um aplicativo web (PWA) gratuito para acompanhar sua carteira de investimentos da B3 usando sua própria planilha do Google Sheets. Saiba quais dados do Google o app acessa e por quê." />
+  <meta name="google-site-verification" content="Xvi4z-VtqEzi1cqZX8edum_vtV38ZFTEVG4LF88SoVQ" />
+  <link rel="canonical" href="https://6271798ma.com.br/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Minhas Ações" />
+  <meta property="og:title" content="Minhas Ações — aplicativo de controle de carteira de investimentos" />
+  <meta property="og:description" content="Aplicativo web gratuito que usa sua planilha do Google Sheets como banco de dados para acompanhar sua carteira de investimentos." />
+  <meta property="og:url" content="https://6271798ma.com.br/" />
+  <title>Minhas Ações — aplicativo de controle de carteira de investimentos</title>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Minhas Ações",
+    "applicationCategory": "FinanceApplication",
+    "operatingSystem": "Web (navegador), Android, iOS, Windows, macOS, Linux",
+    "url": "https://6271798ma.com.br/renda/",
+    "description": "Aplicativo web (PWA) gratuito para acompanhar a carteira de investimentos da B3, usando a planilha do Google Sheets do próprio usuário como banco de dados.",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "BRL" },
+    "author": { "@type": "Person", "name": "Denis Giroto" }
+  }
+  </script>
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-5P3Z253FSG"></script>
+<script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+
+    gtag('config', 'G-5P3Z253FSG');
+</script>
+  <style>
+    :root {
+      --bg: #0b1220;
+      --bg-soft: #111a2e;
+      --card: #16223c;
+      --accent: #22c55e;
+      --accent-2: #16a34a;
+      --gold: #fbbf24;
+      --text: #e8eefb;
+      --muted: #9fb0cf;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+      background:
+        radial-gradient(1200px 600px at 80% -10%, rgba(34, 197, 94, .18), transparent 60%),
+        radial-gradient(900px 500px at -10% 20%, rgba(59, 130, 246, .12), transparent 60%),
+        var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    /* ---------- Top bar ---------- */
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 14px 28px;
+      background: rgba(11, 18, 32, .75);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(255, 255, 255, .06);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 800;
+      font-size: 1.15rem;
+      letter-spacing: .3px;
+    }
+
+    .brand .logo {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      font-size: 1.1rem;
+      box-shadow: 0 4px 18px rgba(34, 197, 94, .35);
+    }
+
+    .cta-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: #06210f;
+      font-weight: 800;
+      font-size: 1rem;
+      padding: 12px 26px;
+      border-radius: 999px;
+      text-decoration: none;
+      box-shadow: 0 6px 24px rgba(34, 197, 94, .4);
+      transition: transform .15s ease, box-shadow .15s ease;
+      animation: pulse 2.4s infinite;
+    }
+
+    .cta-btn:hover {
+      transform: translateY(-2px) scale(1.03);
+      box-shadow: 0 10px 32px rgba(34, 197, 94, .55);
+    }
+
+    @keyframes pulse {
+      0%, 100% { box-shadow: 0 6px 24px rgba(34, 197, 94, .4); }
+      50% { box-shadow: 0 6px 36px rgba(34, 197, 94, .65); }
+    }
+
+    /* ---------- Hero ---------- */
+    .hero {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 90px 28px 60px;
+      text-align: center;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 6px 16px;
+      border-radius: 999px;
+      background: rgba(34, 197, 94, .12);
+      border: 1px solid rgba(34, 197, 94, .35);
+      color: var(--accent);
+      font-weight: 700;
+      font-size: .85rem;
+      margin-bottom: 24px;
+    }
+
+    .hero h1 {
+      font-size: clamp(2.2rem, 5.5vw, 3.8rem);
+      font-weight: 900;
+      line-height: 1.15;
+      letter-spacing: -1px;
+    }
+
+    .hero h1 span {
+      background: linear-gradient(90deg, var(--accent), var(--gold));
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .hero p {
+      max-width: 720px;
+      margin: 22px auto 36px;
+      font-size: 1.15rem;
+      color: var(--muted);
+    }
+
+    .hero .cta-btn { font-size: 1.1rem; padding: 16px 38px; }
+
+    .trust {
+      margin-top: 18px;
+      font-size: .9rem;
+      color: var(--muted);
+    }
+
+    /* ---------- Features ---------- */
+    .features {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 40px 28px 90px;
+    }
+
+    .features h2 {
+      text-align: center;
+      font-size: clamp(1.6rem, 3.5vw, 2.4rem);
+      font-weight: 800;
+      margin-bottom: 8px;
+    }
+
+    .features .subtitle {
+      text-align: center;
+      color: var(--muted);
+      margin-bottom: 48px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 22px;
+    }
+
+    .card {
+      background: linear-gradient(160deg, var(--card), var(--bg-soft));
+      border: 1px solid rgba(255, 255, 255, .07);
+      border-radius: 18px;
+      padding: 28px;
+      transition: transform .2s ease, border-color .2s ease;
+    }
+
+    .card:hover {
+      transform: translateY(-6px);
+      border-color: rgba(34, 197, 94, .4);
+    }
+
+    .card .icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      font-size: 1.5rem;
+      background: rgba(34, 197, 94, .12);
+      margin-bottom: 16px;
+    }
+
+    .card h3 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+
+    .card p { color: var(--muted); font-size: .95rem; }
+
+    /* ---------- Privacy strip ---------- */
+    .privacy {
+      max-width: 1100px;
+      margin: 0 auto 90px;
+      padding: 40px 28px;
+    }
+
+    .privacy-box {
+      display: flex;
+      gap: 20px;
+      align-items: center;
+      background: linear-gradient(135deg, rgba(34, 197, 94, .1), rgba(251, 191, 36, .06));
+      border: 1px solid rgba(34, 197, 94, .3);
+      border-radius: 20px;
+      padding: 30px 34px;
+    }
+
+    .privacy-box .lock { font-size: 2.6rem; }
+    .privacy-box h3 { font-size: 1.25rem; font-weight: 800; margin-bottom: 6px; }
+    .privacy-box p { color: var(--muted); }
+
+    /* ---------- Final CTA ---------- */
+    .final-cta {
+      text-align: center;
+      padding: 40px 28px 100px;
+    }
+
+    .final-cta h2 {
+      font-size: clamp(1.8rem, 4vw, 2.6rem);
+      font-weight: 900;
+      margin-bottom: 12px;
+    }
+
+    .final-cta p { color: var(--muted); margin-bottom: 30px; }
+
+    footer {
+      text-align: center;
+      padding: 28px;
+      color: var(--muted);
+      font-size: .85rem;
+      border-top: 1px solid rgba(255, 255, 255, .06);
+    }
+
+    /* ---------- Navegação / links secundários ---------- */
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .nav-links a.plain {
+      color: var(--muted);
+      text-decoration: none;
+      font-weight: 600;
+      font-size: .92rem;
+      white-space: nowrap;
+    }
+
+    .nav-links a.plain:hover,
+    .nav-links a.plain:focus-visible { color: var(--text); text-decoration: underline; }
+
+    /* ---------- Seções de conteúdo ---------- */
+    .section-narrow {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 10px 28px 70px;
+    }
+
+    .section-narrow h2 {
+      font-size: clamp(1.5rem, 3.2vw, 2.1rem);
+      font-weight: 800;
+      margin-bottom: 14px;
+      text-align: left;
+    }
+
+    .section-narrow h3 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin: 26px 0 8px;
+    }
+
+    .section-narrow p { color: var(--muted); margin-bottom: 14px; }
+    .section-narrow p:last-child { margin-bottom: 0; }
+    .section-narrow a { color: var(--accent); }
+    .section-narrow ul, .section-narrow ol { color: var(--muted); margin: 0 0 14px 22px; }
+    .section-narrow li { margin-bottom: 8px; }
+    .section-narrow strong { color: var(--text); }
+
+    /* ---------- Tabela de dados do Google ---------- */
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid rgba(255, 255, 255, .08);
+      border-radius: 16px;
+      margin: 18px 0 10px;
+    }
+
+    table.data {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .92rem;
+      min-width: 640px;
+    }
+
+    table.data th,
+    table.data td {
+      text-align: left;
+      padding: 14px 16px;
+      vertical-align: top;
+      border-bottom: 1px solid rgba(255, 255, 255, .07);
+    }
+
+    table.data thead th {
+      background: rgba(34, 197, 94, .1);
+      color: var(--text);
+      font-size: .82rem;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+    }
+
+    table.data td { color: var(--muted); }
+    table.data td:first-child { color: var(--text); font-weight: 600; }
+    table.data tbody tr:last-child td { border-bottom: none; }
+    table.data code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: .82rem;
+      color: var(--gold);
+      word-break: break-all;
+    }
+
+    /* ---------- Avisos ---------- */
+    .note {
+      border-left: 4px solid var(--accent);
+      background: rgba(34, 197, 94, .07);
+      border-radius: 0 12px 12px 0;
+      padding: 16px 20px;
+      font-size: .92rem;
+      color: var(--muted);
+      margin: 20px 0;
+    }
+
+    .note strong { color: var(--text); }
+
+    /* ---------- Rodapé ---------- */
+    footer .foot-links {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 18px;
+      margin-bottom: 14px;
+    }
+
+    footer .foot-links a {
+      color: var(--text);
+      text-decoration: none;
+      font-weight: 600;
+      font-size: .9rem;
+    }
+
+    footer .foot-links a:hover { color: var(--accent); text-decoration: underline; }
+    footer p { margin: 6px 0; }
+    footer .disclaimer { max-width: 780px; margin: 14px auto 0; font-size: .78rem; line-height: 1.55; }
+
+    @media (max-width: 600px) {
+      .topbar { padding: 12px 16px; }
+      .cta-btn { padding: 10px 18px; font-size: .9rem; }
+      .privacy-box { flex-direction: column; text-align: center; }
+      .nav-links { gap: 12px; }
+      .nav-links a.plain { font-size: .82rem; }
+      .nav-links a.plain.hide-sm { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Barra superior com botão de destaque -->
+  <nav class="topbar">
+    <div class="brand">
+      <div class="logo" aria-hidden="true">📈</div>
+      <span>Minhas Ações</span>
+    </div>
+    <div class="nav-links">
+      <a class="plain hide-sm" href="#sobre">Sobre o app</a>
+      <a class="plain hide-sm" href="#dados-google">Dados do Google</a>
+      <a class="plain" href="https://6271798ma.com.br/privacy.html">Privacidade</a>
+      <a class="cta-btn" href="https://6271798ma.com.br/renda/" rel="noopener">
+        🚀 Abrir o app
+      </a>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <header class="hero">
+    <div class="badge">Aplicativo web gratuito • Código aberto no navegador • Seus dados ficam na sua conta Google</div>
+    <h1>Minhas Ações: controle sua carteira de investimentos <span>sem abrir mão da sua privacidade</span></h1>
+    <p>
+      <strong>Minhas Ações</strong> é um aplicativo web (PWA) para investidores pessoa física que
+      querem acompanhar a própria carteira de ações, FIIs e outros ativos da B3. Ele usa a
+      <strong>sua planilha do Google Sheets</strong> como banco de dados: você entra com sua Conta
+      Google, autoriza o acesso à planilha que <em>você</em> escolher e o app calcula preço médio,
+      rentabilidade, dividendos e evolução patrimonial direto do navegador —
+      instalável como app e com funcionamento <strong>offline</strong>.
+    </p>
+    <a class="cta-btn" href="https://6271798ma.com.br/renda/" rel="noopener">
+      📊 Começar agora — é grátis
+    </a>
+    <p class="trust">Sem cadastro extra. Basta sua Conta Google. Nenhum dado é enviado a servidores do desenvolvedor.</p>
+  </header>
+
+  <!-- Sobre o aplicativo -->
+  <section class="section-narrow" id="sobre">
+    <h2>Sobre o aplicativo</h2>
+    <p>
+      O <strong>Minhas Ações</strong> é um aplicativo da web de uso pessoal, desenvolvido de forma
+      independente por <strong>Denis Giroto</strong>, que ajuda você a registrar e acompanhar
+      operações de compra e venda, proventos (dividendos e JCP), eventos corporativos (splits,
+      grupamentos e bonificações) e metas de alocação da sua carteira.
+    </p>
+    <p>
+      Diferente de outros aplicativos de investimentos, ele <strong>não possui servidor próprio e
+      não mantém banco de dados em nuvem do desenvolvedor</strong>. Toda a informação financeira
+      fica gravada na planilha do Google Sheets que pertence a você, na sua própria Conta Google.
+      O app funciona como uma camada de cálculo e visualização sobre essa planilha.
+    </p>
+    <p>
+      O acesso à página do aplicativo é feito em
+      <a href="https://6271798ma.com.br/renda/" rel="noopener">6271798ma.com.br/renda/</a>.
+    </p>
+
+    <h3>Como funciona</h3>
+    <ol>
+      <li><strong>Entre com sua Conta Google</strong> e autorize o app a acessar apenas as planilhas que você indicar.</li>
+      <li><strong>Escolha ou crie sua planilha</strong> — é nela que operações, proventos e configurações ficam salvos.</li>
+      <li><strong>Acompanhe seus números</strong> no dashboard: preço médio, lucro/prejuízo, alocação por ativo e categoria, dividendos recebidos e evolução patrimonial.</li>
+    </ol>
+  </section>
+
+  <!-- Funcionalidades -->
+  <section class="features">
+    <h2>Tudo o que você precisa em um só lugar</h2>
+    <p class="subtitle">Do lançamento da primeira operação ao rebalanceamento da carteira.</p>
+
+    <div class="grid">
+      <div class="card">
+        <div class="icon">🧾</div>
+        <h3>Operações e proventos</h3>
+        <p>Lance compras, vendas e dividendos/JCP em segundos. O histórico completo fica salvo na sua planilha.</p>
+      </div>
+
+      <div class="card">
+        <div class="icon">📊</div>
+        <h3>Dashboard inteligente</h3>
+        <p>Preço médio, lucro, alocação por ativo e categoria, e evolução patrimonial calculados automaticamente.</p>
+      </div>
+
+      <div class="card">
+        <div class="icon">📥</div>
+        <h3>Importação da B3</h3>
+        <p>Importe extratos da Área do Investidor da B3 (movimentações, negociações e proventos) com poucos cliques.</p>
+      </div>
+
+      <div class="card">
+        <div class="icon">⚖️</div>
+        <h3>Rebalanceamento por metas</h3>
+        <p>Defina metas por categoria e descubra onde aportar com o aporte inteligente.</p>
+      </div>
+
+      <div class="card">
+        <div class="icon">🔀</div>
+        <h3>Eventos corporativos</h3>
+        <p>Splits, grupamentos e bonificações tratados automaticamente nos seus cálculos.</p>
+      </div>
+
+      <div class="card">
+        <div class="icon">🎯</div>
+        <h3>Alertas de valuation</h3>
+        <p>Defina preço teto e margem de segurança — o app sinaliza oportunidades de compra.</p>
+      </div>
+
+      <div class="card">
+        <div class="icon">📱</div>
+        <h3>PWA instalável</h3>
+        <p>Instale no celular ou computador como um app nativo, direto do navegador.</p>
+      </div>
+
+      <div class="card">
+        <div class="icon">✈️</div>
+        <h3>Funciona offline</h3>
+        <p>Consulte tudo sem internet. Suas alterações são sincronizadas automaticamente ao reconectar.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Dados do Google: finalidade e transparência (requisito da verificação OAuth) -->
+  <section class="section-narrow" id="dados-google">
+    <h2>Quais dados do Google o app acessa e para quê</h2>
+    <p>
+      Para funcionar, o Minhas Ações solicita a sua Conta Google somente os dados necessários
+      para identificar você e ler/gravar a planilha que você escolher. A finalidade de cada
+      permissão está descrita abaixo de forma explícita.
+    </p>
+
+    <!-- IMPORTANTE: mantenha esta lista exatamente igual aos escopos configurados na tela de consentimento OAuth -->
+    <div class="table-wrap">
+      <table class="data">
+        <thead>
+          <tr>
+            <th>Dado / permissão solicitada</th>
+            <th>Por que o app precisa disso</th>
+            <th>Onde o dado fica armazenado</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Nome, e-mail e foto do perfil<br /><code>openid</code> <code>email</code> <code>profile</code></td>
+            <td>Identificar sua conta, exibir quem está conectado e vincular suas preferências locais ao seu login. Usado apenas para autenticação — não enviamos e-mails nem mensagens.</td>
+            <td>No seu navegador (armazenamento local). Não é transmitido para servidores do desenvolvedor.</td>
+          </tr>
+          <tr>
+            <td>Planilhas do Google Sheets<br /><code>spreadsheets</code></td>
+            <td>Ler e gravar as operações, proventos, eventos corporativos e configurações da carteira na planilha que <strong>você</strong> selecionar. É o único "banco de dados" do aplicativo.</td>
+            <td>Na sua própria planilha, dentro da sua Conta Google.</td>
+          </tr>
+          <tr>
+            <td>Arquivos do Google Drive criados pelo app<br /><code>drive.file</code></td>
+            <td>Criar a planilha inicial, localizar e abrir apenas os arquivos que o próprio app criou ou que você selecionou explicitamente, e gerar cópias de segurança/exportações.</td>
+            <td>Na sua própria Conta Google (Google Drive).</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>O que o app não faz com seus dados</h3>
+    <ul>
+      <li>Não acessa seu Gmail, Contatos, Calendário, fotos ou arquivos do Drive não selecionados por você.</li>
+      <li>Não vende, aluga, compartilha nem transfere dados do usuário a terceiros.</li>
+      <li>Não usa seus dados para publicidade, criação de perfis comerciais ou treinamento de modelos.</li>
+      <li>Não permite que pessoas leiam seus dados — o acesso técnico é inexistente, pois não há servidor próprio do app.</li>
+    </ul>
+
+    <p class="note">
+      <strong>Uso Limitado:</strong> o uso e a transferência, por parte do Minhas Ações, de informações
+      recebidas das APIs do Google seguem a
+      <a href="https://developers.google.com/terms/api-services-user-data-policy" rel="noopener" target="_blank">Política de Dados do Usuário dos Serviços de API do Google</a>,
+      incluindo os requisitos de Uso Limitado (Limited Use).
+    </p>
+
+    <p>
+      Você pode revogar o acesso do app a qualquer momento em
+      <a href="https://myaccount.google.com/permissions" rel="noopener" target="_blank">myaccount.google.com/permissions</a>
+      ou excluir a planilha diretamente na sua Conta Google. Mais detalhes na
+      <a href="https://6271798ma.com.br/privacy.html">Política de Privacidade</a>.
+    </p>
+  </section>
+
+  <!-- Privacidade -->
+  <section class="privacy">
+    <div class="privacy-box">
+      <div class="lock" aria-hidden="true">🔒</div>
+      <div>
+        <h3>Privacidade de verdade</h3>
+        <p>
+          O app não tem servidor próprio: ele é apenas uma "tela" sobre a <strong>sua</strong> planilha.
+          Tudo é salvo na sua Conta Google, e a única cópia local fica no seu navegador
+          para o funcionamento offline. Leia a
+          <a href="https://6271798ma.com.br/privacy.html" style="color: var(--accent); font-weight: 700;">Política de Privacidade</a>
+          para saber exatamente quais dados são tratados, com qual finalidade e como excluí-los.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA final -->
+  <section class="final-cta">
+    <h2>Pronto para assumir o controle da sua carteira?</h2>
+    <p>Abra o app agora e conecte sua planilha em menos de um minuto.</p>
+    <a class="cta-btn" href="https://6271798ma.com.br/renda/" rel="noopener">
+      🚀 Acessar o Minhas Ações
+    </a>
+  </section>
+
+  <footer>
+    <div class="foot-links">
+      <a href="https://6271798ma.com.br/privacy.html">Política de Privacidade</a>
+      <a href="https://6271798ma.com.br/terms.html">Termos de Serviço</a>
+      <a href="https://6271798ma.com.br/renda/">Abrir o app</a>
+      <a href="mailto:girotodenis@gmail.com">Contato</a>
+    </div>
+    <p><strong>Minhas Ações</strong> — seus investimentos, seus dados. &copy; 2026</p>
+    <p class="disclaimer">
+      Minhas Ações é um projeto independente, desenvolvido por Denis Giroto, e
+      <strong>não é afiliado, patrocinado, endossado ou de qualquer forma associado ao Google LLC</strong>
+      nem à B3 S.A. Google, Google Sheets, Google Drive e Android são marcas registradas do Google LLC.
+      O aplicativo tem finalidade exclusivamente informativa e de organização pessoal:
+      <strong>não constitui recomendação, oferta ou consultoria de investimentos</strong>.
+      Página atualizada em 21 de outubro de 2026.
+    </p>
+  </footer>
+
+</body>
+</html>
