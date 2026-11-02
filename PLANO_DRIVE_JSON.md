@@ -170,7 +170,7 @@ Usa `https://www.googleapis.com/upload/drive/v3/files` e
   - HTTP **412** = conflito: relê e reaplica (read-modify-write) ou informa.
 - `listDatabaseFiles(token, name)` → `[{ fileId }]` (para "abrir banco existente").
 - Reusa `ensureAppFolder`/`moveFileToFolder` de `drive.ts` para manter o arquivo
-  na pasta `minhasacoe_app` (já coberto por `drive.file`).
+  na pasta `databases_app_minhas_acoes` (já coberto por `drive.file`).
 
 ### 3.4 `driveFile/gateway.ts` (a peça que substitui o Sheets)
 

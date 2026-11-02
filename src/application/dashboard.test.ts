@@ -217,6 +217,7 @@ describe('carregarDashboard — cotações Brapi no modo local', () => {
     // O Consolidado já tem preço (12000), mas a atualização manual busca de novo.
     expect(mocks.atualizarCotacoesB3).toHaveBeenCalledWith(['PETR4'], {
       tokens: { brapi: 'token-brapi' },
+      accessToken: 'access-token',
       forceRefresh: true,
     })
     expect(dashboard.cotacoes.get('PETR4')).toMatchObject({
@@ -272,6 +273,7 @@ describe('carregarDashboard — cotações Brapi no modo local', () => {
     expect(mocks.atualizarCotacoesB3).not.toHaveBeenCalled()
     expect(mocks.atualizarCotacoesCripto).toHaveBeenCalledWith(['BTC'], {
       tokens: { brapi: 'token-brapi' },
+      accessToken: 'access-token',
       forceRefresh: true,
     })
     expect(dashboard.cotacoes.get('BTC')).toMatchObject({
@@ -401,7 +403,7 @@ describe('carregarDashboard — cotações Brapi no modo local', () => {
 
     expect(mocks.atualizarCotacoesTesouro).toHaveBeenCalledWith(
       [{ ticker: 'Tesouro Selic 2029', vencimento: '2029-03-01' }],
-      { tokens: { brapi: 'token-brapi' }, forceRefresh: false },
+      { tokens: { brapi: 'token-brapi' }, accessToken: 'access-token', forceRefresh: false },
     )
     expect(mocks.atualizarCotacoesB3).not.toHaveBeenCalled()
     expect(dashboard.cotacoes.get('Tesouro Selic 2029')).toMatchObject({

@@ -53,6 +53,16 @@ export interface DriveFileRequestOptions {
   timeoutMs?: number
 }
 
+/** Opções da criação do arquivo do banco. */
+export interface CreateDatabaseFileOptions extends DriveFileRequestOptions {
+  /**
+   * Pasta onde o arquivo nasce (`databases_app_minhas_acoes`). Criar já dentro dela evita a
+   * janela em que o banco ficaria na raiz do Drive e a dependência do "mover
+   * depois", que era silenciosamente best-effort.
+   */
+  folderId?: string
+}
+
 interface DriveFileMetadata {
   id?: unknown
   name?: unknown
@@ -171,13 +181,20 @@ function toRequestBody(bytes: Uint8Array): ArrayBuffer {
   return bytes.slice().buffer as ArrayBuffer
 }
 
-/** Cria o arquivo vazio do banco e envia o conteúdo inicial. */
+/** Cria o arquivo do banco (dentro de `options.folderId`, se informado) e envia o conteúdo inicial. */
 export async function createDatabaseFile(
   accessToken: string,
   name: string,
   bytes: Uint8Array,
-  options?: DriveFileRequestOptions,
+  options?: CreateDatabaseFileOptions,
 ): Promise<DriveDatabaseFile> {
+  const corpoCriacao: { name: string; mimeType: string; parents?: string[] } = {
+    name,
+    mimeType: DATABASE_MIME_TYPE,
+  }
+  // Sem `parents` o Drive coloca o arquivo na raiz ("Meu Drive").
+  if (options?.folderId) corpoCriacao.parents = [options.folderId]
+
   const created = await driveRequest(
     `${DRIVE_FILES_ENDPOINT}?fields=id,name`,
     {
@@ -186,7 +203,7 @@ export async function createDatabaseFile(
         Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ name, mimeType: DATABASE_MIME_TYPE }),
+      body: JSON.stringify(corpoCriacao),
     },
     options,
   )

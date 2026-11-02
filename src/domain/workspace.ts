@@ -4,6 +4,13 @@ import type { SheetName } from '@/domain/sheetsSchema'
 export type SheetIdMap = Record<SheetName, number>
 
 /**
+ * Estado de criptografia do banco:
+ * - `nenhuma`: arquivo/abas em claro (formato original);
+ * - `total`: arquivo cifrado com AES-GCM (só abre com a chave da sessão).
+ */
+export type CriptografiaBanco = 'nenhuma' | 'total'
+
+/**
  * Banco de dados selecionado ou criado pelo usuário (persistido no navegador).
  *
  * `spreadsheetId` é o identificador da origem ativa: no backend `sheets` é o id
@@ -19,6 +26,11 @@ export interface SpreadsheetWorkspace {
   sheetIds: SheetIdMap
   /** ISO 8601 do momento em que o workspace foi salvo/atualizado. */
   updatedAt: string
+  /**
+   * Estado da criptografia do banco. Ausente equivale a `'nenhuma'` (bancos
+   * criados antes da criptografia).
+   */
+  criptografia?: CriptografiaBanco
 }
 
 /** Referência leve a um banco no Drive (id + título). */
@@ -37,6 +49,9 @@ export interface PlanilhaExistente {
  * - `authenticated`: com token Google válido;
  * - `local`: planilha persistida mas sem token válido — o app abre direto com
  *   os dados do cache e o login só é solicitado quando uma operação precisar
- *   da rede (salvar, sincronizar, trocar de planilha).
+ *   da rede (salvar, sincronizar, trocar de planilha);
+ * - `bloqueado`: banco cifrado **sem a chave na sessão** — bloqueia **antes**
+ *   de qualquer leitura de dados (o cache em claro não pode aparecer). A única
+ *   saída é a tela de desbloqueio (`DesbloquearBanco`), que pede a senha.
  */
-export type AuthStatus = 'loading' | 'unauthenticated' | 'authenticated' | 'local'
+export type AuthStatus = 'loading' | 'unauthenticated' | 'authenticated' | 'local' | 'bloqueado'

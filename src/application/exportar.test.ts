@@ -27,7 +27,7 @@ describe('nomeArquivoOds', () => {
 describe('gerarPlanilhaOds (modo local)', () => {
   it('exporta o cabeçalho e as linhas de todas as abas do schema', async () => {
     setModoArmazenamento(MODO_LOCAL)
-    ensureLocalSheetsWithHeaders()
+    await ensureLocalSheetsWithHeaders()
     await appendValues('', WORKSPACE_LOCAL_ID, "'Operacoes'!A1", [['a1', '2026-01-05', 'Compra']])
 
     const abas = await gerarPlanilhaOds({ accessToken: 'local', spreadsheetId: WORKSPACE_LOCAL_ID })
@@ -50,7 +50,7 @@ describe('gerarPlanilhaOds (modo local)', () => {
 
   it('gera um .ods com o conteúdo exportado', async () => {
     setModoArmazenamento(MODO_LOCAL)
-    ensureLocalSheetsWithHeaders()
+    await ensureLocalSheetsWithHeaders()
     await appendValues('', WORKSPACE_LOCAL_ID, "'Operacoes'!A1", [['a1', 'PETR4']])
 
     const abas = await gerarPlanilhaOds({ accessToken: 'local', spreadsheetId: WORKSPACE_LOCAL_ID })

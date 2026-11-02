@@ -1,11 +1,24 @@
 import { createContext, useContext } from 'react'
+import type { OpcoesMigracao, ResultadoMigracao } from '@/application/migrarPlanilha'
 import type { ModoArmazenamento } from '@/domain/armazenamento'
-import type { AuthStatus, PlanilhaExistente, SpreadsheetWorkspace } from '@/domain/workspace'
+import type {
+  AuthStatus,
+  CriptografiaBanco,
+  PlanilhaExistente,
+  SpreadsheetWorkspace,
+} from '@/domain/workspace'
+import type { SessaoCripto } from '@/infrastructure/cripto/envelope'
+import type { EstadoCriptografia } from '@/infrastructure/sheets/gatewayRouter'
 
 /** Opções de criação do banco padrão. */
 export interface OpcoesCriarBanco {
   /** Ignora a verificação de nome duplicado e cria um banco novo. */
   force?: boolean
+  /**
+   * Sessão de criptografia: com ela o banco **nasce cifrado** e já entra
+   * desbloqueado (o usuário acabou de digitar a senha).
+   */
+  chave?: SessaoCripto
 }
 
 /** Resultado de uma tentativa de criação do banco padrão. */
@@ -14,12 +27,26 @@ export type ResultadoCriacaoBanco =
   | { status: 'duplicate'; existente: PlanilhaExistente }
   | { status: 'error' }
 
+/**
+ * Resultado de abrir um banco pelo id.
+ *
+ * `chave-necessaria` é um resultado **esperado**, não um erro: o banco está
+ * cifrado e sem chave na sessão. O workspace ativo não muda e `error` continua
+ * limpo — a UI decide pedir a senha (2º passo do `AbrirBancoModal`).
+ */
+export type ResultadoAberturaBanco =
+  | { status: 'aberto' }
+  | { status: 'chave-necessaria'; spreadsheetId: string; title: string }
+  | { status: 'erro' }
+
 /** Contexto de sessão exposto pelo `AuthProvider`. */
 export interface AuthContextValue {
   /**
    * Estado da sessão: `loading` (restaurando), `unauthenticated` (sem sessão),
-   * `authenticated` (token válido) ou `local` (planilha persistida sem token
-   * válido — o app opera com o cache e o login é solicitado sob demanda).
+   * `authenticated` (token válido), `local` (planilha persistida sem token
+   * válido — o app opera com o cache e o login é solicitado sob demanda) ou
+   * `bloqueado` (banco cifrado sem chave na sessão — a tela de desbloqueio
+   * substitui qualquer conteúdo de dados).
    */
   status: AuthStatus
   /**
@@ -48,7 +75,11 @@ export interface AuthContextValue {
   isBusy: boolean
   /** Inicia o login OAuth 2.0 pelo Google Identity Services. */
   login: () => Promise<void>
-  /** Revoga o token e limpa a sessão/planilha persistida (também sai do modo local). */
+  /**
+   * Revoga o token e limpa a sessão/planilha persistida (também sai do modo
+   * local). Esquece **todas** as chaves em memória; os verificadores de
+   * desbloqueio offline permanecem no IndexedDB.
+   */
   logout: () => Promise<void>
   /**
    * Ativa o modo local (sem Google): cria/abre o banco de dados do navegador e
@@ -72,6 +103,9 @@ export interface AuthContextValue {
    * Antes de criar, verifica se já existe um banco com o mesmo nome. Quando
    * existe (e `options.force` não está ligado), devolve
    * `{ status: 'duplicate' }` sem criar nada, para que a UI pergunte ao usuário.
+   *
+   * Com `options.chave` o arquivo nasce cifrado, a sessão já fica desbloqueada e
+   * o verificador de desbloqueio offline é gravado.
    */
   criarBanco: (
     title?: string,
@@ -80,8 +114,73 @@ export interface AuthContextValue {
   /**
    * Torna ativo um banco existente pelo id (planilha no Sheets ou arquivo no
    * Drive, conforme o backend), garantindo as abas do schema.
+   *
+   * Banco cifrado sem chave na sessão devolve `{ status: 'chave-necessaria' }`
+   * sem trocar o workspace ativo e sem preencher `error` (não é falha).
    */
-  abrirBancoPorId: (spreadsheetId: string) => Promise<void>
+  abrirBancoPorId: (spreadsheetId: string) => Promise<ResultadoAberturaBanco>
+  /**
+   * Desbloqueia o banco cifrado com a senha do cofre.
+   *
+   * Online usa o arquivo do Drive (`desbloquear` do gateway, que guarda a chave
+   * e deixa o cache pronto); offline/sem token usa o **verificador** gravado no
+   * IndexedDB e segue em `local` com cache + outbox. `spreadsheetId` permite
+   * desbloquear um banco que ainda não é o ativo (2º passo de "Abrir banco");
+   * sem ele, desbloqueia o banco ativo.
+   */
+  desbloquearBanco: (senha: string, spreadsheetId?: string) => Promise<void>
+  /**
+   * Bloqueia o banco ativo: tenta esvaziar o outbox (melhor esforço), limpa o
+   * cache de abas, esquece a chave e entra em `bloqueado`. Devolve quantas
+   * alterações continuaram pendentes (não houve rede para enviá-las).
+   */
+  bloquearBanco: () => Promise<{ pendentes: number }>
+  /**
+   * "Esquecer este banco neste dispositivo": remove workspace, verificador e
+   * chave e volta para `unauthenticated` (a próxima abertura lista os bancos).
+   */
+  esquecerBanco: () => void
+  /**
+   * Estado de criptografia do banco ativo (`'nenhuma'` quando o workspace ainda
+   * não informa o dado — bancos criados antes da criptografia).
+   */
+  criptografiaDoBanco: CriptografiaBanco
+  /**
+   * Liga a criptografia do banco ativo (`PLANO_CRIPTOGRAFIA.md` §6.2).
+   *
+   * Exige backend capaz de cifrar, senha não vazia, conexão e fila offline
+   * vazia; falhas preenchem `error` com a mensagem da §6.7. Ao terminar o banco
+   * continua **desbloqueado** (a chave fica na sessão).
+   */
+  ativarCriptografia: (senha: string) => Promise<void>
+  /**
+   * Desliga a criptografia do banco ativo. Não pede a senha: a chave já está na
+   * sessão e o arquivo volta a ser legível. Em falha preenche `error`.
+   */
+  desativarCriptografia: () => Promise<void>
+  /**
+   * Relê o estado real do arquivo (sem a chave) e sincroniza o workspace ativo.
+   *
+   * Devolve `null` quando não há banco ativo ou a leitura falha (offline) — a
+   * UI mantém o último estado conhecido.
+   */
+  recarregarEstadoCriptografia: () => Promise<EstadoCriptografia | null>
+  /**
+   * Migra o banco ativo do formato antigo (planilha do Sheets) para o cofre
+   * JSON do Drive (`PLANO_CRIPTOGRAFIA.md` §6.6).
+   *
+   * A planilha antiga só é lida — nunca apagada nem alterada. Em sucesso o
+   * cofre novo passa a ser o banco ativo (com a chave na sessão quando
+   * `opcoes.chave` é informado). A idempotência fica no caso de uso: repetir a
+   * chamada devolve `ja-existia` sem regravar nada.
+   */
+  migrarPlanilhaAntiga: (opcoes?: OpcoesMigracao) => Promise<ResultadoMigracao>
+  /**
+   * Dispensa a oferta de migração para o banco ativo. A dispensa fica no
+   * `localStorage` e é específica daquele banco, então a oferta não volta a
+   * aparecer a cada abertura.
+   */
+  dispensarMigracao: () => void
   /**
    * Garante um access token válido (renova silenciosamente se necessário).
    * Retorna `null` quando não foi possível obter um token.

@@ -2,12 +2,26 @@ import type { SheetName } from '@/domain/sheetsSchema'
 import { SHEET_HEADERS, SHEET_NAMES } from '@/domain/sheetsSchema'
 import type { PlanilhaExistente, SpreadsheetWorkspace } from '@/domain/workspace'
 import type { RepositoryContext } from '@/domain/repositories/ports'
+import { isCriptografiaSuportada } from '@/infrastructure/cripto/webCrypto'
+import { ChaveIncorretaError } from '@/infrastructure/cripto/envelope'
+import type { SessaoCripto } from '@/infrastructure/cripto/envelope'
+import { esquecerChave, guardarChave, temChave } from '@/infrastructure/cripto/chaveSessao'
+import {
+  ID_COFRE_LOCAL,
+  abrirCofreLocal,
+  criarCofreLocal,
+  removerCofreLocal,
+  temCofreLocal,
+} from '@/infrastructure/cripto/localCofre'
 import * as driveFile from '@/infrastructure/driveFile/gateway'
+import type { EstadoCriptografia } from '@/infrastructure/driveFile/gateway'
 import { isJsonBackend } from '@/infrastructure/googleConfig'
 import { isModoLocal } from '@/infrastructure/modoArmazenamento'
 import * as sheets from '@/infrastructure/sheets/gateway'
 import type { ValueInputOption, ValueRange, ValueRenderOption } from '@/infrastructure/sheets/gateway'
 import * as local from '@/infrastructure/sheets/localGateway'
+import { listLocalSheetNames, readLocalSheet, writeLocalSheet } from '@/infrastructure/sheets/localSheets'
+import type { SheetMatrix } from '@/infrastructure/sheets/localSheets'
 import type { CellValue } from '@/infrastructure/sheets/sheetCells'
 
 /**
@@ -35,6 +49,28 @@ export type {
   ValueRange,
   ValueRenderOption,
 } from '@/infrastructure/sheets/gateway'
+
+/**
+ * Erros e tipos de criptografia reexportados para a camada de aplicação não
+ * precisar importar o adaptador concreto (`driveFile/gateway`).
+ */
+export { ChaveIncorretaError, ChaveNecessariaError } from '@/infrastructure/cripto/envelope'
+export type { SessaoCripto } from '@/infrastructure/cripto/envelope'
+export type { EstadoCriptografia } from '@/infrastructure/driveFile/gateway'
+
+/** Opções da criação do banco (só o cofre JSON as usa por enquanto). */
+export interface OpcoesCriarWorkspace {
+  /** Sessão de criptografia: com ela o arquivo já nasce cifrado. */
+  chave?: SessaoCripto
+  /**
+   * Pasta do app (`databases_app_minhas_acoes`) onde o cofre nasce. Só o backend `json` usa;
+   * o chamador é quem garante/cria a pasta antes de criar o banco.
+   */
+  folderId?: string
+}
+
+const CRIPTOGRAFIA_INDISPONIVEL =
+  'Disponível no cofre JSON e no modo local; no Google Sheets as células precisam ficar legíveis.'
 
 /** Adaptador do modo Google, escolhido em tempo de build pelo backend. */
 const google = isJsonBackend() ? driveFile : sheets
@@ -197,14 +233,123 @@ export function ensureSheetHeaders(accessToken: string, spreadsheetId: string): 
 export function criarWorkspace(
   accessToken: string,
   title?: string,
+  opcoes: OpcoesCriarWorkspace = {},
 ): Promise<SpreadsheetWorkspace> {
   if (isModoLocal()) return local.localLoadWorkspace(new Date().toISOString())
-  return google.createDefaultSpreadsheet(accessToken, title)
+  if (isJsonBackend()) return driveFile.createDefaultSpreadsheet(accessToken, title, opcoes)
+  return sheets.createDefaultSpreadsheet(accessToken, title)
+}
+
+/**
+ * Liga/desliga a criptografia do banco ativo.
+ *
+ * No backend `sheets` as células precisam ficar legíveis (as fórmulas do Sheets
+ * são do próprio usuário), então a operação é recusada com 400 e mensagem
+ * explícita. No modo local o cofre é o próprio IndexedDB (`localCofre`) e as
+ * abas são regravadas cifradas/em claro.
+ */
+export async function alterarCriptografia(
+  accessToken: string,
+  spreadsheetId: string,
+  chave: SessaoCripto | null,
+): Promise<void> {
+  if (isModoLocal()) return alterarCriptografiaLocal(chave)
+  if (isJsonBackend()) return driveFile.alterarCriptografia(accessToken, spreadsheetId, chave)
+  throw new sheets.SheetsApiError(400, CRIPTOGRAFIA_INDISPONIVEL)
+}
+
+/**
+ * Ativa/desativa o cofre do banco local regravando todas as abas.
+ *
+ * As matrizes são lidas **antes** de trocar o estado do cofre: na ativação elas
+ * ainda estão em claro; na desativação é a chave da sessão que as decifra. Se a
+ * leitura falhar (cofre ativo sem chave), nada é alterado. Idempotente nos dois
+ * sentidos: ativar um banco já cifrado recifra com a sessão informada e
+ * desativar um banco em claro não faz nada.
+ */
+async function alterarCriptografiaLocal(sessao: SessaoCripto | null): Promise<void> {
+  if (!sessao && !temCofreLocal()) return
+
+  const abas: Array<{ nome: string; valores: SheetMatrix }> = []
+  for (const nome of listLocalSheetNames()) {
+    abas.push({ nome, valores: await readLocalSheet(nome) })
+  }
+
+  if (sessao) {
+    await criarCofreLocal(sessao)
+    guardarChave(ID_COFRE_LOCAL, sessao)
+  } else {
+    // Remover o cofre **antes** de regravar: as escritas passam a ser em claro.
+    removerCofreLocal()
+  }
+
+  try {
+    for (const aba of abas) await writeLocalSheet(aba.nome, aba.valores)
+  } finally {
+    if (!sessao) esquecerChave(ID_COFRE_LOCAL)
+  }
+}
+
+/**
+ * Desbloqueia o banco ativo com a senha do cofre (`PLANO_CRIPTOGRAFIA.md` §6.1).
+ *
+ * No cofre JSON e no modo local a senha é conferida pelo verificador/cofre
+ * gravado neste dispositivo; no backend `sheets` as células precisam ficar
+ * legíveis — daí o 400 com a mensagem da §6.7.
+ */
+export function desbloquear(
+  accessToken: string,
+  spreadsheetId: string,
+  senha: string,
+): Promise<SpreadsheetWorkspace> {
+  if (isModoLocal()) return desbloquearLocal(senha)
+  if (isJsonBackend()) return driveFile.desbloquear(accessToken, spreadsheetId, senha)
+  return Promise.reject(new sheets.SheetsApiError(400, CRIPTOGRAFIA_INDISPONIVEL))
+}
+
+/** Abre o cofre local e deixa a chave em memória para as abas cifradas. */
+async function desbloquearLocal(senha: string): Promise<SpreadsheetWorkspace> {
+  const sessao = await abrirCofreLocal(senha)
+  if (!sessao) throw new ChaveIncorretaError()
+
+  guardarChave(ID_COFRE_LOCAL, sessao)
+  return local.localLoadWorkspace(new Date().toISOString())
+}
+
+/**
+ * Estado da criptografia do banco ativo (lido dos bytes/do cofre, sem precisar
+ * da chave). No modo local o "arquivo" é o cofre no IndexedDB.
+ */
+export function estadoCriptografia(
+  accessToken: string,
+  spreadsheetId: string,
+): Promise<EstadoCriptografia> {
+  if (isModoLocal()) {
+    const cofre = temCofreLocal()
+    return Promise.resolve({
+      estado: cofre ? 'total' : 'nenhuma',
+      bloqueado: cofre && !temChave(ID_COFRE_LOCAL),
+    })
+  }
+  if (isJsonBackend()) {
+    return driveFile.estadoCriptografia(accessToken, spreadsheetId)
+  }
+  return Promise.resolve({ estado: 'nenhuma', bloqueado: false })
+}
+
+/**
+ * `true` quando o backend ativo consegue cifrar o banco e o navegador tem Web
+ * Crypto (exige HTTPS ou localhost). O modo local tem cofre próprio no
+ * IndexedDB; o backend `sheets` fica de fora (células legíveis).
+ */
+export function criptografiaDisponivel(): boolean {
+  return (isJsonBackend() || isModoLocal()) && isCriptografiaSuportada()
 }
 
 /**
  * Prepara (cria ou reabre) o workspace local do modo sem Google.
- * Idempotente: preserva o que já está no banco do navegador.
+ * Idempotente: preserva o que já está no banco do navegador — inclusive a marca
+ * de criptografia, que vem do cofre local.
  */
 export function prepararWorkspaceLocal(): Promise<SpreadsheetWorkspace> {
   return local.localLoadWorkspace(new Date().toISOString())

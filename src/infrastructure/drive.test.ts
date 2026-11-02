@@ -163,7 +163,7 @@ describe('findAppFolder', () => {
 describe('ensureAppFolder', () => {
   it('reaproveita a pasta padrão existente do app', async () => {
     const { spy, chamadas, metodos } = stubFetchSequence([
-      { files: [{ id: 'pasta-1', name: 'minhasacoe_app' }] },
+      { files: [{ id: 'pasta-1', name: 'databases_app_minhas_acoes' }] },
     ])
 
     const id = await ensureAppFolder('token')
@@ -174,18 +174,38 @@ describe('ensureAppFolder', () => {
 
     const url = new URL(chamadas[0] ?? '')
     expect(url.origin + url.pathname).toBe('https://www.googleapis.com/drive/v3/files')
-    expect(url.searchParams.get('q')).toContain("name = 'minhasacoe_app'")
+    expect(url.searchParams.get('q')).toContain("name = 'databases_app_minhas_acoes'")
     expect(url.searchParams.get('q')).toContain("mimeType = 'application/vnd.google-apps.folder'")
   })
 
   it('cria a pasta quando ela ainda não existe', async () => {
-    const { chamadas, metodos } = stubFetchSequence([{ files: [] }, { id: 'pasta-nova' }])
+    // GET do nome atual, GET do nome legado (nada), POST da criação.
+    const { chamadas, metodos } = stubFetchSequence([
+      { files: [] },
+      { files: [] },
+      { id: 'pasta-nova' },
+    ])
 
     const id = await ensureAppFolder('token')
 
     expect(id).toBe('pasta-nova')
-    expect(metodos).toEqual(['GET', 'POST'])
-    expect(new URL(chamadas[1] ?? '').searchParams.get('fields')).toBe('id')
+    expect(metodos).toEqual(['GET', 'GET', 'POST'])
+    expect(new URL(chamadas[2] ?? '').searchParams.get('fields')).toBe('id')
+  })
+
+  it('renomeia a pasta da versão anterior em vez de criar outra', async () => {
+    const { chamadas, metodos } = stubFetchSequence([
+      { files: [] },
+      { files: [{ id: 'pasta-legada', name: 'minhasacoe_app' }] },
+      { id: 'pasta-legada', name: 'databases_app_minhas_acoes' },
+    ])
+
+    const id = await ensureAppFolder('token')
+
+    expect(id).toBe('pasta-legada')
+    expect(metodos).toEqual(['GET', 'GET', 'PATCH'])
+    expect(chamadas[2]).toContain('pasta-legada')
+    expect(new URL(chamadas[1] ?? '').searchParams.get('q')).toContain("name = 'minhasacoe_app'")
   })
 
   it('lança GoogleDriveError quando a criação da pasta falha', async () => {

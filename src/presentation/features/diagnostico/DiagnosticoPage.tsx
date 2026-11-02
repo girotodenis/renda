@@ -1,31 +1,74 @@
-import { CheckCircle2, Database, Loader2, RefreshCw, Stethoscope, Trash2, XCircle } from 'lucide-react'
-import { useState } from 'react'
+import {
+  CheckCircle2,
+  Database,
+  Loader2,
+  RefreshCw,
+  ShieldCheck,
+  Stethoscope,
+  Trash2,
+  XCircle,
+} from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '@/presentation/app/providers/authContext'
 import { Alert } from '@/presentation/components/Alert'
+import { ConfirmarBloqueio } from '@/presentation/components/ConfirmarBloqueio'
 import { clearAllSheetCache } from '@/infrastructure/cache'
-import { runDataLayerDiagnostics } from '@/application/diagnostics'
-import type { DiagnosticReport } from '@/application/diagnostics'
+import { lerDiagnosticoAmbiente, runDataLayerDiagnostics } from '@/application/diagnostics'
+import type { DiagnosticAmbiente, DiagnosticReport } from '@/application/diagnostics'
 import { describeSheetsError } from '@/infrastructure/sheets/gateway'
+
+const ROTULO_PLANILHA: Record<DiagnosticAmbiente['planilhaCotacoes']['estado'], string> = {
+  ativa: 'Ativa',
+  'nao-autorizada': 'Não autorizada',
+  indisponivel: 'Indisponível',
+}
 
 /**
  * Tela de teste/diagnóstico da camada de dados (Etapa 2).
  *
  * Escreve uma linha em cada aba, atualiza o cache com um único `batchGet` e
  * relê do cache **sem novas chamadas** à API (comprovado pelo contador de
- * requisições exibido na tela).
+ * requisições exibido na tela). O bloco "Estado do ambiente" resume a cifra do
+ * banco e a planilha de cotações, lido ao montar — sem rodar as escritas.
  */
 export function DiagnosticoPage() {
-  const { workspace, ensureAccessToken } = useAuth()
+  const { workspace, status, criptografiaDoBanco, ensureAccessToken } = useAuth()
   const [report, setReport] = useState<DiagnosticReport | null>(null)
+  const [ambiente, setAmbiente] = useState<DiagnosticAmbiente | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [cacheNotice, setCacheNotice] = useState<string | null>(null)
   const [isRunning, setIsRunning] = useState(false)
 
+  const spreadsheetId = workspace?.spreadsheetId ?? null
+  // O metadado do workspace responde antes da leitura do arquivo terminar.
+  const cifrado = (ambiente?.criptografia.estado ?? criptografiaDoBanco) === 'total'
+
+  useEffect(() => {
+    if (!spreadsheetId) {
+      setAmbiente(null)
+      return
+    }
+
+    let cancelado = false
+    void (async () => {
+      // Sem token não há como ler o magic do arquivo remoto: cai no estado local.
+      const token = await ensureAccessToken().catch(() => null)
+      const resultado = await lerDiagnosticoAmbiente(
+        token ? { accessToken: token, spreadsheetId } : null,
+      )
+      if (!cancelado) setAmbiente(resultado)
+    })()
+
+    return () => {
+      cancelado = true
+    }
+  }, [ensureAccessToken, spreadsheetId])
+
   async function runDiagnostics() {
     setError(null)
     if (!workspace) {
-      setError('Configure uma planilha antes de executar o diagnóstico.')
+      setError('Configure um banco de dados antes de executar o diagnóstico.')
       return
     }
 
@@ -41,6 +84,7 @@ export function DiagnosticoPage() {
         spreadsheetId: workspace.spreadsheetId,
       })
       setReport(result)
+      setAmbiente({ criptografia: result.criptografia, planilhaCotacoes: result.planilhaCotacoes })
     } catch (diagnosticError) {
       setError(describeSheetsError(diagnosticError))
     } finally {
@@ -96,8 +140,8 @@ export function DiagnosticoPage() {
       </header>
 
       {!workspace ? (
-        <Alert variant="info" title="Nenhuma planilha configurada">
-          Selecione ou crie uma planilha em{' '}
+        <Alert variant="info" title="Nenhum banco de dados configurado">
+          Selecione ou crie um banco de dados em{' '}
           <Link to="/dashboard" className="font-semibold underline">
             Dashboard
           </Link>{' '}
@@ -107,6 +151,40 @@ export function DiagnosticoPage() {
 
       {error ? <Alert variant="error">{error}</Alert> : null}
       {cacheNotice ? <Alert variant="success">{cacheNotice}</Alert> : null}
+
+      {workspace ? (
+        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-slate-400" aria-hidden />
+              <h2 className="text-sm font-semibold text-slate-700">Estado do ambiente</h2>
+            </div>
+            {cifrado && status !== 'bloqueado' ? (
+              <ConfirmarBloqueio
+                rotulo="Bloquear agora"
+                className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+              />
+            ) : null}
+          </div>
+
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            <StatCard
+              label="Criptografia"
+              value={rotuloCriptografia(ambiente)}
+              hint={
+                ambiente && !ambiente.criptografia.disponivel
+                  ? 'Este backend ou navegador não cifra o banco.'
+                  : null
+              }
+            />
+            <StatCard
+              label="Planilha de cotações"
+              value={ambiente ? ROTULO_PLANILHA[ambiente.planilhaCotacoes.estado] : 'Lendo…'}
+              hint={ambiente?.planilhaCotacoes.motivo ?? null}
+            />
+          </div>
+        </section>
+      ) : null}
 
       {report ? (
         <div className="space-y-4">
@@ -180,13 +258,21 @@ export function DiagnosticoPage() {
   )
 }
 
-function StatCard({ label, value }: { label: string; value: string }) {
+function StatCard({ label, value, hint }: { label: string; value: string; hint?: string | null }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
       <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
       <p className="mt-1 text-lg font-semibold text-slate-900">{value}</p>
+      {hint ? <p className="mt-1 text-xs text-slate-500">{hint}</p> : null}
     </div>
   )
+}
+
+/** Rótulos da §3.3: sem cifra, cifrado e desbloqueado, cifrado e bloqueado. */
+function rotuloCriptografia(ambiente: DiagnosticAmbiente | null): string {
+  if (!ambiente) return 'Lendo…'
+  if (ambiente.criptografia.estado !== 'total') return 'Sem criptografia'
+  return ambiente.criptografia.bloqueado ? 'Bloqueado' : 'Arquivo criptografado'
 }
 
 function formatTimestamp(iso: string): string {

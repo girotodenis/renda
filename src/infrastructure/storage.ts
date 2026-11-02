@@ -15,6 +15,14 @@ const STORAGE_KEYS = {
   layout: 'minhaacoes.layout',
 } as const
 
+/**
+ * Banco legado (planilha do Sheets) cuja oferta de migração foi dispensada.
+ *
+ * Fica fora de `STORAGE_KEYS` porque não é JSON: guarda o `spreadsheetId` puro,
+ * e a oferta deve sumir só para **aquele** banco (§6.6).
+ */
+const MIGRACAO_DISPENSADA_KEY = 'minhaacoes.migracao.v1.dispensada'
+
 /** Token OAuth com expiração calculada localmente. */
 export interface StoredToken {
   accessToken: string
@@ -95,4 +103,26 @@ export const consentStorage = {
 export const layoutStorage = {
   load: (): LayoutTema => parseLayoutTema(readStorageJson<string>(STORAGE_KEYS.layout)),
   save: (tema: LayoutTema): void => writeStorageJson(STORAGE_KEYS.layout, tema),
+}
+
+/** Dispensa da oferta de migração do banco legado (`migrarPlanilha`). */
+export const migracaoStorage = {
+  /** Id do banco legado cuja oferta já foi dispensada (`null` = nenhum). */
+  dispensada: (): string | null => {
+    try {
+      const valor = window.localStorage.getItem(MIGRACAO_DISPENSADA_KEY)
+      return valor && valor.length > 0 ? valor : null
+    } catch {
+      return null
+    }
+  },
+  /** Marca a oferta como dispensada para o banco informado. */
+  dispensar: (spreadsheetId: string): void => {
+    try {
+      window.localStorage.setItem(MIGRACAO_DISPENSADA_KEY, spreadsheetId)
+    } catch {
+      // Armazenamento indisponível (modo privado/cota): a oferta reaparece.
+    }
+  },
+  limpar: (): void => removeStorageKey(MIGRACAO_DISPENSADA_KEY),
 }

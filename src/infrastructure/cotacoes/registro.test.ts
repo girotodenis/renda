@@ -22,13 +22,16 @@ vi.mock('@/infrastructure/storage', () => ({
       if (chave.startsWith(prefixo)) armazenamento.delete(chave)
     }
   },
+  // Sem token Google nos testes da cadeia: a planilha de cotações fica de fora.
+  tokenStorage: { load: () => null, save: () => undefined, clear: () => undefined },
 }))
 
 const TOKENS = { brapi: 'token-brapi', maisretorno: 'mr_abc' }
 
 describe('registro de integrações de cotação', () => {
-  it('ordena as integrações por prioridade (Brapi → Mais Retorno)', () => {
+  it('ordena as integrações por prioridade (Planilha → Brapi → Mais Retorno)', () => {
     expect(integracoesCotacao.map(({ id, nome }) => [id, nome])).toEqual([
+      ['planilha-google', 'Planilha Google (GOOGLEFINANCE)'],
       ['brapi', 'Brapi'],
       ['maisretorno', 'Mais Retorno'],
     ])
@@ -39,8 +42,11 @@ describe('registro de integrações de cotação', () => {
     expect(new Set(ids).size).toBe(ids.length)
     for (const integracao of integracoesCotacao) {
       expect(integracao.site.startsWith('https://')).toBe(true)
-      expect(chaveToken(integracao.id)).toMatch(/^[a-z]+_token$/)
-      expect(integracao.exigeToken).toBe(true)
+      expect(typeof integracao.exigeToken).toBe('boolean')
+      // A planilha de cotações usa OAuth (card em Configurações), não token digitado.
+      if (integracao.exigeToken) {
+        expect(chaveToken(integracao.id)).toMatch(/^[a-z]+_token$/)
+      }
       expect(typeof integracao.limparCache).toBe('function')
     }
   })

@@ -58,7 +58,7 @@ export function DetalheAtivoProventos({
 
   const resolveContext = useCallback(async (): Promise<RepositoryContext | null> => {
     if (!workspace) {
-      setError('Configure uma planilha antes de lançar proventos.')
+      setError('Configure um banco de dados antes de lançar proventos.')
       return null
     }
     const token = await ensureAccessToken()

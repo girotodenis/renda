@@ -56,9 +56,9 @@ export function DashboardPage() {
     return (
       <section className="mx-auto max-w-xl space-y-5 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <header className="space-y-1">
-          <h1 className="text-xl font-semibold text-slate-900">Configurar planilha</h1>
+          <h1 className="text-xl font-semibold text-slate-900">Configurar banco de dados</h1>
           <p className="text-sm text-slate-500">
-            Escolha uma planilha existente no Drive ou crie a planilha padrão com as abas do app.
+            Escolha um banco de dados existente no Drive ou crie o banco padrão com as abas do app.
           </p>
         </header>
         {error ? <Alert variant="error">{error}</Alert> : null}
@@ -172,7 +172,7 @@ function DashboardContent() {
           <div>
             <h1 className="text-xl font-semibold text-slate-900">Dashboard</h1>
             <p className="text-sm text-slate-500">
-              Desempenho da carteira · {workspace?.title ?? 'planilha conectada'}
+              Desempenho da carteira · {workspace?.title ?? 'banco de dados conectado'}
             </p>
           </div>
         </div>

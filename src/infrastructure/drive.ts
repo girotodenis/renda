@@ -16,7 +16,7 @@ import { googleConfig, MISSING_PICKER_KEY_MESSAGE } from '@/infrastructure/googl
  * (`VITE_GOOGLE_BACKEND=json`) a abertura de um banco existente usa
  * `driveFile/api.ts` (listagem dos arquivos criados pelo app) e nada aqui é
  * exibido ao usuário. O que os dois backends compartilham é a organização na
- * pasta `minhasacoe_app` (`ensureAppFolder`/`moveFileToFolder`).
+ * pasta `databases_app_minhas_acoes` (`ensureAppFolder`/`moveFileToFolder`).
  */
 
 const GAPI_SCRIPT_SRC = 'https://apis.google.com/js/api.js'
@@ -25,12 +25,21 @@ const DRIVE_FILES_ENDPOINT = 'https://www.googleapis.com/drive/v3/files'
 const DRIVE_FOLDER_MIME_TYPE = 'application/vnd.google-apps.folder'
 
 /**
- * Nome da pasta padrão onde o app organiza as planilhas que cria.
+ * Nome da pasta padrão onde o app organiza o banco e a planilha de cotações.
  *
  * A pasta é criada PELO app, então o escopo `drive.file` já a cobre — não é
  * preciso pedir nenhuma permissão adicional (nem novo consentimento).
  */
-export const DEFAULT_APP_FOLDER_NAME = 'minhasacoe_app'
+export const DEFAULT_APP_FOLDER_NAME = 'databases_app_minhas_acoes'
+
+/**
+ * Nomes anteriores da pasta, renomeados quando encontrados.
+ *
+ * Sem isso, quem já usava o app ficaria com os bancos na pasta antiga e uma
+ * pasta nova vazia ao lado. O `drive.file` permite renomear porque foi o app
+ * quem criou a pasta.
+ */
+export const LEGACY_APP_FOLDER_NAMES: readonly string[] = ['minhasacoe_app']
 
 let gapiScriptPromise: Promise<void> | null = null
 let pickerLibraryPromise: Promise<void> | null = null
@@ -212,7 +221,8 @@ export async function findAppFolder(
 }
 
 /**
- * Garante a existência da pasta padrão do app (`minhasacoe_app`) e devolve seu id.
+ * Garante a existência da pasta padrão do app (`databases_app_minhas_acoes`) e
+ * devolve seu id.
  *
  * É compatível com o escopo `drive.file`: a pasta é criada PELO app, que passa a
  * enxergá-la e gerenciá-la sem escopos adicionais. Limitação inerente ao escopo:
@@ -228,6 +238,21 @@ export async function ensureAppFolder(
 ): Promise<string> {
   const existing = await findAppFolder(accessToken, name)
   if (existing) return existing
+
+  // Pasta de uma versão anterior: renomeia em vez de criar outra pasta vazia e
+  // deixar os bancos antigos fora da organização.
+  if (name === DEFAULT_APP_FOLDER_NAME) {
+    for (const legado of LEGACY_APP_FOLDER_NAMES) {
+      const legadoId = await findAppFolder(accessToken, legado)
+      if (!legadoId) continue
+      try {
+        await renameFile(accessToken, legadoId, name)
+      } catch {
+        // Sem renomear, ela continua servindo de organização com o nome antigo.
+      }
+      return legadoId
+    }
+  }
 
   const trimmed = name.trim().length > 0 ? name.trim() : DEFAULT_APP_FOLDER_NAME
   const created = await fetch(`${DRIVE_FILES_ENDPOINT}?fields=id`, {
@@ -245,6 +270,22 @@ export async function ensureAppFolder(
     throw new GoogleDriveError(500, 'O Google Drive não retornou o id da pasta criada.')
   }
   return createdBody.id
+}
+
+/** Renomeia um arquivo/pasta que o app criou (usado na pasta legada). */
+async function renameFile(accessToken: string, fileId: string, name: string): Promise<void> {
+  const response = await fetch(
+    `${DRIVE_FILES_ENDPOINT}/${encodeURIComponent(fileId)}?fields=id,name`,
+    {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ name }),
+    },
+  )
+  if (!response.ok) throw toDriveError(response)
 }
 
 /**
@@ -321,7 +362,7 @@ function loadPickerLibrary(): Promise<void> {
 export interface PickSpreadsheetOptions {
   /**
    * Pasta exibida inicialmente pelo Picker. Quando o app já criou a pasta
-   * `minhasacoe_app`, o Picker abre direto nela; o usuário ainda pode navegar
+   * `databases_app_minhas_acoes`, o Picker abre direto nela; o usuário ainda pode navegar
    * para outras pastas (inclusive a raiz) normalmente.
    */
   folderId?: string | null

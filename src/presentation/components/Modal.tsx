@@ -1,6 +1,7 @@
 import { X } from 'lucide-react'
 import { useEffect, useId, useRef } from 'react'
 import type { ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { cn } from '@/presentation/cn'
 
 interface ModalProps {
@@ -25,6 +26,11 @@ interface ModalProps {
  * Comportamentos: fecha com **Esc**, clique no **backdrop** e botão **Fechar**;
  * bloqueia o scroll do body enquanto aberto; move o foco para o painel ao abrir
  * e devolve o foco ao elemento anterior ao fechar.
+ *
+ * O conteúdo é renderizado em um **portal no `body`**: ancestrais com
+ * `backdrop-filter` (o header usa `backdrop-blur`), `transform` ou `filter`
+ * viram *containing block* de `position: fixed` — sem o portal, um modal aberto
+ * de dentro do header (ex.: "Bloquear agora") ficava preso na área do menu.
  */
 export function Modal({ open, onClose, titulo, children, className, corpoClassName, acoes }: ModalProps) {
   const tituloId = useId()
@@ -59,7 +65,7 @@ export function Modal({ open, onClose, titulo, children, className, corpoClassNa
 
   if (!open) return null
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-900/50 p-4 sm:items-center"
       onMouseDown={(event) => {
@@ -95,6 +101,7 @@ export function Modal({ open, onClose, titulo, children, className, corpoClassNa
         </header>
         <div className={cn('px-5 py-4', corpoClassName)}>{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
