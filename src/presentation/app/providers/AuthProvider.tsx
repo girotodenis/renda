@@ -30,7 +30,7 @@ import {
   isModoLocal,
   setModoArmazenamento,
 } from '@/infrastructure/modoArmazenamento'
-import { tokenStorage, workspaceStorage, migracaoStorage } from '@/infrastructure/storage'
+import { tokenStorage, workspaceStorage, migracaoStorage, pastaAppStorage } from '@/infrastructure/storage'
 import {
   esquecerChave,
   esquecerTodasAsChaves,
@@ -43,12 +43,14 @@ import { temCofreLocal } from '@/infrastructure/cripto/localCofre'
 import { clearLocalSheets } from '@/infrastructure/sheets/localSheets'
 import {
   ensureAppFolder,
+  findAppFolder,
   findSpreadsheetsByName,
   GoogleDriveError,
   GooglePickerError,
   listAppSpreadsheets,
   moveFileToFolder,
   pickSpreadsheet,
+  urlPastaDoApp,
 } from '@/infrastructure/drive'
 import {
   GOOGLE_SCOPES,
@@ -103,6 +105,7 @@ interface AuthProviderProps {
 async function organizarNaPastaDoApp(accessToken: string, spreadsheetId: string): Promise<void> {
   try {
     const folderId = await ensureAppFolder(accessToken)
+    pastaAppStorage.save(urlPastaDoApp(folderId))
     await moveFileToFolder(accessToken, spreadsheetId, folderId)
   } catch {
     // Organização é cosmética; qualquer falha não impede o uso do banco.
@@ -116,7 +119,10 @@ async function organizarNaPastaDoApp(accessToken: string, spreadsheetId: string)
  */
 async function garantirPastaDoApp(accessToken: string): Promise<string | null> {
   try {
-    return await ensureAppFolder(accessToken)
+    const folderId = await ensureAppFolder(accessToken)
+    // Guarda a URL: o botão "Abrir no Google Drive" abre a pasta, não o arquivo.
+    pastaAppStorage.save(urlPastaDoApp(folderId))
+    return folderId
   } catch {
     return null
   }
@@ -455,11 +461,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [])
 
   const salvarWorkspace = useCallback((loaded: SpreadsheetWorkspace) => {
-    workspaceStorage.save(loaded)
-    setWorkspace(loaded)
+    // A pasta do app é da conta, não do banco: ao abrir um banco criado antes de
+    // essa informação existir, preserva a URL da pasta já conhecida.
+    const pastaUrl = loaded.pastaUrl ?? workspaceStorage.load()?.pastaUrl ?? pastaAppStorage.load()
+    const salvo: SpreadsheetWorkspace = pastaUrl ? { ...loaded, pastaUrl } : loaded
+    workspaceStorage.save(salvo)
+    setWorkspace(salvo)
     // Banco cifrado recém-aberto só chega aqui quando já desbloqueado.
     setStatus(
-      statusDoBanco(loaded, isModoLocal() || !tokenRef.current ? 'local' : 'authenticated'),
+      statusDoBanco(salvo, isModoLocal() || !tokenRef.current ? 'local' : 'authenticated'),
     )
   }, [])
 
@@ -934,6 +944,36 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const clearError = useCallback(() => setError(null), [])
 
+  /**
+   * URL da pasta do app no Drive (`databases_app_minhas_acoes`) — destino do
+   * botão "Abrir no Google Drive" no backend `json`.
+   *
+   * Devolve o valor já conhecido (workspace/cache do navegador) sem ir à rede.
+   * Quando ele ainda não existe (bancos criados antes desta informação), busca
+   * a pasta uma única vez com o escopo `drive.file` e passa a guardá-la. Nunca
+   * cria nada: sem pasta (ou sem token/rede) devolve `null` e a UI cai para a
+   * URL do arquivo do banco.
+   */
+  const obterUrlPastaDoApp = useCallback(async (): Promise<string | null> => {
+    const conhecida = workspaceStorage.load()?.pastaUrl ?? pastaAppStorage.load()
+    if (conhecida) return conhecida
+    if (isModoLocal() || !isJsonBackend() || !isOnline()) return null
+
+    const token = tokenRef.current ?? (await ensureAccessToken())
+    if (!token) return null
+
+    try {
+      const folderId = await findAppFolder(token)
+      if (!folderId) return null
+      const url = urlPastaDoApp(folderId)
+      pastaAppStorage.save(url)
+      return url
+    } catch {
+      // Sem rede/quota/sessão expirada: o botão cai para a URL do arquivo.
+      return null
+    }
+  }, [ensureAccessToken])
+
   const value = useMemo<AuthContextValue>(
     () => ({
       status,
@@ -962,6 +1002,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       migrarPlanilhaAntiga,
       dispensarMigracao,
       ensureAccessToken,
+      obterUrlPastaDoApp,
       clearError,
     }),
     [
@@ -984,6 +1025,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       logout,
       migrarPlanilhaAntiga,
       modo,
+      obterUrlPastaDoApp,
       recarregarEstadoCriptografia,
       status,
       usarModoLocal,

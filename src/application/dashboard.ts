@@ -4,6 +4,7 @@ import type { AoProgredir } from '@/domain/progresso'
 import { aplicarPrecosAtuais, calcularPosicoes, calcularResumo } from '@/domain/consolidado'
 import type { PosicaoConsolidada, ResumoCarteira } from '@/domain/consolidado'
 import {
+  calcularVariacaoDiaPercent,
   precosDeCotacoes,
   precosManuaisDeOperacoes,
   precoMercadoValido,
@@ -292,6 +293,75 @@ function montarDashboard(consulta: MontarConsulta): DashboardData {
   const consolidado = aplicarPrecosAtuais(posicoes, precosDeCotacoes(cotacoes))
 
   return { ...base, consolidado, resumo: calcularResumo(consolidado), cotacoes }
+}
+
+/**
+ * Reaplica **um único** preço atual (cotação recém-buscada) sobre os dados já
+ * carregados — é o que o botão de refresh do modal do ativo precisa: atualizar
+ * o ticker escolhido sem consultar as cotações dos demais.
+ *
+ * O consolidado é recalculado pelas fórmulas puras da Seção 5.1 (`aplicarPrecosAtuais`)
+ * a partir das posições; as outras linhas permanecem idênticas porque recebem
+ * exatamente o preço que já estava resolvido. Sem operações em cache a base vem
+ * da própria aba `Consolidado` (mesmo critério de `montarDashboard`).
+ */
+export function aplicarCotacaoNoDashboard(
+  data: DashboardData,
+  ticker: string,
+  preco: number,
+  precoAbertura: number | null = null,
+): DashboardData {
+  const alvo = ticker.trim().toUpperCase()
+  if (alvo.length === 0 || !Number.isFinite(preco) || preco <= 0) return data
+
+  const posicoes = calcularPosicoes(data.operacoes)
+  const base: PosicaoConsolidada[] =
+    posicoes.length > 0
+      ? posicoes
+      : data.consolidado.map((linha) => ({
+          ticker: linha.ticker,
+          categoria: linha.categoria,
+          quantidadeAtual: linha.quantidadeAtual,
+          precoMedio: linha.precoMedio,
+          totalInvestido: linha.totalInvestido,
+        }))
+
+  const posicao = base.find((item) => item.ticker.trim().toUpperCase() === alvo)
+  if (!posicao) return data
+
+  const chave =
+    [...data.cotacoes.keys()].find((item) => item.trim().toUpperCase() === alvo) ?? posicao.ticker
+  const anterior = data.cotacoes.get(chave)
+  const abertura = precoAbertura ?? anterior?.precoAbertura ?? null
+
+  const cotacoes = new Map(data.cotacoes)
+  cotacoes.set(chave, {
+    ticker: posicao.ticker,
+    categoria: posicao.categoria,
+    precoAtual: preco,
+    precoAbertura: abertura,
+    variacaoDiaPercent: calcularVariacaoDiaPercent(preco, abertura),
+    fonte: 'api',
+    status: 'disponivel',
+    usandoFallback: false,
+    atualizadoEm: new Date().toISOString(),
+  })
+
+  // Mantém o preço resolvido das demais posições (as chaves do mapa podem ter
+  // caixa diferente do ticker da posição — Tesouro Direto, por exemplo).
+  const precos = new Map<string, number>()
+  for (const item of base) {
+    const resolvida =
+      cotacoes.get(item.ticker) ??
+      [...cotacoes.entries()].find(
+        ([chaveMapa]) => chaveMapa.trim().toUpperCase() === item.ticker.trim().toUpperCase(),
+      )?.[1]
+    if (resolvida) precos.set(item.ticker, resolvida.precoAtual)
+  }
+  precos.set(posicao.ticker, preco)
+
+  const consolidado = aplicarPrecosAtuais(base, precos)
+  return { ...data, cotacoes, consolidado, resumo: calcularResumo(consolidado) }
 }
 
 /**

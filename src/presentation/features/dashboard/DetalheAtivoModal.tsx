@@ -1,5 +1,6 @@
-import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Loader2, RefreshCw } from 'lucide-react'
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react'
+import type { ReactNode } from 'react'
 import { useAuth } from '@/presentation/app/providers/authContext'
 import { Alert } from '@/presentation/components/Alert'
 import { Modal } from '@/presentation/components/Modal'
@@ -26,6 +27,7 @@ import { DetalheAtivoOperacoes } from './DetalheAtivoOperacoes'
 import { DetalheAtivoProventos } from './DetalheAtivoProventos'
 import { DetalheAtivoValuation } from './DetalheAtivoValuation'
 import { sincronizarConsolidadoESnapshot } from '@/application/escritasAtivo'
+import type { ResultadoCotacaoTicker } from '@/application/cotacoesApi'
 
 /** Gráficos carregados sob demanda (Recharts fora do bundle inicial — RNF06). */
 const DetalheAtivoGraficos = lazy(() =>
@@ -48,6 +50,11 @@ interface DetalheAtivoModalProps {
   valuation: Valuation | null
   /** Recarrega os dados do dashboard após registrar/editar/excluir um lançamento. */
   onChanged: () => Promise<void>
+  /**
+   * Atualiza **somente** a cotação deste ticker (botão de refresh do campo
+   * "Preço atual"). Quando ausente, o botão não aparece.
+   */
+  onAtualizarCotacao?: (ticker: string) => Promise<ResultadoCotacaoTicker>
   onClose: () => void
   /** Abre o ticker anterior na ordem da tabela de ativos (navegação circular). */
   onAnterior?: () => void
@@ -105,6 +112,7 @@ export function DetalheAtivoModal({
   proventos,
   valuation,
   onChanged,
+  onAtualizarCotacao,
   onClose,
   onAnterior,
   onProximo,
@@ -254,7 +262,11 @@ export function DetalheAtivoModal({
               aria-labelledby="aba-resumo"
               className="space-y-4"
             >
-              <DetalheAtivoResumo detalhe={detalhe} proventos={proventos} />
+              <DetalheAtivoResumo
+                detalhe={detalhe}
+                proventos={proventos}
+                onAtualizarCotacao={onAtualizarCotacao}
+              />
             </div>
           ) : null}
 
@@ -450,10 +462,43 @@ function BarraAbas({ aba, onChange, contadores }: BarraAbasProps) {
 export function DetalheAtivoResumo({
   detalhe,
   proventos,
+  onAtualizarCotacao,
 }: {
   detalhe: DetalheAtivo
   proventos: readonly Provento[]
+  /** Atualiza a cotação **só deste** ativo (botão ao lado de "Preço atual"). */
+  onAtualizarCotacao?: (ticker: string) => Promise<ResultadoCotacaoTicker>
 }) {
+  const [atualizandoPreco, setAtualizandoPreco] = useState(false)
+  const [avisoPreco, setAvisoPreco] = useState<{
+    tipo: 'success' | 'error' | 'info'
+    texto: string
+  } | null>(null)
+
+  // Troca de ativo: o aviso do ticker anterior não vale mais.
+  useEffect(() => {
+    setAvisoPreco(null)
+    setAtualizandoPreco(false)
+  }, [detalhe.ticker])
+
+  const atualizarPreco = useCallback(async () => {
+    if (!onAtualizarCotacao || atualizandoPreco) return
+    setAtualizandoPreco(true)
+    setAvisoPreco(null)
+    try {
+      const resultado = await onAtualizarCotacao(detalhe.ticker)
+      if (resultado.status === 'atualizada') {
+        setAvisoPreco({ tipo: 'success', texto: `Cotação de ${detalhe.ticker} atualizada.` })
+      } else {
+        setAvisoPreco({ tipo: 'info', texto: resultado.mensagem })
+      }
+    } catch (error) {
+      setAvisoPreco({ tipo: 'error', texto: describeSheetsError(error) })
+    } finally {
+      setAtualizandoPreco(false)
+    }
+  }, [atualizandoPreco, detalhe.ticker, onAtualizarCotacao])
+
   const periodo =
     detalhe.primeiraCompra
       ? `de ${formatarDataBR(detalhe.primeiraCompra)} até hoje`
@@ -472,10 +517,44 @@ export function DetalheAtivoResumo({
         <Metrica rotulo="Menor compra" valor={formatarCentavosOuTraco(detalhe.menorPrecoCompra)} />
         <Metrica rotulo="Quantidade" valor={formatarQuantidade(detalhe.quantidade)} />
         <Metrica rotulo="Preço médio" valor={formatarCentavos(detalhe.precoMedio)} />
-        <Metrica rotulo="Preço atual" valor={formatarCentavos(detalhe.precoAtual)} />
+        <Metrica
+          rotulo="Preço atual"
+          valor={formatarCentavos(detalhe.precoAtual)}
+          acao={
+            onAtualizarCotacao ? (
+              <button
+                type="button"
+                onClick={() => void atualizarPreco()}
+                disabled={atualizandoPreco}
+                aria-label={`Atualizar a cotação de ${detalhe.ticker}`}
+                title="Atualizar a cotação deste ativo"
+                className="rounded p-0.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-brand-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand-600 disabled:cursor-wait disabled:opacity-60"
+              >
+                <RefreshCw
+                  className={cn('h-3.5 w-3.5', atualizandoPreco && 'animate-spin')}
+                  aria-hidden
+                />
+              </button>
+            ) : null
+          }
+        />
         <Metrica rotulo="Valor investido" valor={formatarCentavos(detalhe.valorInvestido)} />
         <Metrica rotulo="Valor atual" valor={formatarCentavos(detalhe.valorAtual)} />
       </div>
+
+      {avisoPreco ? (
+        <p
+          role="status"
+          className={cn(
+            'text-xs',
+            avisoPreco.tipo === 'success' && 'text-emerald-700',
+            avisoPreco.tipo === 'error' && 'text-red-600',
+            avisoPreco.tipo === 'info' && 'text-slate-500',
+          )}
+        >
+          {avisoPreco.texto}
+        </p>
+      ) : null}
 
       <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
         <p className="text-xs uppercase tracking-wide text-slate-500">Proventos no período</p>
@@ -581,10 +660,22 @@ export function DetalheAtivoResumo({
   )
 }
 
-function Metrica({ rotulo, valor }: { rotulo: string; valor: string }) {
+function Metrica({
+  rotulo,
+  valor,
+  acao,
+}: {
+  rotulo: string
+  valor: string
+  /** Ação opcional exibida à direita do rótulo (ex.: botão de atualizar). */
+  acao?: ReactNode
+}) {
   return (
     <div className="rounded-lg border border-slate-200 px-3 py-2">
-      <p className="text-xs uppercase tracking-wide text-slate-500">{rotulo}</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs uppercase tracking-wide text-slate-500">{rotulo}</p>
+        {acao}
+      </div>
       <p className="text-sm font-semibold tabular-nums text-slate-900">{valor}</p>
     </div>
   )

@@ -1,5 +1,5 @@
 import { ExternalLink, Files, HardDrive, LayoutDashboard, Loader2, RefreshCw, Save } from 'lucide-react'
-import { lazy, Suspense, useCallback, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '@/presentation/app/providers/authContext'
 import { Alert } from '@/presentation/components/Alert'
@@ -71,7 +71,7 @@ export function DashboardPage() {
 }
 
 function DashboardContent() {
-  const { workspace, isModoLocal } = useAuth()
+  const { workspace, isModoLocal, obterUrlPastaDoApp } = useAuth()
   const {
     data,
     isLoading,
@@ -86,6 +86,7 @@ function DashboardContent() {
     progressoAtualizacao,
     cancelarAtualizacao,
     registrarSnapshotManual,
+    atualizarCotacaoDoTicker,
   } = useDashboard()
 
   const consolidado = useMemo(() => data?.consolidado ?? [], [data])
@@ -155,11 +156,28 @@ function DashboardContent() {
     return lista
   }, [data])
 
+  // No backend `json` o botão abre a PASTA do app no Drive (onde ficam o cofre
+  // e a planilha de cotações), e não o arquivo. A URL já vem do workspace ou do
+  // cache do navegador; se ainda não for conhecida, é descoberta uma única vez.
+  const [pastaUrl, setPastaUrl] = useState<string | null>(() => workspace?.pastaUrl ?? null)
+  useEffect(() => {
+    if (isModoLocal || !isJsonBackend()) return undefined
+    let ativo = true
+    void obterUrlPastaDoApp().then((url) => {
+      if (ativo && url) setPastaUrl(url)
+    })
+    return () => {
+      ativo = false
+    }
+  }, [isModoLocal, obterUrlPastaDoApp])
+
   const sheetUrl = workspace
-    ? (workspace.spreadsheetUrl ??
-      (isJsonBackend()
-        ? `https://drive.google.com/file/d/${workspace.spreadsheetId}/view`
-        : `https://docs.google.com/spreadsheets/d/${workspace.spreadsheetId}/edit`))
+    ? isJsonBackend()
+      ? (pastaUrl ??
+        workspace.pastaUrl ??
+        `https://drive.google.com/file/d/${workspace.spreadsheetId}/view`)
+      : (workspace.spreadsheetUrl ??
+        `https://docs.google.com/spreadsheets/d/${workspace.spreadsheetId}/edit`)
     : '#'
 
   return (
@@ -183,6 +201,11 @@ function DashboardContent() {
               href={sheetUrl}
               target="_blank"
               rel="noreferrer"
+              title={
+                isJsonBackend()
+                  ? 'Abrir a pasta databases_app_minhas_acoes no Google Drive'
+                  : undefined
+              }
               className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100"
             >
               <ExternalLink className="h-4 w-4" aria-hidden />
@@ -294,6 +317,7 @@ function DashboardContent() {
             proventos={data.proventos}
             valuation={valuationAtivo}
             onChanged={refresh}
+            onAtualizarCotacao={atualizarCotacaoDoTicker}
             onClose={() => setAtivoSelecionado(null)}
             onAnterior={tickersNavegacao.length > 1 ? () => navegarAtivo(-1) : undefined}
             onProximo={tickersNavegacao.length > 1 ? () => navegarAtivo(1) : undefined}

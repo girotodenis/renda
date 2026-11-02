@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '@/presentation/app/providers/authContext'
 import { carregarDashboard, lerDashboardDoCache } from '@/application/dashboard'
 import type { DashboardData, DiagnosticoCotacoesApi } from '@/application/dashboard'
-import { persistirESincronizarCotacoesApi } from '@/application/cotacoesApi'
+import { aplicarCotacaoNoDashboard } from '@/application/dashboard'
+import { atualizarCotacaoTicker, persistirESincronizarCotacoesApi } from '@/application/cotacoesApi'
+import type { ResultadoCotacaoTicker } from '@/application/cotacoesApi'
 import { jaTemSnapshotDeHoje, registrarSnapshot, upsertHistorico } from '@/application/historico'
 import type { RepositoryContext } from '@/infrastructure/repositories'
 import { isAtualizacaoCancelada } from '@/domain/progresso'
@@ -141,6 +143,13 @@ export interface UseDashboardResult {
   cancelarAtualizacao: () => void
   /** Grava um snapshot manual no `Historico` (Seção 2). */
   registrarSnapshotManual: () => Promise<void>
+  /**
+   * Atualiza **somente** a cotação de um ticker (botão de refresh do modal do
+   * ativo): consulta a cadeia de integrações só para ele, persiste o preço no
+   * banco quando possível e reflete o valor nos dados já carregados — sem
+   * consultar as cotações dos demais ativos.
+   */
+  atualizarCotacaoDoTicker: (ticker: string) => Promise<ResultadoCotacaoTicker>
 }
 
 /**
@@ -345,6 +354,26 @@ export function useDashboard(): UseDashboardResult {
     }
   }, [data, resolveContext])
 
+  const atualizarCotacaoDoTicker = useCallback(
+    async (ticker: string): Promise<ResultadoCotacaoTicker> => {
+      const context = await resolveContext()
+      if (!context) {
+        return { status: 'sem-cotacao', mensagem: 'Sessão expirada. Faça login novamente.' }
+      }
+      const resultado = await atualizarCotacaoTicker(context, ticker)
+      if (resultado.status === 'atualizada') {
+        // Atualiza só o ticker escolhido: o resto do dashboard fica intocado.
+        setData((atual) =>
+          atual
+            ? aplicarCotacaoNoDashboard(atual, ticker, resultado.preco, resultado.precoAbertura)
+            : atual,
+        )
+      }
+      return resultado
+    },
+    [resolveContext],
+  )
+
   return {
     data,
     isLoading,
@@ -359,5 +388,6 @@ export function useDashboard(): UseDashboardResult {
     progressoAtualizacao,
     cancelarAtualizacao,
     registrarSnapshotManual,
+    atualizarCotacaoDoTicker,
   }
 }

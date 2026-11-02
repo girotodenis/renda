@@ -1,6 +1,19 @@
 import { sincronizarConsolidadoESnapshot } from '@/application/escritasAtivo'
-import { operacoesRepo } from '@/infrastructure/repositories'
+import { carregarConfiguracoes } from '@/application/configuracoes'
+import { isCripto, isTesouroDireto, usaGoogFinance } from '@/domain/categoria'
+import type {
+  CotacaoMercado,
+  OpcoesConsultaCotacoes,
+  ResultadoCotacoes,
+} from '@/domain/provedoresCotacao'
+import { consolidadoRepo, operacoesRepo } from '@/infrastructure/repositories'
 import type { RepositoryContext } from '@/infrastructure/repositories'
+import {
+  provedorCotacoesB3,
+  provedorCotacoesCripto,
+  provedorCotacoesTesouro,
+} from '@/infrastructure/cotacoes/registro'
+import { isModoLocal } from '@/infrastructure/modoArmazenamento'
 import type { Operacao } from '@/domain/entities'
 
 /**
@@ -74,4 +87,122 @@ export async function persistirESincronizarCotacoesApi(
   const alteradas = await persistirCotacoesApi(context, precos)
   if (alteradas === 0) return
   await sincronizarConsolidadoESnapshot(context)
+}
+
+/**
+ * Resultado da atualização pontual de um ticker (botão de refresh do modal).
+ *
+ * - `atualizada`: preço novo (centavos) já gravado no banco quando possível;
+ * - `sem-cotacao`: a integração foi consultada mas não devolveu preço;
+ * - `sem-suporte`: a categoria não tem cotação automática (Renda Fixa).
+ */
+export type ResultadoCotacaoTicker =
+  | { status: 'atualizada'; preco: number; precoAbertura: number | null }
+  | { status: 'sem-cotacao'; mensagem: string }
+  | { status: 'sem-suporte'; mensagem: string }
+
+/** Operação mais recente do ticker (define categoria e vencimento). */
+function operacaoMaisRecente(
+  operacoes: readonly Operacao[],
+  ticker: string,
+): Operacao | null {
+  const alvo = ticker.trim().toUpperCase()
+  let recente: Operacao | null = null
+  for (const operacao of operacoes) {
+    if (operacao.ticker.trim().toUpperCase() !== alvo) continue
+    if (!recente || eMaisRecente(operacao, recente)) recente = operacao
+  }
+  return recente
+}
+
+/** Cotação de um ticker no resultado, comparando sem diferenciar caixa. */
+function buscarCotacao(
+  cotacoes: ReadonlyMap<string, CotacaoMercado>,
+  ticker: string,
+): CotacaoMercado | null {
+  const alvo = ticker.trim().toUpperCase()
+  for (const [chave, cotacao] of cotacoes) {
+    if (chave.trim().toUpperCase() === alvo) return cotacao
+  }
+  return null
+}
+
+/**
+ * Atualiza **somente** a cotação de um ticker (botão de refresh do modal do
+ * ativo), usando a mesma cadeia de provedores da atualização geral.
+ *
+ * A categoria (e o vencimento, no Tesouro Direto) vem da operação mais recente
+ * do ticker; sem operação, cai para a linha do `Consolidado` em cache. O preço
+ * encontrado é persistido pelo mesmo fluxo da marcação manual (operação mais
+ * recente + `Consolidado` + snapshot), de forma **best-effort**: se a gravação
+ * falhar, o valor novo ainda é devolvido para a tela.
+ */
+export async function atualizarCotacaoTicker(
+  context: RepositoryContext,
+  ticker: string,
+): Promise<ResultadoCotacaoTicker> {
+  const alvo = ticker.trim()
+  if (alvo.length === 0) {
+    return { status: 'sem-cotacao', mensagem: 'Ticker inválido para atualizar a cotação.' }
+  }
+
+  const operacoes = await operacoesRepo.list(context)
+  const operacao = operacaoMaisRecente(operacoes, alvo)
+  const linhaConsolidado = consolidadoRepo
+    .readCache(context.spreadsheetId)
+    ?.find((linha) => linha.ticker.trim().toUpperCase() === alvo.toUpperCase())
+  const categoria = operacao?.categoria ?? linhaConsolidado?.categoria
+
+  if (!categoria) {
+    return {
+      status: 'sem-cotacao',
+      mensagem: `Nenhuma posição de ${alvo} encontrada para atualizar a cotação.`,
+    }
+  }
+
+  if (!usaGoogFinance(categoria) && !isCripto(categoria) && !isTesouroDireto(categoria)) {
+    return {
+      status: 'sem-suporte',
+      mensagem: `${alvo} não tem cotação automática — use o valor manual.`,
+    }
+  }
+
+  const config = await carregarConfiguracoes(context)
+  const opcoes: OpcoesConsultaCotacoes = {
+    tokens: config.tokens,
+    // O sentinela `local` não é token OAuth: o modo local não consulta a
+    // planilha de cotações (as APIs de cotação seguem funcionando).
+    accessToken: isModoLocal() ? undefined : context.accessToken,
+    forceRefresh: true,
+  }
+
+  let resultado: ResultadoCotacoes
+  if (isTesouroDireto(categoria)) {
+    resultado = await provedorCotacoesTesouro.atualizar(
+      [{ ticker: alvo, vencimento: operacao?.vencimento ?? null }],
+      opcoes,
+    )
+  } else if (isCripto(categoria)) {
+    resultado = await provedorCotacoesCripto.atualizar([alvo], opcoes)
+  } else {
+    resultado = await provedorCotacoesB3.atualizar([alvo], opcoes)
+  }
+
+  const cotacao = buscarCotacao(resultado.cotacoes, alvo)
+  if (!cotacao) {
+    return {
+      status: 'sem-cotacao',
+      mensagem: resultado.semToken
+        ? 'Nenhuma integração de cotações está configurada. Informe o token em Configurações → Integrações.'
+        : `A integração não devolveu cotação de ${alvo} agora. Tente novamente em instantes.`,
+    }
+  }
+
+  try {
+    await persistirESincronizarCotacoesApi(context, new Map([[alvo, cotacao.preco]]))
+  } catch {
+    // Best-effort (RNF04): o valor novo aparece na tela mesmo sem gravar.
+  }
+
+  return { status: 'atualizada', preco: cotacao.preco, precoAbertura: cotacao.precoAbertura }
 }

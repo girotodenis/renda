@@ -23,6 +23,12 @@ export interface SpreadsheetWorkspace {
   title: string
   /** URL de edição do banco (Sheets ou Drive), quando conhecida. */
   spreadsheetUrl: string | null
+  /**
+   * URL da pasta do app no Drive (`databases_app_minhas_acoes`) onde o banco e
+   * a planilha de cotações ficam. Só o backend `json` preenche — é o destino do
+   * botão "Abrir no Google Drive". Ausente quando ainda não foi descoberta.
+   */
+  pastaUrl?: string | null
   sheetIds: SheetIdMap
   /** ISO 8601 do momento em que o workspace foi salvo/atualizado. */
   updatedAt: string

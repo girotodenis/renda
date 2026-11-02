@@ -13,6 +13,7 @@ const STORAGE_KEYS = {
   workspace: 'minhaacoes.workspace',
   consent: 'minhaacoes.oauth.consent',
   layout: 'minhaacoes.layout',
+  pastaApp: 'minhaacoes.drive.pasta',
 } as const
 
 /**
@@ -103,6 +104,22 @@ export const consentStorage = {
 export const layoutStorage = {
   load: (): LayoutTema => parseLayoutTema(readStorageJson<string>(STORAGE_KEYS.layout)),
   save: (tema: LayoutTema): void => writeStorageJson(STORAGE_KEYS.layout, tema),
+}
+
+/**
+ * URL da pasta do app no Drive (`databases_app_minhas_acoes`).
+ *
+ * Fica fora do workspace porque a pasta é da **conta**, não do banco: assim o
+ * botão "Abrir no Google Drive" funciona mesmo em bancos abertos antes de a
+ * URL passar a ser conhecida (ou depois de trocar de banco).
+ */
+export const pastaAppStorage = {
+  load: (): string | null => {
+    const url = readStorageJson<string>(STORAGE_KEYS.pastaApp)
+    return typeof url === 'string' && url.length > 0 ? url : null
+  },
+  save: (url: string): void => writeStorageJson(STORAGE_KEYS.pastaApp, url),
+  clear: (): void => removeStorageKey(STORAGE_KEYS.pastaApp),
 }
 
 /** Dispensa da oferta de migração do banco legado (`migrarPlanilha`). */
