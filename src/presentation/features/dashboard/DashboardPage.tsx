@@ -86,6 +86,7 @@ function DashboardContent() {
     progressoAtualizacao,
     cancelarAtualizacao,
     registrarSnapshotManual,
+    atualizarCotacaoDoTicker,
   } = useDashboard()
 
   const consolidado = useMemo(() => data?.consolidado ?? [], [data])
@@ -316,6 +317,7 @@ function DashboardContent() {
             proventos={data.proventos}
             valuation={valuationAtivo}
             onChanged={refresh}
+            onAtualizarCotacao={atualizarCotacaoDoTicker}
             onClose={() => setAtivoSelecionado(null)}
             onAnterior={tickersNavegacao.length > 1 ? () => navegarAtivo(-1) : undefined}
             onProximo={tickersNavegacao.length > 1 ? () => navegarAtivo(1) : undefined}
