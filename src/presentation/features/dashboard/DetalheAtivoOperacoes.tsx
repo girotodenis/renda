@@ -68,7 +68,7 @@ export function DetalheAtivoOperacoes({
 
   const resolveContext = useCallback(async (): Promise<RepositoryContext | null> => {
     if (!workspace) {
-      setError('Configure uma planilha antes de lançar operações.')
+      setError('Configure um banco de dados antes de lançar operações.')
       return null
     }
     const token = await ensureAccessToken()

@@ -1,6 +1,7 @@
 import { Database, Loader2, Search } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import type { PlanilhaExistente } from '@/domain/workspace'
+import { isJsonBackend } from '@/infrastructure/googleConfig'
 import { useAuth } from '@/presentation/app/providers/authContext'
 import { Alert } from '@/presentation/components/Alert'
 import { Modal } from '@/presentation/components/Modal'
@@ -27,8 +28,9 @@ function formatarData(iso: string | null | undefined): string | null {
 
 /**
  * Lista os bancos já existentes na origem ativa (arquivos JSON no Drive ou
- * planilhas visíveis para o app) e abre o escolhido. O Google Picker, quando
- * disponível, fica como ação secundária para uma planilha ainda desconhecida.
+ * planilhas visíveis para o app) e abre o escolhido. O Google Picker só existe
+ * no build `sheets` — no cofre JSON a lista do Drive já mostra tudo o que o app
+ * pode abrir.
  *
  * Banco **cifrado** não abre direto: `abrirBancoPorId` devolve
  * `chave-necessaria` e o mesmo modal pede a senha, sem trocar o banco ativo
@@ -173,7 +175,7 @@ export function AbrirBancoModal({ open, onClose }: AbrirBancoModalProps) {
             Atualizar lista
           </button>
 
-          {isPickerConfigured ? (
+          {isPickerConfigured && !isJsonBackend() ? (
             <button
               type="button"
               onClick={() => void abrirComPicker()}

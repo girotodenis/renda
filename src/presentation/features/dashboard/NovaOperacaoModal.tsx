@@ -49,7 +49,7 @@ export function NovaOperacaoModal({
     async (values: OperacaoFormOutput) => {
       setError(null)
       if (!workspace) {
-        setError('Configure uma planilha antes de lançar operações.')
+        setError('Configure um banco de dados antes de lançar operações.')
         return
       }
       const token = await ensureAccessToken()

@@ -224,7 +224,7 @@ export function DetalheAtivoValuation({
 
   async function handleSave(values: ValuationFormOutput) {
     if (!workspace) {
-      setError('Configure uma planilha antes de salvar a análise.')
+      setError('Configure um banco de dados antes de salvar a análise.')
       return
     }
     const token = await ensureAccessToken()

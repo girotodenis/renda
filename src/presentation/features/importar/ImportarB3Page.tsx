@@ -29,7 +29,7 @@ export function ImportarB3Page() {
 
   const resolveContext = useCallback(async (): Promise<RepositoryContext | null> => {
     if (!workspace) {
-      setError('Configure uma planilha antes de importar.')
+      setError('Configure um banco de dados antes de importar.')
       return null
     }
     const token = await ensureAccessToken()
@@ -121,8 +121,8 @@ export function ImportarB3Page() {
       </header>
 
       {!workspace ? (
-        <Alert variant="info" title="Nenhuma planilha configurada">
-          Selecione ou crie uma planilha em{' '}
+        <Alert variant="info" title="Nenhum banco de dados configurado">
+          Selecione ou crie um banco de dados em{' '}
           <Link to="/dashboard" className="font-semibold underline">
             Dashboard
           </Link>{' '}

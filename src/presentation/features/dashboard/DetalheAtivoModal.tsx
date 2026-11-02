@@ -143,7 +143,7 @@ export function DetalheAtivoModal({
       setAvisoCategoria(null)
 
       if (!workspace) {
-        setErroCategoria('Configure uma planilha antes de alterar a categoria.')
+        setErroCategoria('Configure um banco de dados antes de alterar a categoria.')
         return
       }
       const token = await ensureAccessToken()
