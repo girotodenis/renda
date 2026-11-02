@@ -19,7 +19,7 @@
 | 0 | Decisões e textos | ✅ concluída (no plano) | — |
 | 1 | Validação do escopo Google | ⏸️ pendente (manual, não bloqueante) | — |
 | 2 | Núcleo criptográfico | ✅ concluída | ver commit "Fase 2" |
-| 3 | Container e gateway JSON | ⏳ a fazer | — |
+| 3 | Container e gateway JSON | ✅ concluída | ver commit "Fase 3" |
 | 4 | Abertura, bloqueio e sessão | ⏳ a fazer | — |
 | 5 | Configurações e criação | ⏳ a fazer | — |
 | 6 | Modo local cifrado | ⏳ a fazer | — |
@@ -99,7 +99,35 @@ Validação: 52 arquivos / 532 testes verdes, `tsc --noEmit` e `eslint .` limpos
 **Aceite:** banco antigo abre igual; banco cifrado só abre com a chave; 412
 resolve cifrado; arquivo no Drive deixa de ser gzip legível.
 
-**Resultado:**
+**Resultado:** ✅ concluída.
+
+Arquivos:
+- `src/infrastructure/driveFile/container.ts` (**novo**) — `codificarBanco(sheets, version, sessao)`
+  (comprime e depois cifra) e `decodificarBanco(bytes, chave)` →
+  `{ raw, criptografado }`; detecção **só** por magic; `ChaveNecessariaError`
+  sem chave; `DatabaseFileError` para gzip/JSON inválidos.
+- `src/domain/workspace.ts` — `CriptografiaBanco = 'nenhuma' | 'total'` e
+  `SpreadsheetWorkspace.criptografia?`.
+- `src/infrastructure/driveFile/gateway.ts` — `Entry.criptografado`;
+  `fetchEntry` decifra pela chave da sessão; `uploadDatabase` **lança** se o
+  arquivo está cifrado e a chave sumiu (nunca grava em claro);
+  `resolveConflict` herda o estado do remoto e mantém cifrado;
+  `createDefaultSpreadsheet(token, title?, { chave })` nasce cifrado e já
+  desbloqueado; `alterarCriptografia(token, id, chave | null)` relê o Drive e é
+  idempotente; `estadoCriptografia(token, id)` →
+  `{ estado, bloqueado }`. `toSheetsError` preserva
+  `ChaveNecessariaError`/`ChaveIncorretaError` (não são falhas de rede).
+- `src/infrastructure/sheets/gatewayRouter.ts` — `OpcoesCriarWorkspace`,
+  repasses de `alterarCriptografia`/`estadoCriptografia`, erro 400 no backend
+  `sheets` (mensagem da seção 6.7) e `criptografiaDisponivel()` =
+  `isJsonBackend() && isCriptografiaSuportada()`.
+- Testes: `driveFile/container.test.ts` (9), +8 casos em `driveFile/gateway.test.ts`
+  e +2 em `sheets/gatewayRouter.test.ts`.
+
+Validação: 53 arquivos / 552 testes verdes, `tsc --noEmit` e `eslint .` limpos.
+
+Pendência consciente: o modo local ainda recusa `alterarCriptografia` (400) e
+`criptografiaDisponivel()` não considera o modo local — a Fase 6 fecha isso.
 
 ---
 

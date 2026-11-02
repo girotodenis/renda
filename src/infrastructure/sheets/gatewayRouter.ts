@@ -2,7 +2,10 @@ import type { SheetName } from '@/domain/sheetsSchema'
 import { SHEET_HEADERS, SHEET_NAMES } from '@/domain/sheetsSchema'
 import type { PlanilhaExistente, SpreadsheetWorkspace } from '@/domain/workspace'
 import type { RepositoryContext } from '@/domain/repositories/ports'
+import { isCriptografiaSuportada } from '@/infrastructure/cripto/webCrypto'
+import type { SessaoCripto } from '@/infrastructure/cripto/envelope'
 import * as driveFile from '@/infrastructure/driveFile/gateway'
+import type { EstadoCriptografia } from '@/infrastructure/driveFile/gateway'
 import { isJsonBackend } from '@/infrastructure/googleConfig'
 import { isModoLocal } from '@/infrastructure/modoArmazenamento'
 import * as sheets from '@/infrastructure/sheets/gateway'
@@ -35,6 +38,23 @@ export type {
   ValueRange,
   ValueRenderOption,
 } from '@/infrastructure/sheets/gateway'
+
+/**
+ * Erros e tipos de criptografia reexportados para a camada de aplicação não
+ * precisar importar o adaptador concreto (`driveFile/gateway`).
+ */
+export { ChaveIncorretaError, ChaveNecessariaError } from '@/infrastructure/cripto/envelope'
+export type { SessaoCripto } from '@/infrastructure/cripto/envelope'
+export type { EstadoCriptografia } from '@/infrastructure/driveFile/gateway'
+
+/** Opções da criação do banco (só o cofre JSON as usa por enquanto). */
+export interface OpcoesCriarWorkspace {
+  /** Sessão de criptografia: com ela o arquivo já nasce cifrado. */
+  chave?: SessaoCripto
+}
+
+const CRIPTOGRAFIA_INDISPONIVEL =
+  'Disponível no cofre JSON e no modo local; no Google Sheets as células precisam ficar legíveis.'
 
 /** Adaptador do modo Google, escolhido em tempo de build pelo backend. */
 const google = isJsonBackend() ? driveFile : sheets
@@ -197,9 +217,51 @@ export function ensureSheetHeaders(accessToken: string, spreadsheetId: string): 
 export function criarWorkspace(
   accessToken: string,
   title?: string,
+  opcoes: OpcoesCriarWorkspace = {},
 ): Promise<SpreadsheetWorkspace> {
   if (isModoLocal()) return local.localLoadWorkspace(new Date().toISOString())
-  return google.createDefaultSpreadsheet(accessToken, title)
+  if (isJsonBackend()) return driveFile.createDefaultSpreadsheet(accessToken, title, opcoes)
+  return sheets.createDefaultSpreadsheet(accessToken, title)
+}
+
+/**
+ * Liga/desliga a criptografia do banco ativo.
+ *
+ * No backend `sheets` as células precisam ficar legíveis (as fórmulas do Sheets
+ * são do próprio usuário), então a operação é recusada com 400 e mensagem
+ * explícita. O modo local entra na Fase 6.
+ */
+export function alterarCriptografia(
+  accessToken: string,
+  spreadsheetId: string,
+  chave: SessaoCripto | null,
+): Promise<void> {
+  if (!isModoLocal() && isJsonBackend()) {
+    return driveFile.alterarCriptografia(accessToken, spreadsheetId, chave)
+  }
+  return Promise.reject(new sheets.SheetsApiError(400, CRIPTOGRAFIA_INDISPONIVEL))
+}
+
+/**
+ * Estado da criptografia do banco ativo (lido dos bytes, sem precisar da chave).
+ * Fora do cofre JSON a resposta é sempre "sem criptografia": não há arquivo.
+ */
+export function estadoCriptografia(
+  accessToken: string,
+  spreadsheetId: string,
+): Promise<EstadoCriptografia> {
+  if (!isModoLocal() && isJsonBackend()) {
+    return driveFile.estadoCriptografia(accessToken, spreadsheetId)
+  }
+  return Promise.resolve({ estado: 'nenhuma', bloqueado: false })
+}
+
+/**
+ * `true` quando o backend ativo consegue cifrar o banco e o navegador tem Web
+ * Crypto (exige HTTPS ou localhost). A Fase 6 estende para o modo local.
+ */
+export function criptografiaDisponivel(): boolean {
+  return isJsonBackend() && isCriptografiaSuportada()
 }
 
 /**

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { MAGIC } from '@/domain/criptografia'
 import { SHEET_NAMES } from '@/domain/sheetsSchema'
 import { gunzip } from '@/infrastructure/compression'
 import type { CellValue } from '@/infrastructure/sheets/sheetCells'
@@ -144,5 +145,44 @@ describe('gatewayRouter', () => {
     expect(workspace.spreadsheetId).toBe('planilha-1')
     expect(linhas).toEqual([LINHA])
     expect(sheets.chamadas.every((url) => url.includes('sheets.googleapis.com'))).toBe(true)
+  })
+
+  it('com backend json repassa a chave na criação e lê o estado pela magic', async () => {
+    vi.stubEnv('VITE_GOOGLE_BACKEND', 'json')
+    const drive = stubDrive()
+    const router: Router = await import('@/infrastructure/sheets/gatewayRouter')
+    const cripto = await import('@/infrastructure/cripto/envelope')
+    const sessao = await cripto.criarSessao('senha', { iteracoes: 1000 })
+
+    const workspace = await router.criarWorkspace('token', 'Carteira', { chave: sessao })
+
+    expect(workspace.criptografia).toBe('total')
+    const enviado = corpoBinario(drive.chamadas.find((chamada) => chamada.method === 'PATCH')?.body)
+    expect(new TextDecoder().decode(enviado.subarray(0, MAGIC.length))).toBe(MAGIC)
+    expect(await router.estadoCriptografia('token', workspace.spreadsheetId)).toEqual({
+      estado: 'total',
+      bloqueado: false,
+    })
+    expect(router.criptografiaDisponivel()).toBe(true)
+  })
+
+  it('no backend sheets recusa alterarCriptografia e responde sem criptografia', async () => {
+    vi.stubEnv('VITE_GOOGLE_BACKEND', '')
+    stubSheets()
+    const router: Router = await import('@/infrastructure/sheets/gatewayRouter')
+    const cripto = await import('@/infrastructure/cripto/envelope')
+    const sessao = await cripto.criarSessao('senha', { iteracoes: 1000 })
+
+    const erro = await router
+      .alterarCriptografia('token', 'planilha-1', sessao)
+      .catch((falha: unknown) => falha)
+
+    expect(erro).toBeInstanceOf(router.SheetsApiError)
+    expect(erro).toMatchObject({ status: 400 })
+    expect(await router.estadoCriptografia('token', 'planilha-1')).toEqual({
+      estado: 'nenhuma',
+      bloqueado: false,
+    })
+    expect(router.criptografiaDisponivel()).toBe(false)
   })
 })
