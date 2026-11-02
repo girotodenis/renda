@@ -720,6 +720,55 @@ describe('cofre cifrado', () => {
     expect(drive.bytes).toEqual(bytesAntes)
     expect(cripto.estaCifrado(drive.bytes)).toBe(true)
   })
+
+  it('desbloquear com a senha certa abre, guarda a chave e passa a ler do cache', async () => {
+    const sessao = await sessaoDeTeste()
+    const inicial = emptyDatabase()
+    inicial.sheets.Operacoes = [[...SHEET_HEADERS.Operacoes], linhaOperacao('id-1', 'PETR4')]
+    const drive = criarDriveFalso({ bytes: await cifrar(inicial, sessao) })
+
+    const workspace = await gateway.desbloquear('token', drive.id, 'senha de teste')
+
+    expect(workspace.spreadsheetId).toBe(drive.id)
+    expect(workspace.title).toBe(TITULO)
+    expect(workspace.criptografia).toBe('total')
+    expect(chaves.temChave(drive.id)).toBe(true)
+    // Nada é gravado no Drive ao desbloquear.
+    expect(escritas(drive)).toBe(0)
+
+    // A leitura seguinte vem do cache: um único download (o do desbloqueio).
+    const linhas = await gateway.getValues('token', drive.id, "'Operacoes'!A2:L")
+    expect(linhas).toEqual([linhaOperacao('id-1', 'PETR4')])
+    expect(downloads(drive)).toBe(1)
+  })
+
+  it('desbloquear com a senha errada lança ChaveIncorretaError sem guardar chave nem cache', async () => {
+    const sessao = await sessaoDeTeste()
+    const drive = criarDriveFalso({ bytes: await cifrar(emptyDatabase(), sessao) })
+
+    const erro = await capturarErro(gateway.desbloquear('token', drive.id, 'senha errada'))
+
+    expect(erro).toBeInstanceOf(cripto.ChaveIncorretaError)
+    // Não é erro de rede: o outbox não deve reenfileirar a tentativa.
+    expect(erro).not.toBeInstanceOf(gateway.SheetsApiError)
+    expect(chaves.temChave(drive.id)).toBe(false)
+
+    // Sem cache: a leitura seguinte tenta de novo e falha por falta de chave.
+    const erroLeitura = await capturarErro(gateway.getValues('token', drive.id, "'Operacoes'!A2:L"))
+    expect(erroLeitura).toBeInstanceOf(cripto.ChaveNecessariaError)
+    expect(downloads(drive)).toBe(2)
+    expect(escritas(drive)).toBe(0)
+  })
+
+  it('desbloquear um arquivo em claro recusa com 400 (não é falha de rede)', async () => {
+    const drive = criarDriveFalso({ bytes: await compactar(emptyDatabase()) })
+
+    const erro = await capturarErro(gateway.desbloquear('token', drive.id, 'qualquer senha'))
+
+    expect(erro).toBeInstanceOf(gateway.SheetsApiError)
+    expect(erro.status).toBe(400)
+    expect(chaves.temChave(drive.id)).toBe(false)
+  })
 })
 
 /* --------------------------------------------------------------------------

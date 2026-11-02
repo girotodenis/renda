@@ -49,6 +49,9 @@ export interface PlanilhaExistente {
  * - `authenticated`: com token Google válido;
  * - `local`: planilha persistida mas sem token válido — o app abre direto com
  *   os dados do cache e o login só é solicitado quando uma operação precisar
- *   da rede (salvar, sincronizar, trocar de planilha).
+ *   da rede (salvar, sincronizar, trocar de planilha);
+ * - `bloqueado`: banco cifrado **sem a chave na sessão** — bloqueia **antes**
+ *   de qualquer leitura de dados (o cache em claro não pode aparecer). A única
+ *   saída é a tela de desbloqueio (`DesbloquearBanco`), que pede a senha.
  */
-export type AuthStatus = 'loading' | 'unauthenticated' | 'authenticated' | 'local'
+export type AuthStatus = 'loading' | 'unauthenticated' | 'authenticated' | 'local' | 'bloqueado'

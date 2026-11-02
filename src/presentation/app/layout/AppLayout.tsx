@@ -3,6 +3,7 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '@/presentation/app/providers/authContext'
 import { cn } from '@/presentation/cn'
 import { useOnlineStatus } from '@/presentation/hooks/useOnlineStatus'
+import { BadgeProtegido } from '@/presentation/components/BadgeProtegido'
 import { SyncStatusBadge } from '@/presentation/components/SyncStatusBadge'
 import { useSyncStatus } from '@/presentation/hooks/useSyncStatus'
 
@@ -58,8 +59,10 @@ export function AppLayout() {
               status={sync.status}
               aplicadas={sync.aplicadas}
               erro={sync.erro}
+              bloqueado={status === 'bloqueado'}
               onSync={() => void sync.syncNow()}
             />
+            <BadgeProtegido />
             {isModoLocal ? (
               <span
                 className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600"

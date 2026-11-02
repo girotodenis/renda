@@ -243,6 +243,24 @@ export function alterarCriptografia(
 }
 
 /**
+ * Desbloqueia o banco ativo com a senha do cofre (`PLANO_CRIPTOGRAFIA.md` §6.1).
+ *
+ * Só o cofre JSON tem arquivo para decifrar; no modo local a operação entra na
+ * Fase 6 e, no backend `sheets`, as células precisam ficar legíveis — daí o 400
+ * com a mensagem da §6.7.
+ */
+export function desbloquear(
+  accessToken: string,
+  spreadsheetId: string,
+  senha: string,
+): Promise<SpreadsheetWorkspace> {
+  if (!isModoLocal() && isJsonBackend()) {
+    return driveFile.desbloquear(accessToken, spreadsheetId, senha)
+  }
+  return Promise.reject(new sheets.SheetsApiError(400, CRIPTOGRAFIA_INDISPONIVEL))
+}
+
+/**
  * Estado da criptografia do banco ativo (lido dos bytes, sem precisar da chave).
  * Fora do cofre JSON a resposta é sempre "sem criptografia": não há arquivo.
  */

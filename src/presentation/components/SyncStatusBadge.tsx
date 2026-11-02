@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, Loader2, RefreshCw, WifiOff } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Loader2, Lock, RefreshCw, WifiOff } from 'lucide-react'
 import { cn } from '@/presentation/cn'
 import type { SyncPhase } from '@/presentation/hooks/useSync'
 
@@ -6,6 +6,8 @@ import type { SyncPhase } from '@/presentation/hooks/useSync'
  * Badge de estado da sincronização (Fase 4 do plano PWA).
  *
  * Complementa (sem duplicar) o banner "Modo offline" do `AppLayout`:
+ * - banco bloqueado → "Banco bloqueado" (+ pendências, sem botão: o flush só
+ *   pode ocorrer depois da chave);
  * - offline → badge "Offline" (com o contador de pendências, se houver);
  * - online com pendências → "N alterações pendentes" + botão "Sincronizar agora";
  * - erro → alerta discreto (`AlertTriangle`), sem travar a UI;
@@ -28,6 +30,8 @@ export interface SyncStatusBadgeProps {
   erro?: string
   /** Ação do botão "Sincronizar agora". */
   onSync: () => void
+  /** Banco cifrado sem chave: a fila espera o desbloqueio. */
+  bloqueado?: boolean
   /** Classes extras (posicionamento no layout). */
   className?: string
 }
@@ -64,11 +68,28 @@ export function SyncStatusBadge({
   aplicadas = 0,
   erro,
   onSync,
+  bloqueado = false,
   className,
 }: SyncStatusBadgeProps) {
   const sincronizando = status === 'syncing'
   const temPendencias = pendentes > 0
   const temErro = status === 'error' || Boolean(erro)
+
+  // Banco bloqueado: informar a fila sem oferecer um botão que falharia (sem a
+  // chave não há como decifrar nem gravar o arquivo).
+  if (bloqueado) {
+    return (
+      <span
+        role="status"
+        title="Banco bloqueado — as alterações pendentes serão sincronizadas após o desbloqueio."
+        className={cn(badgeClass, 'border-slate-200 bg-slate-50 text-slate-600', className)}
+      >
+        <Lock className="h-3.5 w-3.5" aria-hidden />
+        <span>Banco bloqueado</span>
+        {temPendencias ? <span className="text-slate-500">· {rotuloPendencias(pendentes)}</span> : null}
+      </span>
+    )
+  }
 
   // Offline: o flush só ocorre ao reconectar — mostra o contador, sem botão.
   if (!online) {

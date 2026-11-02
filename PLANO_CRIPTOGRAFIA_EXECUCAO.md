@@ -20,7 +20,7 @@
 | 1 | Validação do escopo Google | ⏸️ pendente (manual, não bloqueante) | — |
 | 2 | Núcleo criptográfico | ✅ concluída | ver commit "Fase 2" |
 | 3 | Container e gateway JSON | ✅ concluída | ver commit "Fase 3" |
-| 4 | Abertura, bloqueio e sessão | ⏳ a fazer | — |
+| 4 | Abertura, bloqueio e sessão | ✅ concluída | ver commit "Fase 4" |
 | 5 | Configurações e criação | ⏳ a fazer | — |
 | 6 | Modo local cifrado | ⏳ a fazer | — |
 | 7 | Planilha de cotações | ⏳ a fazer | — |
@@ -145,7 +145,43 @@ Pendência consciente: o modo local ainda recusa `alterarCriptografia` (400) e
 cancelar não troca o banco ativo; bloqueio confirma; logout esquece chaves;
 "Bloquear agora" limpa o cache.
 
-**Resultado:**
+**Resultado:** ✅ concluída.
+
+Arquivos:
+- `src/infrastructure/cripto/verificadorLocal.ts` (**novo**) — verificador por
+  banco no IndexedDB (`cripto-verificador::<id>`): `guardarVerificador`,
+  `abrirVerificador` (senha errada → `null`), `temVerificador`,
+  `esquecerVerificador`, `esquecerTodosOsVerificadores`. Só parâmetros do KDF +
+  bloco fixo cifrado; senha e chave jamais são gravadas.
+- `src/infrastructure/driveFile/gateway.ts` — `desbloquear(token, id, senha)`:
+  só cacheia e guarda a chave **depois** de decifrar; senha errada não altera
+  nada. `gatewayRouter` repassa (400 fora do backend `json`).
+- `src/domain/workspace.ts` — `AuthStatus` ganha `'bloqueado'`.
+- `src/presentation/app/providers/authContext.ts` + `AuthProvider.tsx` —
+  `desbloquearBanco(senha, id?)`, `bloquearBanco()`, `esquecerBanco()`,
+  `criptografiaDoBanco`, `abrirBancoPorId` agora devolve
+  `ResultadoAberturaBanco` (`aberto` | `chave-necessaria` | `erro`),
+  `criarBanco(title, { force, chave })`. Bootstrap bloqueia antes de ler dados;
+  desbloqueio online usa o arquivo, offline usa o verificador; logout e troca de
+  banco esquecem chaves; bloqueio sincroniza a fila (best effort), invalida o
+  cache de abas e esquece a chave.
+- `src/presentation/app/routes/RouteGuards.tsx` — `'bloqueado'` renderiza a tela
+  de desbloqueio nos dois guards.
+- `src/presentation/features/auth/DesbloquearBanco.tsx` (**novo**) — nome do
+  banco, senha com autofocus/Enter, spinner, atraso 0/1/2/5 s, "Esquecer este
+  banco", "Usar sem Google", aviso de Web Crypto.
+- `src/presentation/features/auth/AbrirBancoModal.tsx` — 2 passos (lista →
+  senha) sem trocar o banco ativo quando a chave não é aceita.
+- `src/presentation/components/CampoSenha.tsx`, `ModalSenha.tsx`,
+  `BadgeProtegido.tsx` (**novos**) — campo com olho/erro/Enter, casca genérica
+  de modal de senha e indicador `🔒 Protegido` no header com "Bloquear"
+  (confirmação obrigatória e aviso de pendências).
+- `src/presentation/hooks/useSync.ts` + `SyncStatusBadge.tsx` — não sincronizam
+  bloqueado e retomam após o desbloqueio.
+- Testes: `cripto/verificadorLocal.test.ts` (9) e +5 casos no gateway/router.
+
+Validação: 54 arquivos / 566 testes verdes, `tsc --noEmit`, `eslint .` e
+`vite build` limpos.
 
 ---
 

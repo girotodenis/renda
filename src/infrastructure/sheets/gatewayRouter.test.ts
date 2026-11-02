@@ -52,9 +52,9 @@ function corpoBinario(body: unknown): Uint8Array {
 }
 
 /** Drive falso mínimo (um arquivo) usado pelo backend `json`. */
-function stubDrive() {
+function stubDrive(inicial?: { bytes?: Uint8Array }) {
   const estado: { bytes: Uint8Array; etag: string; versao: number } = {
-    bytes: new Uint8Array(),
+    bytes: inicial?.bytes ?? new Uint8Array(),
     etag: 'etag-1',
     versao: 1,
   }
@@ -184,5 +184,40 @@ describe('gatewayRouter', () => {
       bloqueado: false,
     })
     expect(router.criptografiaDisponivel()).toBe(false)
+  })
+
+  it('com backend json o desbloquear repassa ao cofre e libera a leitura', async () => {
+    vi.stubEnv('VITE_GOOGLE_BACKEND', 'json')
+    const cripto = await import('@/infrastructure/cripto/envelope')
+    const container = await import('@/infrastructure/driveFile/container')
+    const formato = await import('@/infrastructure/driveFile/format')
+    const sessao = await cripto.criarSessao('senha', { iteracoes: 1000 })
+
+    const vazio = formato.emptyDatabase()
+    const drive = stubDrive({
+      bytes: await container.codificarBanco(vazio.sheets, vazio.version, sessao),
+    })
+    const router: Router = await import('@/infrastructure/sheets/gatewayRouter')
+
+    const workspace = await router.desbloquear('token', 'arquivo-1', 'senha')
+
+    expect(workspace.criptografia).toBe('total')
+    expect(workspace.title).toBe('Carteira')
+    expect(await router.getValues('token', 'arquivo-1', "'Operacoes'!A2:L")).toEqual([])
+    expect(drive.chamadas.filter((chamada) => chamada.method === 'PATCH')).toHaveLength(0)
+  })
+
+  it('fora do backend json o desbloquear rejeita com 400 e a mensagem da §6.7', async () => {
+    vi.stubEnv('VITE_GOOGLE_BACKEND', '')
+    stubSheets()
+    const router: Router = await import('@/infrastructure/sheets/gatewayRouter')
+
+    const erro = await router
+      .desbloquear('token', 'planilha-1', 'senha')
+      .catch((falha: unknown) => falha)
+
+    expect(erro).toBeInstanceOf(router.SheetsApiError)
+    expect(erro).toMatchObject({ status: 400 })
+    expect((erro as Error).message).toContain('cofre JSON')
   })
 })

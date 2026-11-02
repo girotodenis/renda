@@ -7,7 +7,12 @@ import type {
   SpreadsheetWorkspace,
 } from '@/domain/workspace'
 import { obterChave, esquecerChave, guardarChave, temChave } from '@/infrastructure/cripto/chaveSessao'
-import { ChaveIncorretaError, ChaveNecessariaError, estaCifrado } from '@/infrastructure/cripto/envelope'
+import {
+  ChaveIncorretaError,
+  ChaveNecessariaError,
+  abrirComSenha,
+  estaCifrado,
+} from '@/infrastructure/cripto/envelope'
 import type { SessaoCripto } from '@/infrastructure/cripto/envelope'
 import { codificarBanco, decodificarBanco } from '@/infrastructure/driveFile/container'
 import {
@@ -783,6 +788,63 @@ export async function loadSpreadsheetWorkspace(
     entry.title,
     entry.criptografado ? 'total' : 'nenhuma',
   )
+}
+
+/**
+ * Desbloqueia um banco cifrado com a senha informada e o deixa pronto para uso.
+ *
+ * A ordem é a garantia do fluxo (§6.1): baixa, deriva a chave do cabeçalho,
+ * decifra, valida o conteúdo e **só então** grava o cache e registra a chave na
+ * sessão. Com a senha errada a tag do AES-GCM não valida e nada é alterado: nem
+ * cache, nem chave, nem o arquivo no Drive (nenhum upload acontece aqui).
+ */
+export async function desbloquear(
+  accessToken: string,
+  spreadsheetId: string,
+  senha: string,
+): Promise<SpreadsheetWorkspace> {
+  let read: Awaited<ReturnType<typeof readDatabaseFile>>
+  try {
+    read = await readDatabaseFile(accessToken, spreadsheetId)
+  } catch (error) {
+    throw toSheetsError(error)
+  }
+
+  if (!estaCifrado(read.bytes)) {
+    // Não é falha de rede: `status` 0 faria o outbox reenfileirar para sempre.
+    throw new SheetsApiError(400, 'Este banco não está criptografado: não é preciso informar a chave.')
+  }
+
+  let sessao: SessaoCripto
+  let raw: unknown
+  try {
+    const aberto = await abrirComSenha(read.bytes, senha)
+    sessao = aberto.sessao
+    raw = (await decodificarBanco(read.bytes, sessao.chave)).raw
+  } catch (error) {
+    if (error instanceof ChaveIncorretaError) throw error
+    // Senha vazia, cabeçalho inválido ou conteúdo corrompido: também não é rede.
+    throw new SheetsApiError(
+      400,
+      error instanceof Error && error.message.length > 0
+        ? error.message
+        : 'Não foi possível abrir o banco criptografado.',
+    )
+  }
+
+  const entry: Entry = {
+    db: toDatabase(raw),
+    etag: read.etag,
+    title: titleFromFileName(read.name),
+    pendingOps: [],
+    criptografado: true,
+  }
+
+  // Só depois de decifrar: a partir daqui as leituras usam o cache em claro.
+  cache.set(spreadsheetId, entry)
+  guardarChave(spreadsheetId, sessao)
+
+  return toWorkspace(spreadsheetId, entry.title, 'total')
 }
 
 /** Estado da criptografia de um banco, sem precisar da chave. */
