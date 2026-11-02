@@ -10,6 +10,8 @@
  * lançar nada ao chamador (contrato da porta `IntegracaoCotacao`).
  */
 
+import { moveFileToFolder } from '@/infrastructure/drive'
+
 /** Endpoint da Sheets API v4 (criação, metadados, leitura e escrita). */
 export const SHEETS_API_ENDPOINT = 'https://sheets.googleapis.com/v4/spreadsheets'
 
@@ -146,7 +148,10 @@ function parseValores(payload: unknown): unknown[][] {
 }
 
 /** Cria a planilha de cotações com a aba única `Cotações`. */
-export async function criarPlanilhaCotacoes(token: string): Promise<{ spreadsheetId: string }> {
+export async function criarPlanilhaCotacoes(
+  token: string,
+  opcoes: { folderId?: string } = {},
+): Promise<{ spreadsheetId: string }> {
   const payload = await planilhaRequest(SHEETS_API_ENDPOINT, {
     method: 'POST',
     headers: jsonAuthHeaders(token),
@@ -162,7 +167,25 @@ export async function criarPlanilhaCotacoes(token: string): Promise<{ spreadshee
       'O Google não devolveu o identificador da planilha de cotações criada.',
     )
   }
+  // A Sheets API não aceita `parents`: a planilha nasce na raiz e é movida para
+  // a pasta do app logo em seguida. Se o move falhar ela continua válida na
+  // raiz — pasta é organização, não requisito de funcionamento.
+  if (opcoes.folderId) await garantirNaPasta(token, spreadsheetId, opcoes.folderId)
+
   return { spreadsheetId }
+}
+
+/** Move a planilha de cotações para a pasta do app (best-effort, sem lançar). */
+export async function garantirNaPasta(
+  token: string,
+  spreadsheetId: string,
+  folderId: string,
+): Promise<void> {
+  try {
+    await moveFileToFolder(token, spreadsheetId, folderId)
+  } catch {
+    // Organização cosmética: a planilha segue utilizável onde estiver.
+  }
 }
 
 /** Escapa um valor para uso seguro dentro de uma consulta do Drive (`q`). */

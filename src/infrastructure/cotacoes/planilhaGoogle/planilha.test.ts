@@ -34,6 +34,16 @@ vi.mock('@/infrastructure/cotacoes/planilhaGoogle/api', async (importOriginal) =
   }
 })
 
+const drive = vi.hoisted(() => ({
+  ensureAppFolder: vi.fn(),
+  moveFileToFolder: vi.fn(),
+}))
+
+vi.mock('@/infrastructure/drive', () => ({
+  ensureAppFolder: drive.ensureAppFolder,
+  moveFileToFolder: drive.moveFileToFolder,
+}))
+
 const armazenamento = new Map<string, string>()
 
 vi.mock('@/infrastructure/storage', () => ({
@@ -56,6 +66,8 @@ beforeEach(() => {
   armazenamento.clear()
   _resetPlanilhaForTests()
   mocks.garantirAba.mockResolvedValue(METADADOS)
+  drive.ensureAppFolder.mockResolvedValue('pasta-app')
+  drive.moveFileToFolder.mockResolvedValue(undefined)
 })
 
 describe('parsePrecoPlanilha', () => {
@@ -174,6 +186,7 @@ describe('garantirPlanilha', () => {
     const id = await garantirPlanilha('token')
 
     expect(id).toBe('nova-planilha')
+    expect(mocks.criarPlanilhaCotacoes).toHaveBeenCalledWith('token', { folderId: 'pasta-app' })
     expect(mocks.escreverValores).toHaveBeenCalledWith('token', 'nova-planilha', 'Cotações!A1:D1', [
       CABECALHO,
     ])
@@ -198,6 +211,28 @@ describe('garantirPlanilha', () => {
     expect(id).toBe('achada')
     expect(mocks.criarPlanilhaCotacoes).not.toHaveBeenCalled()
     expect(JSON.parse(armazenamento.get(PLANILHA_STORAGE_KEY) ?? 'null')).toBe('achada')
+  })
+
+  it('move a planilha já existente para a pasta do app uma vez por sessão', async () => {
+    armazenamento.set(PLANILHA_STORAGE_KEY, JSON.stringify('salva'))
+
+    await garantirPlanilha('token')
+    await garantirPlanilha('token')
+
+    expect(drive.moveFileToFolder).toHaveBeenCalledTimes(1)
+    expect(drive.moveFileToFolder).toHaveBeenCalledWith('token', 'salva', 'pasta-app')
+  })
+
+  it('cria na raiz quando a pasta do app não pode ser garantida', async () => {
+    drive.ensureAppFolder.mockRejectedValue(new Error('sem rede'))
+    mocks.descobrirPlanilhaCotacoes.mockResolvedValue(null)
+    mocks.criarPlanilhaCotacoes.mockResolvedValue({ spreadsheetId: 'sem-pasta' })
+
+    const id = await garantirPlanilha('token')
+
+    expect(id).toBe('sem-pasta')
+    expect(mocks.criarPlanilhaCotacoes).toHaveBeenCalledWith('token', { folderId: undefined })
+    expect(drive.moveFileToFolder).not.toHaveBeenCalled()
   })
 
   it('recria quando o id salvo aponta para uma planilha apagada (404)', async () => {

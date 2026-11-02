@@ -249,6 +249,12 @@ modo local. O formato é o de `PLANO_CRIPTOGRAFIA.md` §3.2:
 - `cotacoes/planilhaGoogle/*` é um `IntegracaoCotacao` que grava as fórmulas
   `GOOGLEFINANCE` uma vez por ticker e lê os preços em lote. Nada da carteira
   mora nela: se for apagada, é recriada.
+- Nome fixo `Minhas Ações — Cotações` (aba `Cotações`), criada na pasta
+  `minhasacoe_app` como o cofre. A Sheets API não aceita `parents`, então a
+  planilha nasce na raiz e é movida logo depois (`garantirNaPasta`); se a pasta
+  falhar, ela segue válida na raiz.
+- Criação é preguiçosa: acontece na primeira consulta de cotações depois da
+  autorização (antes disso, id salvo → descoberta por nome → criação).
 - A cadeia de preços é **Planilha → Brapi → Mais Retorno**
   (`cotacoes/registro.ts`); a planilha só entra depois da autorização
   incremental do escopo `spreadsheets`, pedida em Configurações.

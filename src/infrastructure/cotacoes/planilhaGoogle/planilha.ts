@@ -7,6 +7,7 @@
  */
 
 import { parseDecimalBR, toCentavos } from '@/domain/money'
+import { ensureAppFolder } from '@/infrastructure/drive'
 import { readStorageJson, removeStorageKey, writeStorageJson } from '@/infrastructure/storage'
 import {
   buildGoogFinanceFormula,
@@ -20,6 +21,7 @@ import {
   descobrirPlanilhaCotacoes,
   escreverValores,
   garantirAba,
+  garantirNaPasta,
   isNaoEncontrada,
   lerValores,
   limparValores,
@@ -50,6 +52,12 @@ interface MetadadosCotacoes {
 
 /** Metadados da última planilha acessada (evita reler locale/abas a cada sync). */
 let metadados: MetadadosCotacoes | null = null
+
+/**
+ * `true` depois de conferir, nesta sessão, que a planilha está na pasta do app.
+ * A conferência custa requisições: basta uma vez por planilha/sessão.
+ */
+let pastaConferida = false
 
 /** Normaliza e remove duplicatas, preservando a ordem recebida. */
 function normalizarTickers(tickers: readonly string[]): string[] {
@@ -102,7 +110,30 @@ async function resolverMetadados(
 }
 
 /**
- * Devolve o id da planilha de cotações, criando-a quando não existir.
+ * Pasta do app (`minhasacoe_app`) onde a planilha de cotações deve ficar.
+ *
+ * `null` quando não foi possível garantir a pasta: a planilha é criada/usada na
+ * raiz, como antes — cotações continuam funcionando.
+ */
+async function pastaDoApp(token: string): Promise<string | null> {
+  try {
+    return await ensureAppFolder(token)
+  } catch {
+    return null
+  }
+}
+
+/** Move uma planilha já existente (id salvo/descoberto) para a pasta do app. */
+async function conferirPasta(token: string, spreadsheetId: string): Promise<void> {
+  if (pastaConferida) return
+  const folderId = await pastaDoApp(token)
+  if (!folderId) return
+  await garantirNaPasta(token, spreadsheetId, folderId)
+  pastaConferida = true
+}
+
+/**
+ * Garante a planilha de cotações e devolve o id.
  *
  * Ordem: id salvo → descoberta por título (Drive, `drive.file`) → criação.
  * O id salvo que não responde mais (404) é descartado e a descoberta recomeça.
@@ -112,6 +143,7 @@ export async function garantirPlanilha(token: string): Promise<string> {
   if (salvo !== null) {
     try {
       await resolverMetadados(token, salvo)
+      await conferirPasta(token, salvo)
       return salvo
     } catch (error) {
       // 404 = apagada/arquivo inválido: recria. Outras falhas sobem para a
@@ -125,11 +157,15 @@ export async function garantirPlanilha(token: string): Promise<string> {
   const descoberta = await descobrirPlanilhaCotacoes(token)
   if (descoberta !== null) {
     await resolverMetadados(token, descoberta)
+    await conferirPasta(token, descoberta)
     salvarId(descoberta)
     return descoberta
   }
 
-  const { spreadsheetId } = await criarPlanilhaCotacoes(token)
+  const { spreadsheetId } = await criarPlanilhaCotacoes(token, {
+    folderId: (await pastaDoApp(token)) ?? undefined,
+  })
+  pastaConferida = true
   await resolverMetadados(token, spreadsheetId)
   await escreverValores(token, spreadsheetId, `${ABA_COTACOES}!A1:D1`, [CABECALHO])
   salvarId(spreadsheetId)
@@ -237,4 +273,6 @@ export function limparPlanilhaCotacoes(): void {
 /** Estado limpo para os testes (id salvo e metadados memorizados). */
 export function _resetPlanilhaForTests(): void {
   limparPlanilhaCotacoes()
+  metadados = null
+  pastaConferida = false
 }
