@@ -18,14 +18,14 @@
 | --- | --- | --- | --- |
 | 0 | Decisões e textos | ✅ concluída (no plano) | — |
 | 1 | Validação do escopo Google | ⏸️ pendente (manual, não bloqueante) | — |
-| 2 | Núcleo criptográfico | ✅ concluída | ver commit "Fase 2" |
-| 3 | Container e gateway JSON | ✅ concluída | ver commit "Fase 3" |
-| 4 | Abertura, bloqueio e sessão | ✅ concluída | ver commit "Fase 4" |
-| 5 | Configurações e criação | ✅ concluída | ver commit "Fase 5" |
-| 6 | Modo local cifrado | ✅ concluída | ver commit "Fase 6" |
-| 7 | Planilha de cotações | ✅ concluída | ver commit "Fase 7" |
-| 8 | Backend `json` padrão + migração | ✅ concluída | ver commit "Fase 8" |
-| 9 | Diagnóstico, docs e memória | ✅ concluída | ver commit "Fase 9" |
+| 2 | Núcleo criptográfico | ✅ concluída | `Fase 2` |
+| 3 | Container e gateway JSON | ✅ concluída | `Fase 3` |
+| 4 | Abertura, bloqueio e sessão | ✅ concluída | `Fase 4` |
+| 5 | Configurações e criação | ✅ concluída | `Fase 5` |
+| 6 | Modo local cifrado | ✅ concluída | `Fase 6` |
+| 7 | Planilha de cotações | ✅ concluída | `Fase 7` |
+| 8 | Backend `json` padrão + migração | ✅ concluída | `Fase 8` |
+| 9 | Diagnóstico, docs e memória | ✅ concluída | `Fase 9` |
 
 Legenda: ⏳ a fazer · 🔄 em andamento · ✅ concluída · ⚠️ concluída com pendência · ⏸️ bloqueada/pendente manual
 
@@ -424,3 +424,50 @@ Google real e HTTPS:
 16. Reload offline com banco cifrado → desbloqueio pelo verificador local.
 17. Criação/ativação sem "Entendi" → botão desabilitado.
 18. Cancelar o desbloqueio ao abrir banco pela lista → banco ativo não muda.
+
+---
+
+## Definition of Done (seção 11 do plano)
+
+- [x] Toggle funcional no backend `json` **e** no modo local, refletindo o estado
+  real (magic do arquivo / meta do cofre).
+- [x] Banco cifrado pede a chave ao abrir e ao restaurar a sessão; a chave
+  **nunca** é gravada em `localStorage`/`IndexedDB`/`sessionStorage` (só o
+  verificador, para desbloqueio offline).
+- [x] Checkbox de criação gera o banco já cifrado (backend `json`).
+- [x] Leitura, escrita, `sync` e conflito 412 funcionam com o arquivo cifrado;
+  abas locais cifradas funcionam após `localSheets` virar assíncrono (testes
+  dedicados).
+- [x] "Bloquear agora" limpa o cache de abas, esquece a chave e **pede
+  confirmação** (header e Diagnóstico).
+- [x] Tela de bloqueio mostra o **nome do banco** e desbloqueia também
+  **offline** (verificador local).
+- [x] Criação e ativação exigem o checkbox **"Entendi que não há recuperação"**.
+- [x] Planilha de cotações: `ativa`, `não autorizada` e `indisponível`, sempre
+  com fallback para as APIs (Brapi → Mais Retorno).
+- [x] Backend `json` é o padrão; migração automática disponível (e caminho
+  manual via `.ods` sem escopo).
+- [x] `npm run typecheck`, `npm test -- --run` e `npm run lint` verdes (Node 20)
+  — 62 arquivos / 655 testes na última execução, `vite build` ok.
+- [x] `ARCHITECTURE.md`/`README.md` atualizados; memória do repositório
+  (`~/.copilot/memories/repo/renda.md`) registrando decisão e armadilhas.
+
+### Resumo dos commits
+
+| Fase | Commit |
+| --- | --- |
+| 2 | `Fase 2: núcleo criptográfico (AES-256-GCM + PBKDF2) do cofre` |
+| 3 | `Fase 3: container cifrado e gateway JSON com chave de sessão` |
+| 4 | `Fase 4: bloqueio do banco, desbloqueio online/offline e sessão de chaves` |
+| 5 | `Fase 5: card de segurança, ativação/desativação e criação de banco cifrado` |
+| 6 | `Fase 6: cofre cifrado do modo local e localSheets assíncrono` |
+| 7 | `Fase 7: planilha de cotações (GOOGLEFINANCE) como integração opcional` |
+| 8 | `Fase 8: backend json como padrão e migração automática de bancos Sheets` |
+| 9 | `Fase 9: diagnóstico de criptografia/planilha, docs e memória do repositório` |
+
+### Pendências
+
+1. **Fase 1** (validação do escopo Google/`GOOGLEFINANCE`) continua manual: só
+   é possível no navegador, com conta Google real e HTTPS.
+2. Os 18 cenários de validação manual da seção 8 (lista acima) não foram
+   executados — exigem Google real.
