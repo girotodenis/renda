@@ -22,7 +22,7 @@
 | 3 | Container e gateway JSON | ✅ concluída | ver commit "Fase 3" |
 | 4 | Abertura, bloqueio e sessão | ✅ concluída | ver commit "Fase 4" |
 | 5 | Configurações e criação | ✅ concluída | ver commit "Fase 5" |
-| 6 | Modo local cifrado | ⏳ a fazer | — |
+| 6 | Modo local cifrado | ✅ concluída | ver commit "Fase 6" |
 | 7 | Planilha de cotações | ⏳ a fazer | — |
 | 8 | Backend `json` padrão + migração | ⏳ a fazer | — |
 | 9 | Diagnóstico, docs e memória | ⏳ a fazer | — |
@@ -239,7 +239,43 @@ mensagem do backend no modo local — a Fase 6 habilita o cofre local.
 **Aceite:** abas cifradas no IndexedDB (sem texto legível), exporta `.ods` com
 aviso, suíte local verde.
 
-**Resultado:**
+**Resultado:** ✅ concluída.
+
+Arquivos:
+- `src/infrastructure/cripto/localCofre.ts` (**novo**) — `ID_COFRE_LOCAL`,
+  `temCofreLocal`, `criarCofreLocal`, `abrirCofreLocal`, `removerCofreLocal`.
+  O cofre **é** o verificador sob o id `local`: nenhuma lógica de KDF/AES-GCM
+  foi duplicada e a chave só vai para `chaveSessao`.
+- `src/infrastructure/sheets/localSheets.ts` — API **assíncrona** e cifra por
+  aba: com cofre ativo o valor persistido é `{ v: 1, iv, dados }`
+  (AES-256-GCM, IV novo, AAD = bytes de `local-sheet::<aba>`); sem chave
+  `writeLocalSheet` lança `ChaveNecessariaError` (nunca grava em claro) e
+  `readLocalSheet` também; matriz pura com cofre ativo é tratada como estado
+  inconsistente (nunca devolve dados em claro). Sem cofre, comportamento
+  idêntico ao anterior.
+- `src/infrastructure/sheets/localGateway.ts` — `await` em tudo;
+  `localLoadWorkspace` inclui `criptografia` a partir do cofre e não tenta
+  garantir cabeçalhos no banco bloqueado.
+- `src/infrastructure/sheets/gatewayRouter.ts` — `criptografiaDisponivel()` =
+  `(isJsonBackend() || isModoLocal()) && isCriptografiaSuportada()`;
+  `estadoCriptografia`/`alterarCriptografia` no modo local (ativar/desativar
+  regravam todas as abas, idempotentes) e `desbloquear` pela senha do cofre.
+- `src/application/criptografia.ts` — no modo local não exige online nem fila
+  vazia (decisão "Local: funciona offline") e `motivoCriptografiaIndisponivel`
+  deixa de bloquear o modo local.
+- `AuthProvider` — "Esquecer este banco" também limpa as abas locais quando o
+  cofre local existe (sem o cofre os envelopes ficariam órfãos).
+- Testes novos: `cripto/localCofre.test.ts` (7),
+  `infrastructure/sheets/localSheets.test.ts` (14); estendidos
+  `localGateway.test.ts` (12), `gatewayRouter.test.ts` (9),
+  `application/criptografia.test.ts` (20) e os testes de aplicação que leem as
+  abas locais.
+
+Assinaturas (síncrono → assíncrono): `readLocalSheet`, `writeLocalSheet`,
+`ensureLocalSheetsWithHeaders`, `readSheetRange`, `writeSheetRange`,
+`appendValuesToSheet`, `clearSheetRange`.
+
+Validação: 57 arquivos / 613 testes verdes, `tsc --noEmit` e `eslint .` limpos.
 
 ---
 

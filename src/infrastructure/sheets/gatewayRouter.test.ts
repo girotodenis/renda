@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { MODO_LOCAL } from '@/domain/armazenamento'
 import { MAGIC } from '@/domain/criptografia'
-import { SHEET_NAMES } from '@/domain/sheetsSchema'
+import { SHEET_HEADERS, SHEET_NAMES } from '@/domain/sheetsSchema'
 import { gunzip } from '@/infrastructure/compression'
 import type { CellValue } from '@/infrastructure/sheets/sheetCells'
 
@@ -219,5 +220,104 @@ describe('gatewayRouter', () => {
     expect(erro).toBeInstanceOf(router.SheetsApiError)
     expect(erro).toMatchObject({ status: 400 })
     expect((erro as Error).message).toContain('cofre JSON')
+  })
+})
+
+describe('cofre do modo local', () => {
+  it('responde o estado pelo cofre e fica disponível sem depender do backend', async () => {
+    // Backend `sheets`: só o modo local pode cifrar neste cenário.
+    vi.stubEnv('VITE_GOOGLE_BACKEND', '')
+    const router: Router = await import('@/infrastructure/sheets/gatewayRouter')
+    const modo = await import('@/infrastructure/modoArmazenamento')
+    modo.setModoArmazenamento(MODO_LOCAL)
+
+    expect(router.criptografiaDisponivel()).toBe(true)
+    await expect(router.estadoCriptografia('', 'local')).resolves.toEqual({
+      estado: 'nenhuma',
+      bloqueado: false,
+    })
+  })
+
+  it('ativar cifra as abas e desativar volta à matriz pura', async () => {
+    vi.stubEnv('VITE_GOOGLE_BACKEND', '')
+    const kv = await import('@/infrastructure/kvStore')
+    const chaves = await import('@/infrastructure/cripto/chaveSessao')
+    kv._resetForTests()
+    chaves._resetChavesForTests()
+
+    const router: Router = await import('@/infrastructure/sheets/gatewayRouter')
+    const modo = await import('@/infrastructure/modoArmazenamento')
+    const local = await import('@/infrastructure/sheets/localGateway')
+    const cripto = await import('@/infrastructure/cripto/envelope')
+    modo.setModoArmazenamento(MODO_LOCAL)
+
+    await local.localLoadWorkspace('2026-10-15T12:00:00.000Z')
+    await local.localAppendValues("'Operacoes'!A1", [['a1', 'PETR4']])
+    const linhaAba = [[...SHEET_HEADERS.Operacoes]]
+    expect(await local.localGetValues("'Operacoes'!A1:B2")).toEqual([
+      [...SHEET_HEADERS.Operacoes.slice(0, 2)],
+      ['a1', 'PETR4'],
+    ])
+
+    const sessao = await cripto.criarSessao('senha', { iteracoes: 1000 })
+    await router.alterarCriptografia('', 'local', sessao)
+
+    await expect(router.estadoCriptografia('', 'local')).resolves.toEqual({
+      estado: 'total',
+      bloqueado: false,
+    })
+    expect(JSON.stringify(kv.kvGet('sheets', 'local-sheet::Operacoes'))).not.toContain('PETR4')
+    // O banco continua legível na sessão que ativou a cifra.
+    expect((await local.localGetValues("'Operacoes'!A1:B2"))[1]).toEqual(['a1', 'PETR4'])
+
+    // Bloqueio: sem chave, nada é decifrado nem gravado.
+    chaves.esquecerChave('local')
+    await expect(router.estadoCriptografia('', 'local')).resolves.toEqual({
+      estado: 'total',
+      bloqueado: true,
+    })
+    await expect(local.localGetValues("'Operacoes'!A1:B2")).rejects.toBeInstanceOf(
+      router.ChaveNecessariaError,
+    )
+    await expect(router.alterarCriptografia('', 'local', null)).rejects.toBeInstanceOf(
+      router.ChaveNecessariaError,
+    )
+
+    // Desbloqueio pela senha do cofre.
+    await expect(router.desbloquear('', 'local', 'senha errada')).rejects.toBeInstanceOf(
+      router.ChaveIncorretaError,
+    )
+    const workspace = await router.desbloquear('', 'local', 'senha')
+    expect(workspace.criptografia).toBe('total')
+    expect((await local.localGetValues("'Operacoes'!A1:B2"))[1]).toEqual(['a1', 'PETR4'])
+
+    await router.alterarCriptografia('', 'local', null)
+
+    await expect(router.estadoCriptografia('', 'local')).resolves.toEqual({
+      estado: 'nenhuma',
+      bloqueado: false,
+    })
+    expect(kv.kvGet('sheets', 'local-sheet::Operacoes')).toEqual([...linhaAba, ['a1', 'PETR4']])
+    expect(chaves.temChave('local')).toBe(false)
+  })
+
+  it('é idempotente: desativar um banco em claro não altera as abas', async () => {
+    vi.stubEnv('VITE_GOOGLE_BACKEND', '')
+    const kv = await import('@/infrastructure/kvStore')
+    kv._resetForTests()
+    const router: Router = await import('@/infrastructure/sheets/gatewayRouter')
+    const modo = await import('@/infrastructure/modoArmazenamento')
+    const local = await import('@/infrastructure/sheets/localGateway')
+    modo.setModoArmazenamento(MODO_LOCAL)
+
+    await local.localLoadWorkspace('2026-10-15T12:00:00.000Z')
+    await local.localAppendValues("'Operacoes'!A1", [['a1', 'PETR4']])
+
+    await router.alterarCriptografia('', 'local', null)
+
+    expect(kv.kvGet('sheets', 'local-sheet::Operacoes')).toEqual([
+      [...SHEET_HEADERS.Operacoes],
+      ['a1', 'PETR4'],
+    ])
   })
 })

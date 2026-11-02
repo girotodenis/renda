@@ -73,8 +73,9 @@ export interface DependenciasBloqueio {
 /**
  * Estado real do arquivo (ou das abas locais), lido sem precisar da chave.
  *
- * No backend `sheets`/modo local o gateway responde "sem criptografia" sem
- * tocar a rede; no cofre JSON a resposta vem do magic dos bytes.
+ * No backend `sheets` o gateway responde "sem criptografia" sem tocar a rede; no
+ * cofre JSON a resposta vem do magic dos bytes e, no modo local, da presença do
+ * cofre no IndexedDB.
  */
 export async function estadoDoBanco(context: RepositoryContext): Promise<EstadoDoBanco> {
   const { estado, bloqueado } = await estadoCriptografia(
@@ -92,9 +93,8 @@ export async function estadoDoBanco(context: RepositoryContext): Promise<EstadoD
  */
 export function motivoCriptografiaIndisponivel(): string | null {
   if (!isCriptografiaSuportada()) return MSG_WEB_CRYPTO_INDISPONIVEL
-  // Nesta fase o modo local ainda não tem cofre cifrado (Fase 6): a explicação
-  // é a mesma do backend sem arquivo próprio.
-  if (isModoLocal() || !isJsonBackend()) return MSG_BACKEND_SHEETS
+  // O modo local tem cofre próprio no IndexedDB (Fase 6); só o Sheets não cifra.
+  if (!isModoLocal() && !isJsonBackend()) return MSG_BACKEND_SHEETS
   return null
 }
 
@@ -173,6 +173,9 @@ function exigirDisponibilidade(): void {
 
 /** Regravar o arquivo exige internet e uma fila já gravada. */
 function exigirOnlineComFilaVazia(): void {
+  // Modo local: não há nuvem nem outbox a perder — a decisão do plano é
+  // "Local: funciona offline".
+  if (isModoLocal()) return
   if (!isOnline()) throw new ErroCriptografiaIndisponivel(MSG_OFFLINE)
   if (contarPendencias() > 0) throw new ErroCriptografiaIndisponivel(MSG_FILA_PENDENTE)
 }

@@ -2,6 +2,8 @@ import { criarWorkspaceLocal } from '@/domain/armazenamento'
 import type { SpreadsheetWorkspace } from '@/domain/workspace'
 import type { ValueRange } from '@/infrastructure/sheets/gateway'
 import { parseA1Range } from '@/infrastructure/sheets/a1'
+import { temChave } from '@/infrastructure/cripto/chaveSessao'
+import { ID_COFRE_LOCAL, temCofreLocal } from '@/infrastructure/cripto/localCofre'
 import {
   appendValuesToSheet,
   clearSheetRange,
@@ -17,7 +19,11 @@ import type { CellValue } from '@/infrastructure/sheets/sheetCells'
  *
  * Só existem aqui as operações de **valores** necessárias aos repositórios;
  * metadados remotos (locale, pasta do Drive, Picker) não fazem sentido sem rede.
- * Nenhuma função lança: o armazenamento local é síncrono e sempre disponível.
+ *
+ * A superfície já era assíncrona (mesmo contrato do gateway do Google), mas o
+ * armazenamento local respondia de forma síncrona. Com o cofre local (Fase 6) a
+ * decifra é real, então estas funções agora **aguardam** a leitura/escrita —
+ * e propagam `ChaveNecessariaError` quando o banco está cifrado e bloqueado.
  */
 
 /** Lê um intervalo (`spreadsheets.values.get`). */
@@ -43,7 +49,7 @@ export async function localUpdateValues(
 ): Promise<void> {
   const address = parseA1Range(range)
   if (!address) return
-  writeSheetRange(address.sheetName, address, values)
+  await writeSheetRange(address.sheetName, address, values)
 }
 
 /** Escreve vários intervalos (`spreadsheets.values.batchUpdate`). */
@@ -60,14 +66,14 @@ export async function localAppendValues(
 ): Promise<void> {
   const address = parseA1Range(range)
   if (!address) return
-  appendValuesToSheet(address.sheetName, address, values)
+  await appendValuesToSheet(address.sheetName, address, values)
 }
 
 /** Limpa as células de um intervalo (`spreadsheets.values.clear`). */
 export async function localClearValues(range: string): Promise<void> {
   const address = parseA1Range(range)
   if (!address) return
-  clearSheetRange(address.sheetName, address)
+  await clearSheetRange(address.sheetName, address)
 }
 
 /**
@@ -93,8 +99,17 @@ export async function localEnsureRequiredSheets(): Promise<number> {
  * local de `loadSpreadsheetWorkspace`/`createDefaultSpreadsheet`.
  */
 export async function localLoadWorkspace(updatedAt: string): Promise<SpreadsheetWorkspace> {
-  ensureLocalSheetsWithHeaders()
-  return criarWorkspaceLocal(updatedAt)
+  const cifrado = temCofreLocal()
+  // Cofre ativo e sessão bloqueada: não se garante cabeçalho nenhum (gravar
+  // exigiria a chave). O workspace só reporta o estado — as leituras e escritas
+  // é que lançam `ChaveNecessariaError`.
+  if (!cifrado || temChave(ID_COFRE_LOCAL)) await ensureLocalSheetsWithHeaders()
+
+  return {
+    ...criarWorkspaceLocal(updatedAt),
+    // O workspace local não pode perder a marca de cifra ao ser reaberto.
+    criptografia: cifrado ? 'total' : 'nenhuma',
+  }
 }
 
 /** Locale fixo do modo local (define o separador de fórmulas, se houver). */

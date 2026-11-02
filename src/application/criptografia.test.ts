@@ -117,6 +117,13 @@ describe('motivoCriptografiaIndisponivel', () => {
     mocks.isJsonBackend.mockReturnValue(false)
     expect(motivoCriptografiaIndisponivel()).toBe(MSG_BACKEND_SHEETS)
   })
+
+  it('não bloqueia o modo local, mesmo com backend sheets no build', () => {
+    mocks.isModoLocal.mockReturnValue(true)
+    mocks.isJsonBackend.mockReturnValue(false)
+
+    expect(motivoCriptografiaIndisponivel()).toBeNull()
+  })
 })
 
 describe('estadoDoBanco', () => {
@@ -149,11 +156,16 @@ describe('ativarCriptografia', () => {
     expect(mocks.criarSessao).not.toHaveBeenCalled()
   })
 
-  it('recusa no modo local (cofre cifrado chega na Fase 6)', async () => {
+  it('no modo local ativa sem internet e sem exigir a fila vazia', async () => {
     mocks.isModoLocal.mockReturnValue(true)
+    mocks.isOnline.mockReturnValue(false)
+    mocks.contarPendencias.mockReturnValue(3)
 
-    await expect(ativarCriptografia(context, 'segredo')).rejects.toThrow(MSG_BACKEND_SHEETS)
-    expect(mocks.criarSessao).not.toHaveBeenCalled()
+    await ativarCriptografia(context, 'segredo')
+
+    expect(mocks.criarSessao).toHaveBeenCalledWith('segredo')
+    expect(mocks.alterarCriptografia).toHaveBeenCalledWith('token', 'banco-1', sessaoFalsa)
+    expect(mocks.guardarVerificador).toHaveBeenCalledWith('banco-1', sessaoFalsa)
   })
 
   it('recusa senha em branco com a mensagem exata', async () => {
@@ -215,6 +227,18 @@ describe('desativarCriptografia', () => {
     mocks.contarPendencias.mockReturnValue(1)
     await expect(desativarCriptografia(context)).rejects.toThrow(MSG_FILA_PENDENTE)
     expect(mocks.alterarCriptografia).not.toHaveBeenCalled()
+  })
+
+  it('no modo local desativa offline e sem fila pendente', async () => {
+    mocks.obterChave.mockReturnValue(sessaoFalsa)
+    mocks.isModoLocal.mockReturnValue(true)
+    mocks.isOnline.mockReturnValue(false)
+    mocks.contarPendencias.mockReturnValue(2)
+
+    await desativarCriptografia(context)
+
+    expect(mocks.alterarCriptografia).toHaveBeenCalledWith('token', 'banco-1', null)
+    expect(mocks.esquecerChave).toHaveBeenCalledWith('banco-1')
   })
 
   it('regrava em claro e esquece chave e verificador', async () => {

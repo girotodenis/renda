@@ -9,4 +9,5 @@
 export * from '@/domain/criptografia'
 export * from '@/infrastructure/cripto/chaveSessao'
 export * from '@/infrastructure/cripto/envelope'
+export * from '@/infrastructure/cripto/localCofre'
 export * from '@/infrastructure/cripto/webCrypto'

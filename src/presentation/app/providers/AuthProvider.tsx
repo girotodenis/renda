@@ -37,6 +37,8 @@ import {
   temChave,
 } from '@/infrastructure/cripto/chaveSessao'
 import { abrirVerificador, guardarVerificador, esquecerVerificador } from '@/infrastructure/cripto/verificadorLocal'
+import { temCofreLocal } from '@/infrastructure/cripto/localCofre'
+import { clearLocalSheets } from '@/infrastructure/sheets/localSheets'
 import {
   ensureAppFolder,
   findSpreadsheetsByName,
@@ -761,7 +763,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
   /** "Esquecer este banco": remove workspace, verificador e chaves deste dispositivo. */
   const esquecerBanco = useCallback(() => {
     const ativo = workspaceStorage.load()
+    // No modo local o cofre é o único caminho para as abas cifradas: sem ele os
+    // envelopes ficariam órfãos, então esquecer o banco também limpa as abas.
+    const eraCofreLocal = Boolean(ativo && isWorkspaceLocal(ativo.spreadsheetId) && temCofreLocal())
     if (ativo) esquecerVerificador(ativo.spreadsheetId)
+    if (eraCofreLocal) clearLocalSheets()
     // Nada permanece desbloqueado em memória depois de esquecer o banco.
     esquecerTodasAsChaves()
     workspaceStorage.clear()
