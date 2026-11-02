@@ -14,6 +14,8 @@ import {
 } from '@/application/criptografia'
 import { isOnline } from '@/application/online'
 import { contarPendencias } from '@/application/sync'
+import { migrarPlanilhaAntiga as migrarPlanilhaAntigaApp, detectarBancoLegado } from '@/application/migrarPlanilha'
+import type { OpcoesMigracao, ResultadoMigracao } from '@/application/migrarPlanilha'
 import { validarChave } from '@/domain/criptografia'
 import {
   isWorkspaceLocal,
@@ -28,7 +30,7 @@ import {
   isModoLocal,
   setModoArmazenamento,
 } from '@/infrastructure/modoArmazenamento'
-import { tokenStorage, workspaceStorage } from '@/infrastructure/storage'
+import { tokenStorage, workspaceStorage, migracaoStorage } from '@/infrastructure/storage'
 import {
   esquecerChave,
   esquecerTodasAsChaves,
@@ -841,6 +843,85 @@ export function AuthProvider({ children }: AuthProviderProps) {
     [ensureAccessToken, esquecerChaveDoBancoAnterior, salvarWorkspace],
   )
 
+  /**
+   * Migra o banco ativo do formato antigo (planilha do Sheets) para o cofre
+   * JSON (§6.6). O caso de uso só **lê** a planilha antiga; em sucesso o
+   * workspace ativo passa a ser o cofre novo (já desbloqueado quando houve
+   * chave, pois o gateway guarda a chave da sessão na criação).
+   */
+  const migrarPlanilhaAntiga = useCallback(
+    async (opcoes?: OpcoesMigracao): Promise<ResultadoMigracao> => {
+      setError(null)
+      const ativo = workspaceStorage.load()
+
+      if (isModoLocal()) {
+        const mensagem =
+          'Você está no modo local (sem Google). A migração se aplica a bancos salvos no Google.'
+        setError(mensagem)
+        return { status: 'erro', mensagem }
+      }
+      if (!ativo) {
+        const mensagem = 'Nenhum banco selecionado para migrar.'
+        setError(mensagem)
+        return { status: 'erro', mensagem }
+      }
+      if (!detectarBancoLegado(ativo)) {
+        const mensagem = 'Este banco já está no formato novo.'
+        setError(mensagem)
+        return { status: 'erro', mensagem }
+      }
+
+      const token = await ensureAccessToken()
+      if (!token) {
+        const mensagem = 'Sessão expirada. Faça login novamente.'
+        setError(mensagem)
+        return { status: 'erro', mensagem }
+      }
+
+      setIsBusy(true)
+      try {
+        const resultado = await migrarPlanilhaAntigaApp(
+          { accessToken: token, spreadsheetId: ativo.spreadsheetId },
+          { ...opcoes, title: ativo.title },
+        )
+        if (resultado.status === 'erro') {
+          setError(resultado.mensagem)
+          return resultado
+        }
+
+        // Chaves são por banco: a antiga não é mais usada por este workspace.
+        esquecerChaveDoBancoAnterior(resultado.workspace.spreadsheetId)
+        salvarWorkspace(resultado.workspace)
+
+        if (opcoes?.chave) {
+          // Mesma conveniência da criação: desbloquear offline depois é possível.
+          try {
+            await guardarVerificador(resultado.workspace.spreadsheetId, opcoes.chave)
+          } catch {
+            // Sem verificador: o próximo desbloqueio exigirá internet.
+          }
+        }
+
+        // A oferta não volta nem para o banco antigo nem para o cofre novo.
+        migracaoStorage.dispensar(ativo.spreadsheetId)
+        return resultado
+      } catch (migracaoError) {
+        const mensagem = describeError(migracaoError)
+        setError(mensagem)
+        return { status: 'erro', mensagem }
+      } finally {
+        setIsBusy(false)
+      }
+    },
+    [ensureAccessToken, esquecerChaveDoBancoAnterior, salvarWorkspace],
+  )
+
+  /** "Agora não": a oferta some só para o banco legado ativo. */
+  const dispensarMigracao = useCallback(() => {
+    const ativo = workspaceStorage.load()
+    if (ativo) migracaoStorage.dispensar(ativo.spreadsheetId)
+  }, [])
+
   const clearError = useCallback(() => setError(null), [])
 
   const value = useMemo<AuthContextValue>(
@@ -868,6 +949,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       ativarCriptografia,
       desativarCriptografia,
       recarregarEstadoCriptografia,
+      migrarPlanilhaAntiga,
+      dispensarMigracao,
       ensureAccessToken,
       clearError,
     }),
@@ -881,6 +964,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       criarBanco,
       desativarCriptografia,
       desbloquearBanco,
+      dispensarMigracao,
       ensureAccessToken,
       error,
       esquecerBanco,
@@ -888,6 +972,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       listarBancos,
       login,
       logout,
+      migrarPlanilhaAntiga,
       modo,
       recarregarEstadoCriptografia,
       status,

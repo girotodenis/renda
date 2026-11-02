@@ -14,16 +14,22 @@ function readEnv(value: string | undefined): string | null {
 /** Backend do modo Google: planilha (`sheets`) ou arquivo JSON no Drive (`json`). */
 export type GoogleBackend = 'sheets' | 'json'
 
-/** Selecionado em tempo de BUILD por `VITE_GOOGLE_BACKEND` (padrão: `sheets`). */
+/**
+ * Selecionado em tempo de BUILD por `VITE_GOOGLE_BACKEND`.
+ *
+ * `json` é o padrão: cofre único no Drive, com criptografia opcional. `sheets`
+ * é o build alternativo **sem criptografia** (as células precisam ficar
+ * legíveis para as fórmulas).
+ */
 export const GOOGLE_BACKEND: GoogleBackend =
-  import.meta.env.VITE_GOOGLE_BACKEND === 'json' ? 'json' : 'sheets'
+  import.meta.env.VITE_GOOGLE_BACKEND === 'sheets' ? 'sheets' : 'json'
 
 /**
  * Escopos MÍNIMOS exigidos (RF03). Nada além disso é solicitado.
  *
  * No backend `json` basta `drive.file`: é um escopo NÃO sensível, então o app
- * dispensa a verificação OAuth do Google. Durante o rollout do backend
- * `sheets` o escopo `spreadsheets` continua necessário.
+ * dispensa a verificação OAuth do Google. O backend `sheets` (alternativo)
+ * continua pedindo `spreadsheets`.
  */
 export const GOOGLE_SCOPES: readonly string[] =
   GOOGLE_BACKEND === 'json'

@@ -7,8 +7,8 @@ import type { CellValue } from '@/infrastructure/sheets/sheetCells'
 
 /**
  * Teste de fiação do roteador: o mesmo `gatewayRouter` atende os repositórios
- * com a planilha do Sheets (padrão) ou com o arquivo JSON no Drive
- * (`VITE_GOOGLE_BACKEND=json`). A rede é substituída por um stub de `fetch`.
+ * com o arquivo JSON no Drive (padrão) ou com a planilha do Sheets
+ * (`VITE_GOOGLE_BACKEND=sheets`). A rede é substituída por um stub de `fetch`.
  */
 
 type Router = typeof import('@/infrastructure/sheets/gatewayRouter')
@@ -86,7 +86,7 @@ function stubDrive(inicial?: { bytes?: Uint8Array }) {
   return { chamadas }
 }
 
-/** Stub mínimo da API do Sheets, com as abas do schema (garante o padrão). */
+/** Stub mínimo da API do Sheets, com as abas do schema. */
 function stubSheets() {
   const chamadas: string[] = []
   const metadados = {
@@ -134,9 +134,22 @@ describe('gatewayRouter', () => {
     expect(texto).toContain('PETR4')
   })
 
-  it('sem o flag (ou com valor desconhecido) continua usando a API do Google Sheets', async () => {
+  it('sem o flag (ou com valor desconhecido) usa o cofre JSON, que é o padrão', async () => {
     // `''` representa "flag ausente" sem depender do `.env` de quem roda os testes.
     vi.stubEnv('VITE_GOOGLE_BACKEND', '')
+    const drive = stubDrive()
+    const router: Router = await import('@/infrastructure/sheets/gatewayRouter')
+
+    const workspace = await router.criarWorkspace('token', 'Carteira')
+
+    expect(workspace.spreadsheetUrl).toBe('https://drive.google.com/file/d/arquivo-1/view')
+    expect(drive.chamadas.some((chamada) => chamada.url.includes('sheets.googleapis.com'))).toBe(
+      false,
+    )
+  })
+
+  it('com VITE_GOOGLE_BACKEND=sheets usa a API do Google Sheets', async () => {
+    vi.stubEnv('VITE_GOOGLE_BACKEND', 'sheets')
     const sheets = stubSheets()
     const router: Router = await import('@/infrastructure/sheets/gatewayRouter')
 
@@ -168,7 +181,7 @@ describe('gatewayRouter', () => {
   })
 
   it('no backend sheets recusa alterarCriptografia e responde sem criptografia', async () => {
-    vi.stubEnv('VITE_GOOGLE_BACKEND', '')
+    vi.stubEnv('VITE_GOOGLE_BACKEND', 'sheets')
     stubSheets()
     const router: Router = await import('@/infrastructure/sheets/gatewayRouter')
     const cripto = await import('@/infrastructure/cripto/envelope')
@@ -209,7 +222,7 @@ describe('gatewayRouter', () => {
   })
 
   it('fora do backend json o desbloquear rejeita com 400 e a mensagem da §6.7', async () => {
-    vi.stubEnv('VITE_GOOGLE_BACKEND', '')
+    vi.stubEnv('VITE_GOOGLE_BACKEND', 'sheets')
     stubSheets()
     const router: Router = await import('@/infrastructure/sheets/gatewayRouter')
 
@@ -226,7 +239,7 @@ describe('gatewayRouter', () => {
 describe('cofre do modo local', () => {
   it('responde o estado pelo cofre e fica disponível sem depender do backend', async () => {
     // Backend `sheets`: só o modo local pode cifrar neste cenário.
-    vi.stubEnv('VITE_GOOGLE_BACKEND', '')
+    vi.stubEnv('VITE_GOOGLE_BACKEND', 'sheets')
     const router: Router = await import('@/infrastructure/sheets/gatewayRouter')
     const modo = await import('@/infrastructure/modoArmazenamento')
     modo.setModoArmazenamento(MODO_LOCAL)
@@ -239,7 +252,7 @@ describe('cofre do modo local', () => {
   })
 
   it('ativar cifra as abas e desativar volta à matriz pura', async () => {
-    vi.stubEnv('VITE_GOOGLE_BACKEND', '')
+    vi.stubEnv('VITE_GOOGLE_BACKEND', 'sheets')
     const kv = await import('@/infrastructure/kvStore')
     const chaves = await import('@/infrastructure/cripto/chaveSessao')
     kv._resetForTests()
@@ -302,7 +315,7 @@ describe('cofre do modo local', () => {
   })
 
   it('é idempotente: desativar um banco em claro não altera as abas', async () => {
-    vi.stubEnv('VITE_GOOGLE_BACKEND', '')
+    vi.stubEnv('VITE_GOOGLE_BACKEND', 'sheets')
     const kv = await import('@/infrastructure/kvStore')
     kv._resetForTests()
     const router: Router = await import('@/infrastructure/sheets/gatewayRouter')

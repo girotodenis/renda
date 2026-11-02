@@ -1,4 +1,5 @@
 import { createContext, useContext } from 'react'
+import type { OpcoesMigracao, ResultadoMigracao } from '@/application/migrarPlanilha'
 import type { ModoArmazenamento } from '@/domain/armazenamento'
 import type {
   AuthStatus,
@@ -164,6 +165,22 @@ export interface AuthContextValue {
    * UI mantém o último estado conhecido.
    */
   recarregarEstadoCriptografia: () => Promise<EstadoCriptografia | null>
+  /**
+   * Migra o banco ativo do formato antigo (planilha do Sheets) para o cofre
+   * JSON do Drive (`PLANO_CRIPTOGRAFIA.md` §6.6).
+   *
+   * A planilha antiga só é lida — nunca apagada nem alterada. Em sucesso o
+   * cofre novo passa a ser o banco ativo (com a chave na sessão quando
+   * `opcoes.chave` é informado). A idempotência fica no caso de uso: repetir a
+   * chamada devolve `ja-existia` sem regravar nada.
+   */
+  migrarPlanilhaAntiga: (opcoes?: OpcoesMigracao) => Promise<ResultadoMigracao>
+  /**
+   * Dispensa a oferta de migração para o banco ativo. A dispensa fica no
+   * `localStorage` e é específica daquele banco, então a oferta não volta a
+   * aparecer a cada abertura.
+   */
+  dispensarMigracao: () => void
   /**
    * Garante um access token válido (renova silenciosamente se necessário).
    * Retorna `null` quando não foi possível obter um token.

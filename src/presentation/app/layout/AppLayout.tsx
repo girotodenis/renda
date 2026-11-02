@@ -6,6 +6,7 @@ import { useOnlineStatus } from '@/presentation/hooks/useOnlineStatus'
 import { BadgeProtegido } from '@/presentation/components/BadgeProtegido'
 import { SyncStatusBadge } from '@/presentation/components/SyncStatusBadge'
 import { useSyncStatus } from '@/presentation/hooks/useSyncStatus'
+import { MigrarPlanilha } from '@/presentation/features/auth/MigrarPlanilha'
 
 const navItemClass = 'inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all'
 
@@ -132,6 +133,9 @@ export function AppLayout() {
           Modo offline — exibindo o último estado salvo da carteira.
         </div>
       ) : null}
+
+      {/* Oferta de migração (§6.6): no shell para aparecer em qualquer tela após o upgrade. */}
+      <MigrarPlanilha />
 
       <main id="conteudo" tabIndex={-1} className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 focus:outline-none">
         <Outlet />

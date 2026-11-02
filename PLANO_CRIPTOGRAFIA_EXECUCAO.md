@@ -24,7 +24,7 @@
 | 5 | Configurações e criação | ✅ concluída | ver commit "Fase 5" |
 | 6 | Modo local cifrado | ✅ concluída | ver commit "Fase 6" |
 | 7 | Planilha de cotações | ✅ concluída | ver commit "Fase 7" |
-| 8 | Backend `json` padrão + migração | ⏳ a fazer | — |
+| 8 | Backend `json` padrão + migração | ✅ concluída | ver commit "Fase 8" |
 | 9 | Diagnóstico, docs e memória | ⏳ a fazer | — |
 
 Legenda: ⏳ a fazer · 🔄 em andamento · ✅ concluída · ⚠️ concluída com pendência · ⏸️ bloqueada/pendente manual
@@ -332,7 +332,37 @@ Validação: 60 arquivos / 637 testes verdes, `tsc --noEmit` e `eslint .` limpos
 **Aceite:** build padrão usa o cofre; banco antigo migra sem perda; planilha
 antiga permanece intacta.
 
-**Resultado:**
+**Resultado:** ✅ concluída.
+
+Arquivos:
+- `googleConfig.ts` — `GOOGLE_BACKEND` passa a ser **`json` por padrão**
+  (`VITE_GOOGLE_BACKEND=sheets` para o build alternativo, sem criptografia).
+- `.env.example` e `README.md` — `json` como padrão, escopos por backend,
+  escopo incremental da planilha de cotações e migração automática.
+- `src/application/migrarPlanilha.ts` (**novo**) — `detectarBancoLegado`
+  (build `json` + `spreadsheetUrl` em `docs.google.com/spreadsheets/d/…`),
+  `migrarPlanilhaAntiga(context, { chave?, title? })` → `migrado` /
+  `ja-existia` / `erro`. Lê a planilha antiga **só** pela Sheets API
+  (`FORMULA`, intervalo `A1:ZZ`, com fallback aba a aba quando falta uma aba do
+  schema), cria o cofre (opcionalmente cifrado) e grava as abas com um
+  `batchUpdateValues`.
+  - **Sem perda:** preserva a linha 1 da planilha antiga (nomes editados e
+    colunas extras), completa só o sufixo do cabeçalho do schema e não trunca
+    linhas de dados.
+  - **Idempotente de verdade:** cofre já existente e **com dados** → abre e
+    devolve `ja-existia`; cofre **vazio** (migração interrompida) → continua a
+    migração no mesmo arquivo e devolve `migrado`; cofre cifrado sem chave →
+    mensagem própria.
+  - **Nunca** escreve, altera ou apaga a planilha antiga.
+- `src/presentation/features/auth/MigrarPlanilha.tsx` (**novo**) + montagem no
+  `AppLayout` — oferta única por banco legado (dispensa persistida em
+  `minhaacoes.migracao.v1.dispensada`), com opção de criar o cofre cifrado e
+  caminho manual via `.ods` quando o Google nega o escopo.
+- `AuthProvider`/`authContext` — `migrarPlanilhaAntiga` e `dispensarMigracao`.
+- Testes: `application/migrarPlanilha.test.ts` (12).
+
+Validação: 61 arquivos / 650 testes verdes, `tsc --noEmit`, `eslint .` e
+`vite build` limpos.
 
 ---
 
