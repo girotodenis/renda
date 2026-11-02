@@ -25,7 +25,7 @@
 | 6 | Modo local cifrado | ✅ concluída | ver commit "Fase 6" |
 | 7 | Planilha de cotações | ✅ concluída | ver commit "Fase 7" |
 | 8 | Backend `json` padrão + migração | ✅ concluída | ver commit "Fase 8" |
-| 9 | Diagnóstico, docs e memória | ⏳ a fazer | — |
+| 9 | Diagnóstico, docs e memória | ✅ concluída | ver commit "Fase 9" |
 
 Legenda: ⏳ a fazer · 🔄 em andamento · ✅ concluída · ⚠️ concluída com pendência · ⏸️ bloqueada/pendente manual
 
@@ -368,11 +368,36 @@ Validação: 61 arquivos / 650 testes verdes, `tsc --noEmit`, `eslint .` e
 
 ## Fase 9 — Diagnóstico, docs e memória
 
-- [ ] diagnóstico (criptografia + planilha)
-- [ ] `ARCHITECTURE.md`, `README.md`
-- [ ] memória do repositório
+- [x] diagnóstico (criptografia + planilha)
+- [x] `ARCHITECTURE.md`, `README.md`
+- [x] memória do repositório
 
-**Resultado:**
+**Resultado:** ✅ concluída.
+
+Arquivos:
+- `src/application/diagnostics.ts` — `DiagnosticCriptografia`,
+  `DiagnosticPlanilhaCotacoes`, `DiagnosticAmbiente` e
+  `lerDiagnosticoAmbiente(context | null)` (lê o estado **sem escrever**; a
+  leitura do estado da cifra fica em `try/catch`, então offline/403 nunca
+  derrubam o diagnóstico). O relatório passa a carregar o ambiente.
+- `src/presentation/features/diagnostico/DiagnosticoPage.tsx` — seção
+  "Estado do ambiente" com Estatísticas de **Criptografia**
+  (Sem criptografia / Arquivo criptografado / Bloqueado) e **Planilha de
+  cotações** (estado + motivo), com "Bloquear agora" quando o banco está
+  cifrado.
+- `src/presentation/components/ConfirmarBloqueio.tsx` (**novo**) — confirmação
+  de bloqueio obrigatória extraída do `BadgeProtegido` e reutilizada no
+  Diagnóstico (mesma microcopy, sem duplicação).
+- `ARCHITECTURE.md` — camadas/mapa atualizados e seções novas
+  **Criptografia e privacidade**, **Modo local** e
+  **Planilha de cotações (opcional)**.
+- `README.md` — blocos **Criptografia do banco** e **Diagnóstico**.
+- Memória do repositório: `~/.copilot/memories/repo/renda.md` (decisões,
+  onde mora a criptografia, armadilhas e comandos de validação).
+- Testes: `src/application/diagnostics.test.ts` (5).
+
+Validação: 62 arquivos / 655 testes verdes, `tsc --noEmit`, `eslint .` e
+`vite build` limpos.
 
 ---
 

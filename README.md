@@ -78,6 +78,20 @@ O modo com login Google tem **dois backends**, escolhidos em tempo de **build** 
 
 O modo **local** (botão "Usar sem Google", IndexedDB + exportação/importação `.ods`) é independente do backend e continua funcionando igual.
 
+## Criptografia do banco
+
+No backend `json` e no modo local, **Configurações → Segurança do banco** liga a criptografia do banco inteiro (AES-256-GCM com chave derivada da senha por PBKDF2-SHA256, 600.000 iterações). O banco cifrado só abre com a senha, e a chave fica apenas na memória da sessão.
+
+- **Não existe recuperação de senha:** esquecê-la significa perder os dados. Por isso criar ou ativar exige o aviso **"Entendi que não há recuperação"**.
+- **Recarregar a página, trocar de banco ou sair** pede a senha de novo (a chave nunca é gravada). O navegador guarda só um **verificador**, que permite **desbloquear offline** com o cache local.
+- **"Bloquear agora"** (cabeçalho, Configurações e Diagnóstico) sempre pede confirmação; ele esquece a chave e apaga o cache de abas em claro.
+- **O que não é protegido:** o `.ods` exportado é texto puro, o cache de abas e a fila offline do navegador ficam em claro, e os metadados do arquivo (nome, tamanho, datas) e os tickers da planilha de cotações são visíveis. O backend `sheets` não cifra (as células precisam ficar legíveis para as fórmulas).
+- **Esquecer este banco neste dispositivo** apaga o workspace, a chave e o verificador locais; o arquivo no Drive continua intacto e pode ser aberto em outro dispositivo com a senha.
+
+## Diagnóstico
+
+A tela **Diagnóstico** (menu lateral) faz um teste rápido da camada de dados: escreve uma linha em cada aba, atualiza o cache com um único `batchGet` e relê sem novas chamadas à API, mostrando os contadores de requisição. Ela também resume o **estado do ambiente**: criptografia do banco (`Sem criptografia` / `Arquivo criptografado` / `Bloqueado`, com o botão **Bloquear agora**) e a planilha de cotações (estado e motivo).
+
 ## Scripts
 
 | Comando | Descrição |
