@@ -33,6 +33,16 @@ const DRIVE_FOLDER_MIME_TYPE = 'application/vnd.google-apps.folder'
 export const DEFAULT_APP_FOLDER_NAME = 'databases_app_minhas_acoes'
 
 /**
+ * URL da pasta do app no Google Drive (abre a pasta, não o arquivo).
+ *
+ * Usada no botão "Abrir no Google Drive" do backend `json`: o usuário vê o
+ * cofre e a planilha de cotações juntos, no lugar onde o app os organiza.
+ */
+export function urlPastaDoApp(folderId: string): string {
+  return `https://drive.google.com/drive/folders/${folderId}`
+}
+
+/**
  * Nomes anteriores da pasta, renomeados quando encontrados.
  *
  * Sem isso, quem já usava o app ficaria com os bancos na pasta antiga e uma

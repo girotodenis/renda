@@ -267,13 +267,26 @@ describe('createDefaultSpreadsheet', () => {
   it('cria o arquivo dentro da pasta do app quando folderId é informado', async () => {
     const drive = criarDriveFalso()
 
-    await gateway.createDefaultSpreadsheet('token', 'Carteira na pasta', { folderId: 'pasta-app' })
+    const workspace = await gateway.createDefaultSpreadsheet('token', 'Carteira na pasta', {
+      folderId: 'pasta-app',
+    })
 
     const criacao = drive.chamadas[0]
     expect(JSON.parse(String(criacao?.body))).toMatchObject({
       name: `Carteira na pasta${SUFIXO}`,
       parents: ['pasta-app'],
     })
+    // O botão "Abrir no Google Drive" abre a pasta, não o arquivo do banco.
+    expect(workspace.pastaUrl).toBe('https://drive.google.com/drive/folders/pasta-app')
+  })
+
+  it('não inventa a URL da pasta quando ela não é informada', async () => {
+    const drive = criarDriveFalso()
+
+    const workspace = await gateway.createDefaultSpreadsheet('token', 'Carteira na raiz')
+
+    expect(workspace.pastaUrl).toBeUndefined()
+    expect(workspace.spreadsheetUrl).toBe(`https://drive.google.com/file/d/${drive.id}/view`)
   })
 })
 

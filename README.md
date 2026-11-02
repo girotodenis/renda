@@ -64,7 +64,7 @@ O modo com login Google tem **dois backends**, escolhidos em tempo de **build** 
 
 | Backend | Escopos OAuth | Onde os dados ficam | Criar | Abrir existente | Link |
 | --- | --- | --- | --- | --- | --- |
-| `json` (padrão) | **`drive.file`** (+ `spreadsheets` só para a planilha de cotações) | um arquivo `*.json.gz` no Drive (pasta `databases_app_minhas_acoes`) | arquivo novo com as abas vazias | lista os bancos criados pelo app | `drive.google.com/file/d/…` |
+| `json` (padrão) | **`drive.file`** (+ `spreadsheets` só para a planilha de cotações) | um arquivo `*.json.gz` no Drive (pasta `databases_app_minhas_acoes`) | arquivo novo com as abas vazias | lista os bancos criados pelo app | pasta do app (`drive.google.com/drive/folders/…`) |
 | `sheets` (alternativo, sem criptografia) | `spreadsheets` + `drive.file` | planilha do Google Sheets | planilha nova (abas do schema) | lista as planilhas visíveis (Picker opcional) | `docs.google.com/spreadsheets/d/…` |
 
 - A **planilha de cotações** (opcional) chama-se `Minhas Ações — Cotações`, fica na pasta `databases_app_minhas_acoes` como o cofre e é criada só na primeira atualização de preços após a autorização — se você nunca autorizar, ela nunca existe.

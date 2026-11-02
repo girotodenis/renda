@@ -34,6 +34,7 @@ import {
 import type { DatabaseFile, DatabaseSheets } from '@/infrastructure/driveFile/format'
 import { parseA1Range } from '@/infrastructure/sheets/a1'
 import type { EnderecoA1 } from '@/infrastructure/sheets/a1'
+import { urlPastaDoApp } from '@/infrastructure/drive'
 import { SheetsApiError } from '@/infrastructure/sheets/gateway'
 import type { ValueInputOption, ValueRange, ValueRenderOption } from '@/infrastructure/sheets/gateway'
 import type { CellValue } from '@/infrastructure/sheets/sheetCells'
@@ -386,11 +387,15 @@ function toWorkspace(
   fileId: string,
   title: string | null,
   criptografia: CriptografiaBanco,
+  folderId?: string | null,
 ): SpreadsheetWorkspace {
   return {
     spreadsheetId: fileId,
     title: title ?? DEFAULT_DATABASE_TITLE,
     spreadsheetUrl: `https://drive.google.com/file/d/${fileId}/view`,
+    // Só quem cria sabe a pasta; ao abrir um banco existente ela é descoberta
+    // depois (`pastaAppStorage`) — nunca sobrescrever o valor com `null`.
+    ...(folderId ? { pastaUrl: urlPastaDoApp(folderId) } : {}),
     sheetIds: buildSheetIdMap(),
     updatedAt: new Date().toISOString(),
     criptografia,
@@ -765,7 +770,7 @@ export async function createDefaultSpreadsheet(
   // O banco nasce desbloqueado: o usuário acabou de digitar a senha.
   if (sessao) guardarChave(created.fileId, sessao)
 
-  return toWorkspace(created.fileId, workspaceTitle, sessao !== null ? 'total' : 'nenhuma')
+  return toWorkspace(created.fileId, workspaceTitle, sessao !== null ? 'total' : 'nenhuma', opcoes.folderId)
 }
 
 /**

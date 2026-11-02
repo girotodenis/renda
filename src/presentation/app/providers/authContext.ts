@@ -186,6 +186,15 @@ export interface AuthContextValue {
    * Retorna `null` quando não foi possível obter um token.
    */
   ensureAccessToken: () => Promise<string | null>
+  /**
+   * URL da pasta do app no Google Drive (`databases_app_minhas_acoes`) — destino
+   * do botão "Abrir no Google Drive" no backend `json`.
+   *
+   * Responde sem ir à rede quando a URL já é conhecida; caso contrário consulta
+   * o Drive uma única vez (escopo `drive.file`) e passa a guardá-la. `null`
+   * quando não há pasta/token/rede — a UI deve cair para a URL do arquivo.
+   */
+  obterUrlPastaDoApp: () => Promise<string | null>
   /** Limpa a mensagem de erro atual. */
   clearError: () => void
 }
