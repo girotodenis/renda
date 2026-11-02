@@ -96,7 +96,7 @@ interface AuthProviderProps {
 
 /**
  * Move o banco recém-criado (planilha ou arquivo JSON) para a pasta padrão do app
- * (`minhasacoe_app`), criando a pasta se necessário. Best-effort: usa apenas o
+ * (`databases_app_minhas_acoes`), criando a pasta se necessário. Best-effort: usa apenas o
  * escopo `drive.file` (sem novas permissões) e, se falhar, o banco permanece
  * válido na raiz do Drive.
  */
@@ -110,7 +110,7 @@ async function organizarNaPastaDoApp(accessToken: string, spreadsheetId: string)
 }
 
 /**
- * Garante a pasta padrão do app (`minhasacoe_app`) para o Picker abrir direto
+ * Garante a pasta padrão do app (`databases_app_minhas_acoes`) para o Picker abrir direto
  * nela, criando-a se necessário. Best-effort: em falha devolve `null` e o Picker
  * abre no modo padrão.
  */
@@ -820,7 +820,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
         const chave = options?.chave ?? null
         // A pasta é garantida ANTES da criação: com `parents` o arquivo já nasce
-        // dentro de `minhasacoe_app`. O "mover depois" era best-effort e podia
+        // dentro de `databases_app_minhas_acoes`. O "mover depois" era best-effort e podia
         // falhar em silêncio, deixando o banco na raiz do Drive.
         const folderId = isJsonBackend() ? await garantirPastaDoApp(token) : null
         const created = await criarWorkspace(token, title, {

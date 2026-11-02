@@ -198,7 +198,7 @@ async function cofreVazio(
 }
 
 /**
- * Pasta do app onde o cofre deve nascer (`minhasacoe_app`).
+ * Pasta do app onde o cofre deve nascer (`databases_app_minhas_acoes`).
  *
  * Criada/descoberta antes da criação do arquivo para que ele já nasça lá dentro
  * (o `drive.file` permite criar dentro de uma pasta criada pelo app). Falha na

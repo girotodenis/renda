@@ -64,10 +64,10 @@ O modo com login Google tem **dois backends**, escolhidos em tempo de **build** 
 
 | Backend | Escopos OAuth | Onde os dados ficam | Criar | Abrir existente | Link |
 | --- | --- | --- | --- | --- | --- |
-| `json` (padrão) | **`drive.file`** (+ `spreadsheets` só para a planilha de cotações) | um arquivo `*.json.gz` no Drive (pasta `minhasacoe_app`) | arquivo novo com as abas vazias | lista os bancos criados pelo app | `drive.google.com/file/d/…` |
+| `json` (padrão) | **`drive.file`** (+ `spreadsheets` só para a planilha de cotações) | um arquivo `*.json.gz` no Drive (pasta `databases_app_minhas_acoes`) | arquivo novo com as abas vazias | lista os bancos criados pelo app | `drive.google.com/file/d/…` |
 | `sheets` (alternativo, sem criptografia) | `spreadsheets` + `drive.file` | planilha do Google Sheets | planilha nova (abas do schema) | lista as planilhas visíveis (Picker opcional) | `docs.google.com/spreadsheets/d/…` |
 
-- A **planilha de cotações** (opcional) chama-se `Minhas Ações — Cotações`, fica na pasta `minhasacoe_app` como o cofre e é criada só na primeira atualização de preços após a autorização — se você nunca autorizar, ela nunca existe.
+- A **planilha de cotações** (opcional) chama-se `Minhas Ações — Cotações`, fica na pasta `databases_app_minhas_acoes` como o cofre e é criada só na primeira atualização de preços após a autorização — se você nunca autorizar, ela nunca existe.
 - O backend `json` (**padrão**) usa apenas o escopo **`drive.file`**, que **não é sensível**: dispensa a verificação OAuth do Google (e o vídeo de demonstração) para publicar o app. O escopo **`spreadsheets`** é pedido **incrementalmente**, apenas quando o usuário autoriza a **planilha de cotações** em Configurações — negado, as cotações seguem pelas APIs (Brapi → Mais Retorno).
 - O build `sheets` continua compilável como alternativa, mas **sem criptografia**: as células precisam ficar legíveis para as fórmulas (`GOOGLEFINANCE`, Consolidado).
 - Em **Abrir banco existente** aparece a lista dos bancos já existentes (nome + última modificação); basta escolher um para carregar. No backend `sheets`, o Google Picker continua disponível como ação secundária para abrir uma planilha que o app ainda não conhece.

@@ -63,7 +63,7 @@ export interface OpcoesCriarWorkspace {
   /** Sessão de criptografia: com ela o arquivo já nasce cifrado. */
   chave?: SessaoCripto
   /**
-   * Pasta do app (`minhasacoe_app`) onde o cofre nasce. Só o backend `json` usa;
+   * Pasta do app (`databases_app_minhas_acoes`) onde o cofre nasce. Só o backend `json` usa;
    * o chamador é quem garante/cria a pasta antes de criar o banco.
    */
   folderId?: string

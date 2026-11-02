@@ -110,7 +110,7 @@ async function resolverMetadados(
 }
 
 /**
- * Pasta do app (`minhasacoe_app`) onde a planilha de cotações deve ficar.
+ * Pasta do app (`databases_app_minhas_acoes`) onde a planilha de cotações deve ficar.
  *
  * `null` quando não foi possível garantir a pasta: a planilha é criada/usada na
  * raiz, como antes — cotações continuam funcionando.

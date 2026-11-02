@@ -729,7 +729,7 @@ export interface OpcoesCriarDatabase {
   /** Com a chave o arquivo nasce cifrado e a sessão já fica desbloqueada. */
   chave?: SessaoCripto
   /**
-   * Pasta do app (`minhasacoe_app`) onde o arquivo nasce. Omitir cria na raiz
+   * Pasta do app (`databases_app_minhas_acoes`) onde o arquivo nasce. Omitir cria na raiz
    * do Drive — o chamador é quem garante/cria a pasta.
    */
   folderId?: string

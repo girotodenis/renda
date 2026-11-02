@@ -56,7 +56,7 @@ export interface DriveFileRequestOptions {
 /** Opções da criação do arquivo do banco. */
 export interface CreateDatabaseFileOptions extends DriveFileRequestOptions {
   /**
-   * Pasta onde o arquivo nasce (`minhasacoe_app`). Criar já dentro dela evita a
+   * Pasta onde o arquivo nasce (`databases_app_minhas_acoes`). Criar já dentro dela evita a
    * janela em que o banco ficaria na raiz do Drive e a dependência do "mover
    * depois", que era silenciosamente best-effort.
    */

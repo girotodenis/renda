@@ -130,7 +130,7 @@ cabeçalhos, valores tipados) nunca vaze para o domínio:
   `GOOGLEFINANCE` e serve de fonte primária de preços de B3 (ver "Planilha de
   cotações (opcional)").
 - `drive.ts`, `googleIdentity.ts`, `googleConfig.ts` — OAuth 2.0 e organização
-  no Drive. `drive.ts` garante a pasta padrão `minhasacoe_app`
+  no Drive. `drive.ts` garante a pasta padrão `databases_app_minhas_acoes`
   (`ensureAppFolder`) e move para ela o arquivo criado (`moveFileToFolder`) —
   tudo coberto pelo escopo `drive.file`, sem permissões extras.
 - `compression.ts` — compactação gzip nativa (`CompressionStream`) do banco JSON.
@@ -250,7 +250,7 @@ modo local. O formato é o de `PLANO_CRIPTOGRAFIA.md` §3.2:
   `GOOGLEFINANCE` uma vez por ticker e lê os preços em lote. Nada da carteira
   mora nela: se for apagada, é recriada.
 - Nome fixo `Minhas Ações — Cotações` (aba `Cotações`), criada na pasta
-  `minhasacoe_app` como o cofre. A Sheets API não aceita `parents`, então a
+  `databases_app_minhas_acoes` como o cofre. A Sheets API não aceita `parents`, então a
   planilha nasce na raiz e é movida logo depois (`garantirNaPasta`); se a pasta
   falhar, ela segue válida na raiz.
 - Criação é preguiçosa: acontece na primeira consulta de cotações depois da
