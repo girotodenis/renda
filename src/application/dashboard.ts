@@ -30,6 +30,7 @@ import {
   provedorCotacoesCripto,
   provedorCotacoesTesouro,
 } from '@/infrastructure/cotacoes/registro'
+import { PLANILHA_GOOGLE_ID, estadoPlanilhaGoogle } from '@/infrastructure/cotacoes/planilhaGoogle'
 import type {
   CotacaoMercado,
   ProvedorCotacoesB3,
@@ -382,7 +383,14 @@ export async function carregarDashboard(
       config.tokens,
       modoLocal || forceRefresh,
       forceRefresh,
-      { aoConsultar: onProgress ? aoConsultar : undefined, onTotal: aoDefinirTotal, signal },
+      {
+        aoConsultar: onProgress ? aoConsultar : undefined,
+        onTotal: aoDefinirTotal,
+        signal,
+        // O sentinela `local` não é um token OAuth: no modo local a planilha
+        // de cotações fica de fora (as APIs de cotação seguem funcionando).
+        accessToken: modoLocal ? undefined : context.accessToken,
+      },
     ),
     carregarSetores(context, posicoesParaSetor(operacoes, linhasConsolidado), {
       tokens: config.tokens,
@@ -597,6 +605,7 @@ async function resolverCotacoesApi(
   }
   const opcoes = {
     tokens,
+    accessToken: consulta.accessToken,
     forceRefresh,
     aoConsultar: consulta.aoConsultar,
     signal: consulta.signal,
@@ -635,8 +644,13 @@ function metadadosIntegracoes(
   tokens: TokensProvedores,
 ): Pick<DiagnosticoCotacoesApi, 'provedores' | 'dicasTesouro' | 'dicasCripto' | 'semToken'> {
   const exigemToken = integracoesCotacao.filter((integracao) => integracao.exigeToken)
+  const planilhaAtiva = estadoPlanilhaGoogle().estado === 'ativa'
   return {
-    provedores: integracoesCotacao.map((integracao) => integracao.nome),
+    // A planilha de cotações só é nomeada ao usuário quando está ativa: sem
+    // autorização ela é silenciosa e não deve poluir os avisos do dashboard.
+    provedores: integracoesCotacao
+      .filter((integracao) => integracao.id !== PLANILHA_GOOGLE_ID || planilhaAtiva)
+      .map((integracao) => integracao.nome),
     dicasTesouro: integracoesCotacao.flatMap((integracao) =>
       integracao.dicaTesouroSemCotacao ? [integracao.dicaTesouroSemCotacao] : [],
     ),
@@ -657,6 +671,8 @@ interface ConsultaCotacoes {
   onTotal?: (itens: number) => void
   /** Cancela a consulta em andamento. */
   signal?: AbortSignal
+  /** Token OAuth da sessão (usado pela planilha de cotações). */
+  accessToken?: string
 }
 
 /** Cotações das APIs resolvidas (+ aberturas) e o diagnóstico da consulta. */

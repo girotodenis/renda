@@ -19,6 +19,7 @@ import { lerAbasOds } from '@/infrastructure/ods/odsReader'
 import { OdsFormatError } from '@/infrastructure/ods/zipReader'
 import { describeSheetsError } from '@/infrastructure/sheets/gateway'
 import { SegurancaBancoCard } from './SegurancaBancoCard'
+import { PlanilhaCotacoesCard } from './PlanilhaCotacoesCard'
 
 /** Integrações de cotação registradas (fixas durante a execução do app). */
 const INTEGRACOES = listarIntegracoesCotacao().filter((integracao) => integracao.exigeToken)
@@ -345,6 +346,8 @@ export function ConfiguracoesPage() {
       </div>
 
       <SegurancaBancoCard />
+
+      <PlanilhaCotacoesCard />
 
       <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex items-start gap-3">

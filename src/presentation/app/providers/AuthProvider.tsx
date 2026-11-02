@@ -50,12 +50,15 @@ import {
 } from '@/infrastructure/drive'
 import {
   GOOGLE_SCOPES,
+  SCOPES_COM_PLANILHA,
+  SHEETS_SCOPE,
   googleConfig,
   isGoogleConfigured,
   isJsonBackend,
   isSpreadsheetPickerConfigured,
   MISSING_CLIENT_ID_MESSAGE,
   MISSING_PICKER_KEY_MESSAGE,
+  tokenTemEscopo,
 } from '@/infrastructure/googleConfig'
 import {
   GoogleAuthError,
@@ -218,8 +221,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
     const clientId = googleConfig.clientId
     if (!clientId) return false
 
+    // Preserva o escopo da planilha de cotações quando ele já foi concedido:
+    // renovar só com `GOOGLE_SCOPES` revogaria o acesso à planilha a cada hora.
+    const anterior = tokenStorage.load()
+    const scopes =
+      anterior && tokenTemEscopo(anterior.scope, SHEETS_SCOPE) ? SCOPES_COM_PLANILHA : GOOGLE_SCOPES
+
     try {
-      const response = await requestAccessToken({ clientId, scopes: GOOGLE_SCOPES, prompt: '' })
+      const response = await requestAccessToken({ clientId, scopes, prompt: '' })
       applyToken(response)
       return true
     } catch {

@@ -23,7 +23,7 @@
 | 4 | Abertura, bloqueio e sessão | ✅ concluída | ver commit "Fase 4" |
 | 5 | Configurações e criação | ✅ concluída | ver commit "Fase 5" |
 | 6 | Modo local cifrado | ✅ concluída | ver commit "Fase 6" |
-| 7 | Planilha de cotações | ⏳ a fazer | — |
+| 7 | Planilha de cotações | ✅ concluída | ver commit "Fase 7" |
 | 8 | Backend `json` padrão + migração | ⏳ a fazer | — |
 | 9 | Diagnóstico, docs e memória | ⏳ a fazer | — |
 
@@ -290,7 +290,36 @@ Validação: 57 arquivos / 613 testes verdes, `tsc --noEmit` e `eslint .` limpos
 **Aceite:** autorizada → preço da planilha; negada/403 → APIs; dashboard igual
 nos dois casos.
 
-**Resultado:**
+**Resultado:** ✅ concluída.
+
+Arquivos:
+- `src/infrastructure/cotacoes/planilhaGoogle/api.ts` (**novo**) — Sheets API v4
+  (criar/descobrir planilha, `values.get`, `values.update` `USER_ENTERED`,
+  metadados/aba), `PlanilhaCotacoesError` com `isEscopoInsuficiente`/
+  `isNaoEncontrada`, timeout e contador de requisições.
+- `.../planilha.ts` (**novo**) — `garantirPlanilha` (id salvo em
+  `localStorage` → descoberta no Drive → criação com cabeçalho),
+  `reconciliarTickers` (união ordenada; só regrava quando muda, com as fórmulas
+  `GOOGLEFINANCE` via `sheetFormulas.ts`) e `lerCotacoes` (um `values.get` por
+  sync; parse tolerante a `#N/A`, vazio, texto, `0` e preço < R$ 0,20).
+- `.../index.ts` (**novo**) — `integracaoPlanilhaGoogle` (`exigeToken: false`,
+  `b3`), estado memorizado `ativa | nao-autorizada | indisponivel` +
+  `estadoPlanilhaGoogle()`, cache diário no `kvStore` e `limparCache()`.
+  Contrato respeitado: **nunca lança**; sem token/escopo devolve tudo em
+  `semCotacao` sem rede; 403/404/rede memorizam o estado.
+- `src/application/planilhaCotacoes.ts` (**novo**) — `estadoPlanilhaCotacoes`,
+  `autorizarPlanilhaCotacoes` (consentimento explícito; `isUserCancellation` →
+  `negada`, sem lançar), `desconectarPlanilhaCotacoes` e a mensagem da 6.7.
+- `googleConfig.ts` — `SHEETS_SCOPE`, `SCOPES_COM_PLANILHA`, `tokenTemEscopo`.
+- `domain/provedoresCotacao.ts` — `OpcoesConsultaCotacoes.accessToken?`.
+- `cotacoes/registro.ts` — ordem `Planilha → Brapi → Mais Retorno`.
+- `application/dashboard.ts` — passa `context.accessToken` às consultas.
+- `PlanilhaCotacoesCard.tsx` (**novo**) + `ConfiguracoesPage.tsx` — estado,
+  "Autorizar planilha de cotações" e "Desconectar"; negado não insiste.
+- Testes: `planilhaGoogle/planilha.test.ts` (13), `planilhaGoogle/index.test.ts`
+  (7), `application/planilhaCotacoes.test.ts` (4).
+
+Validação: 60 arquivos / 637 testes verdes, `tsc --noEmit` e `eslint .` limpos.
 
 ---
 

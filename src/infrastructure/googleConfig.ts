@@ -33,6 +33,28 @@ export const GOOGLE_SCOPES: readonly string[] =
         'https://www.googleapis.com/auth/drive.file',
       ]
 
+/**
+ * Escopo da Sheets API usado pela **planilha de cotações** (integração
+ * opcional, autorizada por ação explícita em Configurações).
+ */
+export const SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets'
+
+/**
+ * Escopos do login + o da planilha de cotações, sem duplicar o que
+ * `GOOGLE_SCOPES` já pede (no backend `sheets` o escopo já está incluído).
+ */
+export const SCOPES_COM_PLANILHA: readonly string[] = GOOGLE_SCOPES.includes(SHEETS_SCOPE)
+  ? [...GOOGLE_SCOPES]
+  : [...GOOGLE_SCOPES, SHEETS_SCOPE]
+
+/**
+ * `true` quando a string de escopos devolvida pelo Google inclui `escopo`.
+ * O Google devolve os escopos separados por espaço.
+ */
+export function tokenTemEscopo(scope: string, escopo: string): boolean {
+  return scope.split(/\s+/).includes(escopo)
+}
+
 export interface GoogleConfig {
   clientId: string | null
   pickerApiKey: string | null
