@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Minhas Ações é um aplicativo web (PWA) gratuito para acompanhar sua carteira de investimentos da B3 usando sua própria planilha do Google Sheets. Saiba quais dados do Google o app acessa e por quê." />
+  <meta name="description" content="Minhas Ações é um aplicativo web (PWA) gratuito para acompanhar sua carteira de investimentos da B3 com um banco de dados criptografado no seu próprio Google Drive. Saiba quais dados do Google o app acessa e por quê." />
   <meta name="google-site-verification" content="Xvi4z-VtqEzi1cqZX8edum_vtV38ZFTEVG4LF88SoVQ" />
   <link rel="canonical" href="https://6271798ma.com.br/" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="Minhas Ações" />
   <meta property="og:title" content="Minhas Ações — aplicativo de controle de carteira de investimentos" />
-  <meta property="og:description" content="Aplicativo web gratuito que usa sua planilha do Google Sheets como banco de dados para acompanhar sua carteira de investimentos." />
+  <meta property="og:description" content="Aplicativo web gratuito que guarda sua carteira em um único arquivo — com criptografia opcional — no seu próprio Google Drive, sem servidor do desenvolvedor." />
   <meta property="og:url" content="https://6271798ma.com.br/" />
   <title>Minhas Ações — aplicativo de controle de carteira de investimentos</title>
   <script type="application/ld+json">
@@ -20,7 +20,7 @@
     "applicationCategory": "FinanceApplication",
     "operatingSystem": "Web (navegador), Android, iOS, Windows, macOS, Linux",
     "url": "https://6271798ma.com.br/renda/",
-    "description": "Aplicativo web (PWA) gratuito para acompanhar a carteira de investimentos da B3, usando a planilha do Google Sheets do próprio usuário como banco de dados.",
+    "description": "Aplicativo web (PWA) gratuito para acompanhar a carteira de investimentos da B3, guardando os dados em um arquivo JSON criptografado no Google Drive do próprio usuário.",
     "offers": { "@type": "Offer", "price": "0", "priceCurrency": "BRL" },
     "author": { "@type": "Person", "name": "Denis Giroto" }
   }
@@ -417,13 +417,14 @@
 
   <!-- Hero -->
   <header class="hero">
-    <div class="badge">Aplicativo web gratuito • Código aberto no navegador • Seus dados ficam na sua conta Google</div>
+    <div class="badge">Aplicativo web gratuito • Código aberto no navegador • Seus dados ficam no seu Google Drive, com criptografia opcional</div>
     <h1>Minhas Ações: controle sua carteira de investimentos <span>sem abrir mão da sua privacidade</span></h1>
     <p>
       <strong>Minhas Ações</strong> é um aplicativo web (PWA) para investidores pessoa física que
-      querem acompanhar a própria carteira de ações, FIIs e outros ativos da B3. Ele usa a
-      <strong>sua planilha do Google Sheets</strong> como banco de dados: você entra com sua Conta
-      Google, autoriza o acesso à planilha que <em>você</em> escolher e o app calcula preço médio,
+      querem acompanhar a própria carteira de ações, FIIs e outros ativos da B3. Ele guarda tudo em um
+      <strong>único arquivo no seu Google Drive</strong> — que pode ser
+      <strong>criptografado com uma senha só sua</strong>: você entra com sua Conta Google, autoriza
+      o app a acessar apenas os arquivos que ele mesmo cria e o app calcula preço médio,
       rentabilidade, dividendos e evolução patrimonial direto do navegador —
       instalável como app e com funcionamento <strong>offline</strong>.
     </p>
@@ -445,8 +446,10 @@
     <p>
       Diferente de outros aplicativos de investimentos, ele <strong>não possui servidor próprio e
       não mantém banco de dados em nuvem do desenvolvedor</strong>. Toda a informação financeira
-      fica gravada na planilha do Google Sheets que pertence a você, na sua própria Conta Google.
-      O app funciona como uma camada de cálculo e visualização sobre essa planilha.
+      fica gravada em um único arquivo do <strong>seu Google Drive</strong>, criado pelo próprio app.
+      Se você ativar a criptografia, esse arquivo é cifrado (AES-256-GCM) e a chave só existe na
+      memória do navegador — nunca é enviada nem gravada. O app funciona como uma camada de cálculo
+      e visualização sobre esse arquivo.
     </p>
     <p>
       O acesso à página do aplicativo é feito em
@@ -455,8 +458,8 @@
 
     <h3>Como funciona</h3>
     <ol>
-      <li><strong>Entre com sua Conta Google</strong> e autorize o app a acessar apenas as planilhas que você indicar.</li>
-      <li><strong>Escolha ou crie sua planilha</strong> — é nela que operações, proventos e configurações ficam salvos.</li>
+      <li><strong>Entre com sua Conta Google</strong> e autorize o app a acessar apenas os arquivos que ele mesmo cria no seu Drive.</li>
+      <li><strong>Crie ou abra seu banco de dados</strong> — é nele que operações, proventos e configurações ficam salvos. Se quiser, ative a criptografia e proteja tudo com uma senha.</li>
       <li><strong>Acompanhe seus números</strong> no dashboard: preço médio, lucro/prejuízo, alocação por ativo e categoria, dividendos recebidos e evolução patrimonial.</li>
     </ol>
   </section>
@@ -470,7 +473,7 @@
       <div class="card">
         <div class="icon">🧾</div>
         <h3>Operações e proventos</h3>
-        <p>Lance compras, vendas e dividendos/JCP em segundos. O histórico completo fica salvo na sua planilha.</p>
+        <p>Lance compras, vendas e dividendos/JCP em segundos. O histórico completo fica salvo no seu banco de dados.</p>
       </div>
 
       <div class="card">
@@ -514,6 +517,12 @@
         <h3>Funciona offline</h3>
         <p>Consulte tudo sem internet. Suas alterações são sincronizadas automaticamente ao reconectar.</p>
       </div>
+
+      <div class="card">
+        <div class="icon">🔐</div>
+        <h3>Criptografia opcional</h3>
+        <p>Ative a proteção com uma senha: o arquivo do seu Drive passa a ser cifrado e pede a chave a cada abertura — inclusive para desbloquear offline.</p>
+      </div>
     </div>
   </section>
 
@@ -522,8 +531,8 @@
     <h2>Quais dados do Google o app acessa e para quê</h2>
     <p>
       Para funcionar, o Minhas Ações solicita a sua Conta Google somente os dados necessários
-      para identificar você e ler/gravar a planilha que você escolher. A finalidade de cada
-      permissão está descrita abaixo de forma explícita.
+      para criar e ler/gravar o <strong>arquivo do seu banco de dados</strong> no Drive. A finalidade
+      de cada permissão está descrita abaixo de forma explícita.
     </p>
 
     <!-- IMPORTANTE: mantenha esta lista exatamente igual aos escopos configurados na tela de consentimento OAuth -->
@@ -538,19 +547,14 @@
         </thead>
         <tbody>
           <tr>
-            <td>Nome, e-mail e foto do perfil<br /><code>openid</code> <code>email</code> <code>profile</code></td>
-            <td>Identificar sua conta, exibir quem está conectado e vincular suas preferências locais ao seu login. Usado apenas para autenticação — não enviamos e-mails nem mensagens.</td>
-            <td>No seu navegador (armazenamento local). Não é transmitido para servidores do desenvolvedor.</td>
-          </tr>
-          <tr>
-            <td>Planilhas do Google Sheets<br /><code>spreadsheets</code></td>
-            <td>Ler e gravar as operações, proventos, eventos corporativos e configurações da carteira na planilha que <strong>você</strong> selecionar. É o único "banco de dados" do aplicativo.</td>
-            <td>Na sua própria planilha, dentro da sua Conta Google.</td>
-          </tr>
-          <tr>
             <td>Arquivos do Google Drive criados pelo app<br /><code>drive.file</code></td>
-            <td>Criar a planilha inicial, localizar e abrir apenas os arquivos que o próprio app criou ou que você selecionou explicitamente, e gerar cópias de segurança/exportações.</td>
-            <td>Na sua própria Conta Google (Google Drive).</td>
+            <td>Criar, localizar, ler e gravar o <strong>arquivo do banco de dados</strong> da carteira (um único arquivo criado pelo app), além de gerar cópias de segurança e exportações. É o único "banco de dados" do aplicativo.</td>
+            <td>No seu próprio Google Drive. Com a criptografia ativada, o conteúdo do arquivo fica cifrado.</td>
+          </tr>
+          <tr>
+            <td>Planilhas do Google Sheets<br /><code>spreadsheets</code> — <strong>opcional</strong></td>
+            <td>Solicitada somente se você ativar a <strong>planilha de cotações</strong>, que usa o serviço GOOGLEFINANCE para buscar preços de mercado. Se você não autorizar, nada quebra: o app segue funcionando e busca os preços por outras fontes.</td>
+            <td>Em uma planilha criada pelo app, dentro da sua Conta Google. Ela contém apenas tickers e preços — nenhum dado da carteira.</td>
           </tr>
         </tbody>
       </table>
@@ -574,7 +578,7 @@
     <p>
       Você pode revogar o acesso do app a qualquer momento em
       <a href="https://myaccount.google.com/permissions" rel="noopener" target="_blank">myaccount.google.com/permissions</a>
-      ou excluir a planilha diretamente na sua Conta Google. Mais detalhes na
+      ou excluir o arquivo do banco (e a planilha de cotações, se houver) diretamente na sua Conta Google. Mais detalhes na
       <a href="https://6271798ma.com.br/privacy.html">Política de Privacidade</a>.
     </p>
   </section>
@@ -586,9 +590,10 @@
       <div>
         <h3>Privacidade de verdade</h3>
         <p>
-          O app não tem servidor próprio: ele é apenas uma "tela" sobre a <strong>sua</strong> planilha.
-          Tudo é salvo na sua Conta Google, e a única cópia local fica no seu navegador
-          para o funcionamento offline. Leia a
+          O app não tem servidor próprio: ele é apenas uma "tela" sobre o <strong>seu</strong> arquivo.
+          Tudo é salvo na sua Conta Google — e pode ser <strong>criptografado com uma senha que só
+          você conhece</strong> — e a única cópia local fica no seu navegador para o funcionamento
+          offline. Leia a
           <a href="https://6271798ma.com.br/privacy.html" style="color: var(--accent); font-weight: 700;">Política de Privacidade</a>
           para saber exatamente quais dados são tratados, com qual finalidade e como excluí-los.
         </p>
@@ -599,7 +604,7 @@
   <!-- CTA final -->
   <section class="final-cta">
     <h2>Pronto para assumir o controle da sua carteira?</h2>
-    <p>Abra o app agora e conecte sua planilha em menos de um minuto.</p>
+    <p>Abra o app agora e crie seu banco de dados — com criptografia, se quiser — em menos de um minuto.</p>
     <a class="cta-btn" href="https://6271798ma.com.br/renda/" rel="noopener">
       🚀 Acessar o Minhas Ações
     </a>
@@ -619,7 +624,7 @@
       nem à B3 S.A. Google, Google Sheets, Google Drive e Android são marcas registradas do Google LLC.
       O aplicativo tem finalidade exclusivamente informativa e de organização pessoal:
       <strong>não constitui recomendação, oferta ou consultoria de investimentos</strong>.
-      Página atualizada em 21 de outubro de 2026.
+      Página atualizada em 2 de novembro de 2026.
     </p>
   </footer>
 
