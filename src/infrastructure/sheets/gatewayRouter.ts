@@ -62,6 +62,11 @@ export type { EstadoCriptografia } from '@/infrastructure/driveFile/gateway'
 export interface OpcoesCriarWorkspace {
   /** Sessão de criptografia: com ela o arquivo já nasce cifrado. */
   chave?: SessaoCripto
+  /**
+   * Pasta do app (`minhasacoe_app`) onde o cofre nasce. Só o backend `json` usa;
+   * o chamador é quem garante/cria a pasta antes de criar o banco.
+   */
+  folderId?: string
 }
 
 const CRIPTOGRAFIA_INDISPONIVEL =

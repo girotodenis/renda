@@ -14,6 +14,7 @@ import {
   listDatabaseWorkspaces,
   loadSpreadsheetWorkspace,
 } from '@/infrastructure/driveFile/gateway'
+import { ensureAppFolder } from '@/infrastructure/drive'
 import { isJsonBackend } from '@/infrastructure/googleConfig'
 import {
   SheetsApiError,
@@ -197,6 +198,21 @@ async function cofreVazio(
 }
 
 /**
+ * Pasta do app onde o cofre deve nascer (`minhasacoe_app`).
+ *
+ * Criada/descoberta antes da criação do arquivo para que ele já nasça lá dentro
+ * (o `drive.file` permite criar dentro de uma pasta criada pelo app). Falha na
+ * pasta não impede a migração: o cofre fica na raiz, como antes.
+ */
+async function pastaDoApp(accessToken: string): Promise<string | undefined> {
+  try {
+    return await ensureAppFolder(accessToken)
+  } catch {
+    return undefined
+  }
+}
+
+/**
  * Copia as abas do banco legado para um cofre JSON no Drive.
  *
  * `context` aponta para a **planilha antiga** (id + token). A idempotência vem
@@ -248,11 +264,10 @@ export async function migrarPlanilhaAntiga(
 
     const alvo =
       destino ??
-      (await createDefaultSpreadsheet(
-        context.accessToken,
-        title,
-        opcoes.chave ? { chave: opcoes.chave } : {},
-      ))
+      (await createDefaultSpreadsheet(context.accessToken, title, {
+        ...(opcoes.chave ? { chave: opcoes.chave } : {}),
+        folderId: await pastaDoApp(context.accessToken),
+      }))
     if (data.length > 0) {
       await batchUpdateValues(context.accessToken, alvo.spreadsheetId, data)
     }

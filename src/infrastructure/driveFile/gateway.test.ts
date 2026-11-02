@@ -263,6 +263,18 @@ describe('createDefaultSpreadsheet', () => {
     expect(workspace.title).toBe(TITULO)
     expect(drive.nome).toBe(`${TITULO}${SUFIXO}`)
   })
+
+  it('cria o arquivo dentro da pasta do app quando folderId é informado', async () => {
+    const drive = criarDriveFalso()
+
+    await gateway.createDefaultSpreadsheet('token', 'Carteira na pasta', { folderId: 'pasta-app' })
+
+    const criacao = drive.chamadas[0]
+    expect(JSON.parse(String(criacao?.body))).toMatchObject({
+      name: `Carteira na pasta${SUFIXO}`,
+      parents: ['pasta-app'],
+    })
+  })
 })
 
 /* --------------------------------------------------------------------------

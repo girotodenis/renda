@@ -819,7 +819,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
 
         const chave = options?.chave ?? null
-        const created = await criarWorkspace(token, title, chave ? { chave } : {})
+        // A pasta é garantida ANTES da criação: com `parents` o arquivo já nasce
+        // dentro de `minhasacoe_app`. O "mover depois" era best-effort e podia
+        // falhar em silêncio, deixando o banco na raiz do Drive.
+        const folderId = isJsonBackend() ? await garantirPastaDoApp(token) : null
+        const created = await criarWorkspace(token, title, {
+          ...(chave ? { chave } : {}),
+          folderId: folderId ?? undefined,
+        })
         esquecerChaveDoBancoAnterior(created.spreadsheetId)
         salvarWorkspace(created)
         if (chave) {
@@ -831,7 +838,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
             // Sem verificador: o próximo desbloqueio exigirá internet.
           }
         }
-        await organizarNaPastaDoApp(token, created.spreadsheetId)
+        // Só quando a pasta não pôde ser garantida antes (fallback do fallback).
+        if (isJsonBackend() && !folderId) {
+          await organizarNaPastaDoApp(token, created.spreadsheetId)
+        }
         return { status: 'created' }
       } catch (creationError) {
         setError(describeError(creationError))

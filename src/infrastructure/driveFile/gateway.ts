@@ -724,11 +724,22 @@ export async function getSpreadsheetLocale(
   return DATABASE_LOCALE
 }
 
+/** Opções da criação de um banco novo no Drive. */
+export interface OpcoesCriarDatabase {
+  /** Com a chave o arquivo nasce cifrado e a sessão já fica desbloqueada. */
+  chave?: SessaoCripto
+  /**
+   * Pasta do app (`minhasacoe_app`) onde o arquivo nasce. Omitir cria na raiz
+   * do Drive — o chamador é quem garante/cria a pasta.
+   */
+  folderId?: string
+}
+
 /** Cria o arquivo do banco com as abas do schema (só cabeçalho) e o workspace. */
 export async function createDefaultSpreadsheet(
   accessToken: string,
   title: string = DEFAULT_DATABASE_TITLE,
-  opcoes: { chave?: SessaoCripto } = {},
+  opcoes: OpcoesCriarDatabase = {},
 ): Promise<SpreadsheetWorkspace> {
   const db = emptyDatabase()
   const sessao = opcoes.chave ?? null
@@ -736,7 +747,9 @@ export async function createDefaultSpreadsheet(
 
   let created: Awaited<ReturnType<typeof createDatabaseFile>>
   try {
-    created = await createDatabaseFile(accessToken, databaseFileName(title), bytes)
+    created = await createDatabaseFile(accessToken, databaseFileName(title), bytes, {
+      folderId: opcoes.folderId,
+    })
   } catch (error) {
     throw toSheetsError(error)
   }
