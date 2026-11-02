@@ -7,6 +7,7 @@ import type {
   SpreadsheetWorkspace,
 } from '@/domain/workspace'
 import type { SessaoCripto } from '@/infrastructure/cripto/envelope'
+import type { EstadoCriptografia } from '@/infrastructure/sheets/gatewayRouter'
 
 /** Opções de criação do banco padrão. */
 export interface OpcoesCriarBanco {
@@ -143,6 +144,26 @@ export interface AuthContextValue {
    * não informa o dado — bancos criados antes da criptografia).
    */
   criptografiaDoBanco: CriptografiaBanco
+  /**
+   * Liga a criptografia do banco ativo (`PLANO_CRIPTOGRAFIA.md` §6.2).
+   *
+   * Exige backend capaz de cifrar, senha não vazia, conexão e fila offline
+   * vazia; falhas preenchem `error` com a mensagem da §6.7. Ao terminar o banco
+   * continua **desbloqueado** (a chave fica na sessão).
+   */
+  ativarCriptografia: (senha: string) => Promise<void>
+  /**
+   * Desliga a criptografia do banco ativo. Não pede a senha: a chave já está na
+   * sessão e o arquivo volta a ser legível. Em falha preenche `error`.
+   */
+  desativarCriptografia: () => Promise<void>
+  /**
+   * Relê o estado real do arquivo (sem a chave) e sincroniza o workspace ativo.
+   *
+   * Devolve `null` quando não há banco ativo ou a leitura falha (offline) — a
+   * UI mantém o último estado conhecido.
+   */
+  recarregarEstadoCriptografia: () => Promise<EstadoCriptografia | null>
   /**
    * Garante um access token válido (renova silenciosamente se necessário).
    * Retorna `null` quando não foi possível obter um token.

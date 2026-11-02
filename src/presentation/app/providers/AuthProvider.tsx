@@ -7,8 +7,13 @@ import type {
   ResultadoAberturaBanco,
   ResultadoCriacaoBanco,
 } from '@/presentation/app/providers/authContext'
+import {
+  ativarCriptografia as ativarCriptografiaApp,
+  bloquearBanco as bloquearBancoApp,
+  desativarCriptografia as desativarCriptografiaApp,
+} from '@/application/criptografia'
 import { isOnline } from '@/application/online'
-import { contarPendencias, sincronizarPendentes } from '@/application/sync'
+import { contarPendencias } from '@/application/sync'
 import { validarChave } from '@/domain/criptografia'
 import {
   isWorkspaceLocal,
@@ -24,7 +29,6 @@ import {
   setModoArmazenamento,
 } from '@/infrastructure/modoArmazenamento'
 import { tokenStorage, workspaceStorage } from '@/infrastructure/storage'
-import { invalidateSpreadsheetCache } from '@/infrastructure/cache'
 import {
   esquecerChave,
   esquecerTodasAsChaves,
@@ -65,11 +69,13 @@ import {
   abrirWorkspace,
   criarWorkspace,
   desbloquear as desbloquearWorkspace,
+  estadoCriptografia,
   listarBancosDisponiveis,
   listarBancosExistentes,
   prepararWorkspaceLocal,
   SheetsApiError,
 } from '@/infrastructure/sheets/gatewayRouter'
+import type { EstadoCriptografia } from '@/infrastructure/sheets/gatewayRouter'
 import type {
   AuthStatus,
   CriptografiaBanco,
@@ -632,38 +638,125 @@ export function AuthProvider({ children }: AuthProviderProps) {
   )
 
   /**
-   * "Bloquear agora": tenta esvaziar a fila, limpa o cache em claro, esquece a
-   * chave e entra em `bloqueado` (§6.4). Pendências sem rede permanecem na fila
-   * e voltam a ser enviadas após o desbloqueio.
+   * "Bloquear agora": delega o flush/cache/chave ao caso de uso e entra em
+   * `bloqueado` (§6.4). Pendências sem rede permanecem na fila e voltam a ser
+   * enviadas após o desbloqueio.
    */
   const bloquearBanco = useCallback(async (): Promise<{ pendentes: number }> => {
     setError(null)
     const ativo = workspaceStorage.load()
     if (!ativo) return { pendentes: contarPendencias() }
 
-    if (!isModoLocal() && isOnline() && contarPendencias() > 0) {
-      try {
-        const token = await ensureAccessToken()
-        if (token) {
-          await sincronizarPendentes(
-            { accessToken: token, spreadsheetId: ativo.spreadsheetId },
-            { obterToken: () => ensureAccessToken() },
-          )
-        }
-      } catch {
-        // Melhor esforço: a fila fica para depois do desbloqueio.
-      }
-    }
+    const resultado = await bloquearBancoApp(
+      { accessToken: tokenRef.current ?? '', spreadsheetId: ativo.spreadsheetId },
+      {
+        obterToken: async () => {
+          if (isModoLocal() || !isOnline()) return null
+          return ensureAccessToken()
+        },
+      },
+    )
 
-    // O cache de abas fica em claro no IndexedDB: não pode sobreviver ao bloqueio.
-    invalidateSpreadsheetCache(ativo.spreadsheetId)
-    esquecerChave(ativo.spreadsheetId)
-    // Só um banco cifrado faz sentido bloquear; num banco em claro a ação é
+    // Só um banco cifrado faz sentido bloquear; num banco em claro a ação foi
     // apenas limpeza de cache/chaves e o status atual permanece.
     setStatus((atual) => (bancoBloqueado(ativo) ? 'bloqueado' : atual))
 
-    return { pendentes: contarPendencias() }
+    return resultado
   }, [ensureAccessToken])
+
+  /**
+   * Liga a criptografia do banco ativo (§6.2). Ao terminar o banco continua
+   * desbloqueado: a chave recém-derivada fica em memória nesta sessão.
+   */
+  const ativarCriptografia = useCallback(
+    async (senha: string) => {
+      setError(null)
+      const ativo = workspaceStorage.load()
+      if (!ativo) {
+        setError('Nenhum banco selecionado para criptografar.')
+        return
+      }
+
+      setIsBusy(true)
+      try {
+        const token = await ensureAccessToken()
+        if (!token && !isModoLocal()) {
+          setError('Sessão expirada. Faça login novamente.')
+          return
+        }
+        await ativarCriptografiaApp(
+          { accessToken: token ?? TOKEN_MODO_LOCAL, spreadsheetId: ativo.spreadsheetId },
+          senha,
+        )
+        salvarWorkspace({ ...ativo, criptografia: 'total' })
+      } catch (criptoError) {
+        setError(describeError(criptoError))
+      } finally {
+        setIsBusy(false)
+      }
+    },
+    [ensureAccessToken, salvarWorkspace],
+  )
+
+  /**
+   * Desliga a criptografia do banco ativo (§6.2). Não pede a senha: a chave já
+   * está na sessão e o arquivo volta a ser legível.
+   */
+  const desativarCriptografia = useCallback(async () => {
+    setError(null)
+    const ativo = workspaceStorage.load()
+    if (!ativo) {
+      setError('Nenhum banco selecionado para alterar a criptografia.')
+      return
+    }
+
+    setIsBusy(true)
+    try {
+      const token = await ensureAccessToken()
+      if (!token && !isModoLocal()) {
+        setError('Sessão expirada. Faça login novamente.')
+        return
+      }
+      await desativarCriptografiaApp({
+        accessToken: token ?? TOKEN_MODO_LOCAL,
+        spreadsheetId: ativo.spreadsheetId,
+      })
+      // `nenhuma` também libera o status: a chave acabou de ser esquecida.
+      salvarWorkspace({ ...ativo, criptografia: 'nenhuma' })
+    } catch (criptoError) {
+      setError(describeError(criptoError))
+    } finally {
+      setIsBusy(false)
+    }
+  }, [ensureAccessToken, salvarWorkspace])
+
+  /**
+   * Relê o estado real do arquivo (magic/abas) e sincroniza o workspace ativo.
+   *
+   * Serve para o card de Configurações não confiar só no metadado persistido —
+   * outro dispositivo pode ter cifrado o banco. Falha (offline, sem token) é
+   * silenciosa: devolve `null` e a UI mantém o último estado conhecido.
+   */
+  const recarregarEstadoCriptografia = useCallback(async (): Promise<EstadoCriptografia | null> => {
+    const ativo = workspaceStorage.load()
+    if (!ativo) return null
+
+    const token = tokenRef.current ?? (await ensureAccessToken())
+    try {
+      const resultado = await estadoCriptografia(
+        token ?? TOKEN_MODO_LOCAL,
+        ativo.spreadsheetId,
+      )
+      const atualizado: SpreadsheetWorkspace = {
+        ...ativo,
+        criptografia: resultado.estado,
+      }
+      if (ativo.criptografia !== resultado.estado) salvarWorkspace(atualizado)
+      return resultado
+    } catch {
+      return null
+    }
+  }, [ensureAccessToken, salvarWorkspace])
 
   /** "Esquecer este banco": remove workspace, verificador e chaves deste dispositivo. */
   const esquecerBanco = useCallback(() => {
@@ -757,6 +850,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       bloquearBanco,
       esquecerBanco,
       criptografiaDoBanco: criptografiaDoBanco(workspace),
+      ativarCriptografia,
+      desativarCriptografia,
+      recarregarEstadoCriptografia,
       ensureAccessToken,
       clearError,
     }),
@@ -764,9 +860,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
       abrirBancoPorId,
       abrirPlanilhaNoPicker,
       accessToken,
+      ativarCriptografia,
       bloquearBanco,
       clearError,
       criarBanco,
+      desativarCriptografia,
       desbloquearBanco,
       ensureAccessToken,
       error,
@@ -776,6 +874,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       login,
       logout,
       modo,
+      recarregarEstadoCriptografia,
       status,
       usarModoLocal,
       workspace,

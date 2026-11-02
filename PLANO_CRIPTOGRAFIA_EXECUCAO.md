@@ -21,7 +21,7 @@
 | 2 | Núcleo criptográfico | ✅ concluída | ver commit "Fase 2" |
 | 3 | Container e gateway JSON | ✅ concluída | ver commit "Fase 3" |
 | 4 | Abertura, bloqueio e sessão | ✅ concluída | ver commit "Fase 4" |
-| 5 | Configurações e criação | ⏳ a fazer | — |
+| 5 | Configurações e criação | ✅ concluída | ver commit "Fase 5" |
 | 6 | Modo local cifrado | ⏳ a fazer | — |
 | 7 | Planilha de cotações | ⏳ a fazer | — |
 | 8 | Backend `json` padrão + migração | ⏳ a fazer | — |
@@ -195,7 +195,37 @@ Validação: 54 arquivos / 566 testes verdes, `tsc --noEmit`, `eslint .` e
 **Aceite:** toggle reflete o estado real; botões desabilitados sem senha,
 confirmação igual e "Entendi" marcado; mensagens da seção 6.7 corretas.
 
-**Resultado:**
+**Resultado:** ✅ concluída.
+
+Arquivos:
+- `src/application/criptografia.ts` (**novo**) — `estadoDoBanco`,
+  `motivoCriptografiaIndisponivel` (uma única fonte das mensagens da 6.7),
+  `ativarCriptografia` (senha → `criarSessao` → `alterarCriptografia` →
+  verificador), `desativarCriptografia` (exige chave na sessão, esquece
+  chave/verificador), `bloquearBanco(context, deps)` (flush best effort + limpeza
+  do cache + esquecimento da chave) e `ErroCriptografiaIndisponivel`.
+  Pré-condições: Web Crypto, backend (`json` ou local), **online** e **fila
+  vazia**.
+- `src/presentation/components/Switch.tsx` (**novo**) — `role="switch"`,
+  `aria-checked`, teclado, `disabled`/`pending`.
+- `src/presentation/features/configuracoes/SegurancaBancoCard.tsx` (**novo**) —
+  estado real relido no mount (`🔒`/Sem criptografia/Bloqueado), ativação com
+  senha + confirmação + "Entendi que não há recuperação" + backup `.ods`,
+  desativação com confirmação explícita, "Bloquear agora" com aviso de
+  pendências e o aviso "O arquivo .ods é exportado sem criptografia.".
+- `AuthProvider`/`authContext` — `ativarCriptografia`, `desativarCriptografia`,
+  `recarregarEstadoCriptografia`; `bloquearBanco` passa a delegar ao caso de uso
+  (sem duplicação).
+- `WorkspaceSetup.tsx` — checkbox "Criar banco criptografado" com senha,
+  confirmação, "Entendi" obrigatório, `criarSessao` só no clique (spinner) e
+  sessão preservada no fluxo de nome duplicado.
+- Testes: `application/criptografia.test.ts` (18, com `vi.mock`).
+
+Validação: 55 arquivos / 584 testes verdes, `tsc --noEmit`, `eslint .` e
+`vite build` limpos.
+
+Pendência consciente: `motivoCriptografiaIndisponivel()` ainda mostra a
+mensagem do backend no modo local — a Fase 6 habilita o cofre local.
 
 ---
 

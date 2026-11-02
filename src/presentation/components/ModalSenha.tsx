@@ -1,5 +1,5 @@
 import { Loader2 } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FormEvent, ReactNode } from 'react'
 import { Alert } from '@/presentation/components/Alert'
 import { CampoSenha } from '@/presentation/components/CampoSenha'
@@ -28,6 +28,11 @@ export interface ModalSenhaProps {
   children?: ReactNode
   rotuloCancelar?: string
   rotuloSenha?: string
+  /**
+   * Espelha a senha digitada para o chamador validar campos extras
+   * (ex.: confirmação igual e "Entendi" marcado antes de habilitar o envio).
+   */
+  aoMudarSenha?: (senha: string) => void
   /** `false` em modais só de confirmação ("Bloquear agora"). */
   pedirSenha?: boolean
   /** Desabilita o botão principal (ex.: "Entendi" ainda não marcado). */
@@ -55,16 +60,26 @@ export function ModalSenha({
   children,
   rotuloCancelar = 'Cancelar',
   rotuloSenha = 'Senha',
+  aoMudarSenha,
   pedirSenha = true,
   confirmarDesabilitado = false,
   className,
 }: ModalSenhaProps) {
   const [senha, setSenha] = useState('')
+  const aoMudarSenhaRef = useRef(aoMudarSenha)
+  aoMudarSenhaRef.current = aoMudarSenha
 
   // Cada abertura começa com o campo limpo (a senha não fica em memória à toa).
   useEffect(() => {
-    if (!open) setSenha('')
+    if (open) return
+    setSenha('')
+    aoMudarSenhaRef.current?.('')
   }, [open])
+
+  function atualizarSenha(valor: string) {
+    setSenha(valor)
+    aoMudarSenhaRef.current?.(valor)
+  }
 
   function confirmar() {
     if (pending || confirmarDesabilitado) return
@@ -85,7 +100,7 @@ export function ModalSenha({
         {pedirSenha ? (
           <CampoSenha
             valor={senha}
-            aoMudar={setSenha}
+            aoMudar={atualizarSenha}
             rotulo={rotuloSenha}
             autoFocus
             desabilitado={pending}
