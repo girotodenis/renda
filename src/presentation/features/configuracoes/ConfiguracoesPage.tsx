@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '@/presentation/app/providers/authContext'
+import { ondeFicaOCofreGoogle } from '@/presentation/app/textosArmazenamento'
 import { useLayout } from '@/presentation/app/providers/layoutContext'
 import { LAYOUT_TEMA_LABELS, LAYOUT_TEMAS, LayoutTema } from '@/domain/layout'
 import { cn } from '@/presentation/cn'
@@ -18,6 +19,8 @@ import type { IntegracaoCotacaoInfo } from '@/application/integracoesCotacao'
 import { lerAbasOds } from '@/infrastructure/ods/odsReader'
 import { OdsFormatError } from '@/infrastructure/ods/zipReader'
 import { describeSheetsError } from '@/infrastructure/sheets/gateway'
+import { SegurancaBancoCard } from './SegurancaBancoCard'
+import { PlanilhaCotacoesCard } from './PlanilhaCotacoesCard'
 
 /** Integrações de cotação registradas (fixas durante a execução do app). */
 const INTEGRACOES = listarIntegracoesCotacao().filter((integracao) => integracao.exigeToken)
@@ -28,9 +31,9 @@ function tokensDasIntegracoes(tokens: Readonly<Record<string, string>>): Record<
 }
 
 /**
- * Página de configurações das integrações (aba `Configuracoes` da planilha).
+ * Página de configurações das integrações (aba `Configuracoes` do banco de dados).
  *
- * As credenciais/ajustes ficam **no próprio arquivo do usuário** (Google Sheets)
+ * As credenciais/ajustes ficam **no próprio banco do usuário** (arquivo no Drive ou planilha)
  * em vez de variáveis de ambiente — cada usuário configura as suas integrações
  * sem recompilar o app. Ao salvar, os caches de cotação são limpos para que os
  * novos valores passem a valer imediatamente.
@@ -81,7 +84,7 @@ export function ConfiguracoesPage() {
     setError(null)
     setNotice(null)
     if (!workspace) {
-      setError('Configure uma planilha antes de salvar as configurações.')
+      setError('Configure um banco de dados antes de salvar as configurações.')
       return
     }
     setIsSaving(true)
@@ -97,7 +100,7 @@ export function ConfiguracoesPage() {
       )
       // Invalida o cache para que o novo token passe a valer já na próxima busca.
       limparCachesCotacao()
-      setNotice('Configurações salvas na planilha.')
+      setNotice('Configurações salvas no banco de dados.')
     } catch (saveError) {
       setError(describeSheetsError(saveError))
     } finally {
@@ -217,8 +220,8 @@ export function ConfiguracoesPage() {
           </span>
           <h1 className="text-xl font-semibold text-slate-900">Configurações</h1>
         </header>
-        <Alert variant="info" title="Nenhuma planilha configurada">
-          Selecione ou crie uma planilha em{' '}
+        <Alert variant="info" title="Nenhum banco de dados configurado">
+          Selecione ou crie um banco de dados em{' '}
           <Link to="/dashboard" className="font-semibold underline">
             Dashboard
           </Link>{' '}
@@ -237,7 +240,7 @@ export function ConfiguracoesPage() {
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Configurações</h1>
           <p className="text-sm text-slate-500">
-            Integrações do app ficam salvas na própria planilha ({workspace.title}).
+            Integrações do app ficam salvas no próprio banco de dados ({workspace.title}).
           </p>
         </div>
       </header>
@@ -273,7 +276,7 @@ export function ConfiguracoesPage() {
                 </>
               ) : (
                 <>
-                  <strong>Modo Google</strong>: a carteira está na planilha{' '}
+                  <strong>Modo Google</strong>: a carteira está {ondeFicaOCofreGoogle()} —{' '}
                   <strong className="font-semibold text-slate-700">{workspace.title}</strong>. Você
                   também pode exportar uma cópia em{' '}
                   <code className="rounded bg-slate-100 px-1">.ods</code>.
@@ -336,12 +339,16 @@ export function ConfiguracoesPage() {
 
         {!isModoLocal ? (
           <Alert variant="info" title="Ao usar sem Google">
-            A carteira passa a ser salva no banco de dados deste navegador (sem login). A planilha
-            do Google continua intacta, e o conteúdo local pode ser exportado para{' '}
+            A carteira passa a ser salva no banco de dados deste navegador (sem login). O banco do
+            Google continua intacto, e o conteúdo local pode ser exportado para{' '}
             <code>.ods</code> a qualquer momento.
           </Alert>
         ) : null}
       </div>
+
+      <SegurancaBancoCard />
+
+      <PlanilhaCotacoesCard />
 
       <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex items-start gap-3">
@@ -451,7 +458,7 @@ export function ConfiguracoesPage() {
 
           <Alert variant="error" title="Isto substitui os dados atuais">
             O conteúdo atual dessas abas é apagado antes da importação
-            {isModoLocal ? ' do banco local' : ' da planilha'}. Exporte um backup antes, se precisar.
+            {isModoLocal ? ' do banco local' : ' do banco do Google'}. Exporte um backup antes, se precisar.
           </Alert>
         </div>
 
@@ -530,9 +537,9 @@ function TokenIntegracaoCard({
         <div className="space-y-1">
           <h2 className="text-sm font-semibold text-slate-900">Token da {integracao.nome}</h2>
           <p className="text-xs text-slate-500">
-            Usado como <strong>fallback de cotação da B3</strong> (Ação/FII/BDR/ETF) quando o
-            <code className="mx-1 rounded bg-slate-100 px-1">GOOGLEFINANCE</code>da planilha não
-            retorna preço.
+            Usado como <strong>fallback de cotação da B3</strong> (Ação/FII/BDR/ETF) quando a fonte
+            primária de preços (
+            <code className="rounded bg-slate-100 px-1">GOOGLEFINANCE</code>) não retorna valor.
           </p>
           <p className="text-xs text-slate-500">
             <strong>Como obter:</strong> acesse{' '}
@@ -556,7 +563,7 @@ function TokenIntegracaoCard({
         hint={
           isModoLocal
             ? 'Fica salvo na aba Configurações do banco local deste navegador.'
-            : 'Fica salvo na sua planilha do Google Drive — não é enviado a nenhum servidor do app.'
+            : 'Fica salvo no seu banco de dados no Google Drive — não é enviado a nenhum servidor do app.'
         }
       >
         <div className="flex items-center gap-2">

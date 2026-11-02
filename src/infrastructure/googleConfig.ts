@@ -14,16 +14,22 @@ function readEnv(value: string | undefined): string | null {
 /** Backend do modo Google: planilha (`sheets`) ou arquivo JSON no Drive (`json`). */
 export type GoogleBackend = 'sheets' | 'json'
 
-/** Selecionado em tempo de BUILD por `VITE_GOOGLE_BACKEND` (padrão: `sheets`). */
+/**
+ * Selecionado em tempo de BUILD por `VITE_GOOGLE_BACKEND`.
+ *
+ * `json` é o padrão: cofre único no Drive, com criptografia opcional. `sheets`
+ * é o build alternativo **sem criptografia** (as células precisam ficar
+ * legíveis para as fórmulas).
+ */
 export const GOOGLE_BACKEND: GoogleBackend =
-  import.meta.env.VITE_GOOGLE_BACKEND === 'json' ? 'json' : 'sheets'
+  import.meta.env.VITE_GOOGLE_BACKEND === 'sheets' ? 'sheets' : 'json'
 
 /**
  * Escopos MÍNIMOS exigidos (RF03). Nada além disso é solicitado.
  *
  * No backend `json` basta `drive.file`: é um escopo NÃO sensível, então o app
- * dispensa a verificação OAuth do Google. Durante o rollout do backend
- * `sheets` o escopo `spreadsheets` continua necessário.
+ * dispensa a verificação OAuth do Google. O backend `sheets` (alternativo)
+ * continua pedindo `spreadsheets`.
  */
 export const GOOGLE_SCOPES: readonly string[] =
   GOOGLE_BACKEND === 'json'
@@ -32,6 +38,28 @@ export const GOOGLE_SCOPES: readonly string[] =
         'https://www.googleapis.com/auth/spreadsheets',
         'https://www.googleapis.com/auth/drive.file',
       ]
+
+/**
+ * Escopo da Sheets API usado pela **planilha de cotações** (integração
+ * opcional, autorizada por ação explícita em Configurações).
+ */
+export const SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets'
+
+/**
+ * Escopos do login + o da planilha de cotações, sem duplicar o que
+ * `GOOGLE_SCOPES` já pede (no backend `sheets` o escopo já está incluído).
+ */
+export const SCOPES_COM_PLANILHA: readonly string[] = GOOGLE_SCOPES.includes(SHEETS_SCOPE)
+  ? [...GOOGLE_SCOPES]
+  : [...GOOGLE_SCOPES, SHEETS_SCOPE]
+
+/**
+ * `true` quando a string de escopos devolvida pelo Google inclui `escopo`.
+ * O Google devolve os escopos separados por espaço.
+ */
+export function tokenTemEscopo(scope: string, escopo: string): boolean {
+  return scope.split(/\s+/).includes(escopo)
+}
 
 export interface GoogleConfig {
   clientId: string | null

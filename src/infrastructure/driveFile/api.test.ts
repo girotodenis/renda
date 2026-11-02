@@ -129,6 +129,22 @@ describe('createDatabaseFile', () => {
     expect(upload?.headers.get('Content-Type')).toBe('application/gzip')
     expect(corpoBytes(upload?.body)).toEqual(BYTES)
   })
+
+  it('cria o arquivo dentro da pasta informada (parents no metadata)', async () => {
+    const { chamadas } = stubFetchSequence([
+      { json: { id: 'arquivo-2', name: 'minhasacoe.json.gz' } },
+      { json: { id: 'arquivo-2', name: 'minhasacoe.json.gz' } },
+    ])
+
+    await createDatabaseFile('token-abc', 'minhasacoe.json.gz', BYTES, { folderId: 'pasta-app' })
+
+    const [metadados] = chamadas
+    expect(JSON.parse(String(metadados?.body))).toEqual({
+      name: 'minhasacoe.json.gz',
+      mimeType: DATABASE_MIME_TYPE,
+      parents: ['pasta-app'],
+    })
+  })
 })
 
 describe('readDatabaseFile', () => {

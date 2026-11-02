@@ -1,7 +1,20 @@
 import { SHEET_HEADERS, SHEET_NAMES } from '@/domain/sheetsSchema'
 import type { SheetName } from '@/domain/sheetsSchema'
-import type { PlanilhaExistente, SheetIdMap, SpreadsheetWorkspace } from '@/domain/workspace'
-import { gunzip } from '@/infrastructure/compression'
+import type {
+  CriptografiaBanco,
+  PlanilhaExistente,
+  SheetIdMap,
+  SpreadsheetWorkspace,
+} from '@/domain/workspace'
+import { obterChave, esquecerChave, guardarChave, temChave } from '@/infrastructure/cripto/chaveSessao'
+import {
+  ChaveIncorretaError,
+  ChaveNecessariaError,
+  abrirComSenha,
+  estaCifrado,
+} from '@/infrastructure/cripto/envelope'
+import type { SessaoCripto } from '@/infrastructure/cripto/envelope'
+import { codificarBanco, decodificarBanco } from '@/infrastructure/driveFile/container'
 import {
   createDatabaseFile,
   getDriveFileRequestCount,
@@ -15,7 +28,6 @@ import {
 import {
   DatabaseFileError,
   emptyDatabase,
-  encodeDatabaseFile,
   needsNormalization,
   normalizeDatabaseFile,
 } from '@/infrastructure/driveFile/format'
@@ -47,7 +59,10 @@ import type { CellValue } from '@/infrastructure/sheets/sheetCells'
  *
  * Todo erro do Drive vira `SheetsApiError` com o mesmo `status` e mensagem, para
  * `isOfflineWriteError` (0/429), `describeSheetsError`, `sync.ts` e
- * `AuthProvider` continuarem funcionando sem alteração.
+ * `AuthProvider` continuarem funcionando sem alteração. A exceção são
+ * `ChaveNecessariaError`/`ChaveIncorretaError`: eles atravessam intactos, porque
+ * não são falhas de rede (reenfileirar não resolveria) e a UI precisa deles para
+ * pedir a senha.
  */
 
 /** Título padrão do banco (nome exibido como "planilha ativa"). */
@@ -78,8 +93,17 @@ export function resetSheetsRequestCount(): void {
  * Erros
  * ------------------------------------------------------------------------ */
 
-/** Converte qualquer falha em `SheetsApiError` (contrato esperado pelo app). */
-function toSheetsError(error: unknown): SheetsApiError {
+/**
+ * Erro que sai deste gateway: falha de rede/formato (`SheetsApiError`) ou de
+ * criptografia. As duas falhas de chave **não** podem virar `SheetsApiError`:
+ * elas não são retentáveis (a fila offline reenviaria um arquivo que nunca vai
+ * abrir) e a UI precisa distingui-las para pedir a senha.
+ */
+type ErroDoGateway = SheetsApiError | ChaveNecessariaError | ChaveIncorretaError
+
+/** Converte a falha em erro do contrato, preservando os erros de chave. */
+function toSheetsError(error: unknown): ErroDoGateway {
+  if (error instanceof ChaveNecessariaError || error instanceof ChaveIncorretaError) return error
   if (error instanceof SheetsApiError) return error
   if (error instanceof GoogleDriveFileError) {
     return new SheetsApiError(error.status, error.message)
@@ -289,22 +313,6 @@ function sanitizeRows(rows: readonly unknown[]): CellValue[][] {
   return result
 }
 
-/** Descompacta e parseia o arquivo (erros viram `SheetsApiError` 500). */
-async function parseDatabaseBytes(bytes: Uint8Array): Promise<unknown> {
-  let text: string
-  try {
-    text = new TextDecoder().decode(await gunzip(bytes))
-  } catch {
-    throw new SheetsApiError(500, 'Não foi possível descompactar o arquivo do banco de dados.')
-  }
-
-  try {
-    return JSON.parse(text)
-  } catch {
-    throw new SheetsApiError(500, 'Arquivo do banco de dados inválido: não foi possível ler o JSON.')
-  }
-}
-
 /**
  * Banco em memória a partir do objeto lido.
  *
@@ -341,6 +349,8 @@ interface Entry {
   etag: string | null
   title: string | null
   pendingOps: PendingOp[]
+  /** O arquivo no Drive está cifrado (decidido pela magic em cada leitura). */
+  criptografado: boolean
 }
 
 const cache = new Map<string, Entry>()
@@ -372,17 +382,31 @@ function buildSheetIdMap(): SheetIdMap {
   return map
 }
 
-function toWorkspace(fileId: string, title: string | null): SpreadsheetWorkspace {
+function toWorkspace(
+  fileId: string,
+  title: string | null,
+  criptografia: CriptografiaBanco,
+): SpreadsheetWorkspace {
   return {
     spreadsheetId: fileId,
     title: title ?? DEFAULT_DATABASE_TITLE,
     spreadsheetUrl: `https://drive.google.com/file/d/${fileId}/view`,
     sheetIds: buildSheetIdMap(),
     updatedAt: new Date().toISOString(),
+    criptografia,
   }
 }
 
-async function fetchEntry(accessToken: string, fileId: string): Promise<{ entry: Entry; raw: unknown }> {
+/**
+ * Baixa e decodifica o arquivo.
+ *
+ * A chave vem da sessão (por `fileId`), nunca de parâmetro: é o único lugar que
+ * decide entre ler em claro e decifrar, e ele é usado por toda leitura nova.
+ */
+async function fetchEntry(
+  accessToken: string,
+  fileId: string,
+): Promise<{ entry: Entry; raw: unknown }> {
   let read: Awaited<ReturnType<typeof readDatabaseFile>>
   try {
     read = await readDatabaseFile(accessToken, fileId)
@@ -390,12 +414,20 @@ async function fetchEntry(accessToken: string, fileId: string): Promise<{ entry:
     throw toSheetsError(error)
   }
 
-  const raw = await parseDatabaseBytes(read.bytes)
+  let decodificado: Awaited<ReturnType<typeof decodificarBanco>>
+  try {
+    decodificado = await decodificarBanco(read.bytes, obterChave(fileId)?.chave ?? null)
+  } catch (error) {
+    throw toSheetsError(error)
+  }
+
+  const { raw, criptografado } = decodificado
   const entry: Entry = {
     db: toDatabase(raw),
     etag: read.etag,
     title: titleFromFileName(read.name),
     pendingOps: [],
+    criptografado,
   }
   return { entry, raw }
 }
@@ -410,14 +442,23 @@ async function loadEntry(accessToken: string, fileId: string): Promise<Entry> {
   return entry
 }
 
-/** Envia o banco em memória e, se deu certo, limpa as mutações pendentes. */
+/**
+ * Envia o banco em memória e, se deu certo, limpa as mutações pendentes.
+ *
+ * Se a entrada está cifrada e a sessão perdeu a chave, o upload **falha** em vez
+ * de gravar em claro (risco §9 do plano): perder a chave nunca deve "desproteger"
+ * o banco silenciosamente.
+ */
 async function uploadDatabase(
   accessToken: string,
   fileId: string,
   entry: Entry,
   etag: string | null,
 ): Promise<void> {
-  const bytes = await encodeDatabaseFile(entry.db.sheets, entry.db.version)
+  const sessao = entry.criptografado ? obterChave(fileId) : null
+  if (entry.criptografado && !sessao) throw new ChaveNecessariaError()
+
+  const bytes = await codificarBanco(entry.db.sheets, entry.db.version, sessao)
   const written = await writeDatabaseFile(accessToken, fileId, bytes, etag)
   entry.etag = written.etag
   entry.pendingOps = []
@@ -426,13 +467,21 @@ async function uploadDatabase(
 /** 412: relê o arquivo, reaplica as mutações pendentes e grava uma vez. */
 async function resolveConflict(accessToken: string, fileId: string, entry: Entry): Promise<void> {
   const read = await readDatabaseFile(accessToken, fileId)
-  const remote = toDatabase(await parseDatabaseBytes(read.bytes))
+  const { raw, criptografado } = await decodificarBanco(
+    read.bytes,
+    obterChave(fileId)?.chave ?? null,
+  )
+  const remote = toDatabase(raw)
 
   for (const op of entry.pendingOps) applyOp(remote.sheets, op)
 
   entry.db = remote
   entry.etag = read.etag
   entry.title = titleFromFileName(read.name)
+  // O estado vem do remoto: outro dispositivo pode ter cifrado/descifrado, e a
+  // gravação seguinte precisa respeitar o que está lá (senão o arquivo volta a
+  // ser legível sem o usuário ter pedido).
+  entry.criptografado = criptografado
   await uploadDatabase(accessToken, fileId, entry, read.etag)
 }
 
@@ -675,25 +724,48 @@ export async function getSpreadsheetLocale(
   return DATABASE_LOCALE
 }
 
+/** Opções da criação de um banco novo no Drive. */
+export interface OpcoesCriarDatabase {
+  /** Com a chave o arquivo nasce cifrado e a sessão já fica desbloqueada. */
+  chave?: SessaoCripto
+  /**
+   * Pasta do app (`databases_app_minhas_acoes`) onde o arquivo nasce. Omitir cria na raiz
+   * do Drive — o chamador é quem garante/cria a pasta.
+   */
+  folderId?: string
+}
+
 /** Cria o arquivo do banco com as abas do schema (só cabeçalho) e o workspace. */
 export async function createDefaultSpreadsheet(
   accessToken: string,
   title: string = DEFAULT_DATABASE_TITLE,
+  opcoes: OpcoesCriarDatabase = {},
 ): Promise<SpreadsheetWorkspace> {
   const db = emptyDatabase()
+  const sessao = opcoes.chave ?? null
+  const bytes = await codificarBanco(db.sheets, db.version, sessao)
 
   let created: Awaited<ReturnType<typeof createDatabaseFile>>
   try {
-    const bytes = await encodeDatabaseFile(db.sheets, db.version)
-    created = await createDatabaseFile(accessToken, databaseFileName(title), bytes)
+    created = await createDatabaseFile(accessToken, databaseFileName(title), bytes, {
+      folderId: opcoes.folderId,
+    })
   } catch (error) {
     throw toSheetsError(error)
   }
 
   const workspaceTitle = titleFromFileName(created.name)
-  cache.set(created.fileId, { db, etag: created.etag, title: workspaceTitle, pendingOps: [] })
+  cache.set(created.fileId, {
+    db,
+    etag: created.etag,
+    title: workspaceTitle,
+    pendingOps: [],
+    criptografado: sessao !== null,
+  })
+  // O banco nasce desbloqueado: o usuário acabou de digitar a senha.
+  if (sessao) guardarChave(created.fileId, sessao)
 
-  return toWorkspace(created.fileId, workspaceTitle)
+  return toWorkspace(created.fileId, workspaceTitle, sessao !== null ? 'total' : 'nenhuma')
 }
 
 /**
@@ -724,7 +796,124 @@ export async function loadSpreadsheetWorkspace(
     await persist(accessToken, spreadsheetId)
   }
 
-  return toWorkspace(spreadsheetId, entry.title)
+  return toWorkspace(
+    spreadsheetId,
+    entry.title,
+    entry.criptografado ? 'total' : 'nenhuma',
+  )
+}
+
+/**
+ * Desbloqueia um banco cifrado com a senha informada e o deixa pronto para uso.
+ *
+ * A ordem é a garantia do fluxo (§6.1): baixa, deriva a chave do cabeçalho,
+ * decifra, valida o conteúdo e **só então** grava o cache e registra a chave na
+ * sessão. Com a senha errada a tag do AES-GCM não valida e nada é alterado: nem
+ * cache, nem chave, nem o arquivo no Drive (nenhum upload acontece aqui).
+ */
+export async function desbloquear(
+  accessToken: string,
+  spreadsheetId: string,
+  senha: string,
+): Promise<SpreadsheetWorkspace> {
+  let read: Awaited<ReturnType<typeof readDatabaseFile>>
+  try {
+    read = await readDatabaseFile(accessToken, spreadsheetId)
+  } catch (error) {
+    throw toSheetsError(error)
+  }
+
+  if (!estaCifrado(read.bytes)) {
+    // Não é falha de rede: `status` 0 faria o outbox reenfileirar para sempre.
+    throw new SheetsApiError(400, 'Este banco não está criptografado: não é preciso informar a chave.')
+  }
+
+  let sessao: SessaoCripto
+  let raw: unknown
+  try {
+    const aberto = await abrirComSenha(read.bytes, senha)
+    sessao = aberto.sessao
+    raw = (await decodificarBanco(read.bytes, sessao.chave)).raw
+  } catch (error) {
+    if (error instanceof ChaveIncorretaError) throw error
+    // Senha vazia, cabeçalho inválido ou conteúdo corrompido: também não é rede.
+    throw new SheetsApiError(
+      400,
+      error instanceof Error && error.message.length > 0
+        ? error.message
+        : 'Não foi possível abrir o banco criptografado.',
+    )
+  }
+
+  const entry: Entry = {
+    db: toDatabase(raw),
+    etag: read.etag,
+    title: titleFromFileName(read.name),
+    pendingOps: [],
+    criptografado: true,
+  }
+
+  // Só depois de decifrar: a partir daqui as leituras usam o cache em claro.
+  cache.set(spreadsheetId, entry)
+  guardarChave(spreadsheetId, sessao)
+
+  return toWorkspace(spreadsheetId, entry.title, 'total')
+}
+
+/** Estado da criptografia de um banco, sem precisar da chave. */
+export interface EstadoCriptografia {
+  estado: CriptografiaBanco
+  /** `true` quando o arquivo está cifrado e a sessão não tem a chave. */
+  bloqueado: boolean
+}
+
+/**
+ * Liga/desliga a criptografia regravando o arquivo.
+ *
+ * Relê do Drive antes de decidir: o cache pode estar velho (outro dispositivo
+ * pode ter cifrado) e recifrar precisa dos bytes/etag reais. Idempotente — com o
+ * mesmo estado de destino o arquivo é gravado de novo com IV novo, sem efeito
+ * colateral nos dados.
+ */
+export async function alterarCriptografia(
+  accessToken: string,
+  spreadsheetId: string,
+  chave: SessaoCripto | null,
+): Promise<void> {
+  const chaveAnterior = obterChave(spreadsheetId)
+  // A leitura logo abaixo usa a chave da sessão; ao ativar, a chave nova precisa
+  // estar registrada antes para o arquivo (que já pode estar cifrado) abrir.
+  if (chave) guardarChave(spreadsheetId, chave)
+
+  try {
+    const { entry } = await fetchEntry(accessToken, spreadsheetId)
+    entry.criptografado = chave !== null
+    cache.set(spreadsheetId, entry)
+    await persist(accessToken, spreadsheetId)
+  } catch (error) {
+    // Sem restaurar, uma senha errada deixaria a sessão "aberta" com a chave errada.
+    if (chaveAnterior) guardarChave(spreadsheetId, chaveAnterior)
+    else esquecerChave(spreadsheetId)
+    throw error
+  }
+
+  if (!chave) esquecerChave(spreadsheetId)
+}
+
+/** Responde pelo magic do arquivo (não precisa da chave nem do cache). */
+export async function estadoCriptografia(
+  accessToken: string,
+  spreadsheetId: string,
+): Promise<EstadoCriptografia> {
+  let read: Awaited<ReturnType<typeof readDatabaseFile>>
+  try {
+    read = await readDatabaseFile(accessToken, spreadsheetId)
+  } catch (error) {
+    throw toSheetsError(error)
+  }
+
+  const estado: CriptografiaBanco = estaCifrado(read.bytes) ? 'total' : 'nenhuma'
+  return { estado, bloqueado: estado === 'total' && !temChave(spreadsheetId) }
 }
 
 /** Garante as abas do schema (criando as ausentes com cabeçalho). */

@@ -1,5 +1,6 @@
 import { HardDrive, KeyRound, Loader2, LogIn, ShieldCheck } from 'lucide-react'
 import { useAuth } from '@/presentation/app/providers/authContext'
+import { textoPermissoesGoogle } from '@/presentation/app/textosArmazenamento'
 import { Alert } from '@/presentation/components/Alert'
 import { WorkspaceSetup } from '@/presentation/features/auth/WorkspaceSetup'
 
@@ -47,8 +48,7 @@ export function LoginPage() {
 
           <p className="flex items-start gap-2 text-xs text-slate-500">
             <ShieldCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-600" aria-hidden />
-            Permissões mínimas solicitadas (RF03): ler/editar planilhas e acessar apenas os arquivos
-            que você escolher no Drive.
+            Permissões mínimas solicitadas (RF03): {textoPermissoesGoogle()}.
           </p>
         </div>
       ) : null}
@@ -59,7 +59,7 @@ export function LoginPage() {
 
           <Alert variant="info" title="Modo local">
             Você está vendo os dados salvos neste navegador. Entre novamente com o Google para
-            sincronizar com a sua planilha.
+            sincronizar com o seu banco de dados.
           </Alert>
 
           <button
@@ -83,7 +83,7 @@ export function LoginPage() {
       {isConfigured && status === 'authenticated' && !workspace ? (
         <div className="space-y-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
           <Alert variant="success" title="Login concluído">
-            Agora escolha a planilha que servirá de base de dados para a sua carteira.
+            Agora escolha (ou crie) o banco de dados da sua carteira.
           </Alert>
           <WorkspaceSetup />
         </div>

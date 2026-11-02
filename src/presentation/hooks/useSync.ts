@@ -10,9 +10,14 @@ import { useOnlineStatus } from './useOnlineStatus'
  * UX de sincronização (Fase 4).
  *
  * Reaplica as mutações pendentes do outbox quando há rede, nos seguintes
- * momentos: ao montar o layout, a cada reconexão (`window.online`) e em retry
- * periódico (60s) **enquanto houver pendências**. Nenhum disparador roda a
- * lógica de sincronização duas vezes em paralelo (`inFlightRef`).
+ * momentos: ao montar o layout, a cada reconexão (`window.online`), em retry
+ * periódico (60s) **enquanto houver pendências** e sempre que o estado da sessão
+ * muda (para retomar logo após o desbloqueio). Nenhum disparador roda a lógica
+ * de sincronização duas vezes em paralelo (`inFlightRef`).
+ *
+ * Com o banco **bloqueado** nada é enviado: sem a chave o flush falharia no
+ * `upload` (o gateway se recusa a gravar em claro) e só gastaria rede. A fila
+ * espera o desbloqueio.
  *
  * Além dos disparos automáticos, expõe `syncNow()` para forçar o flush (botão
  * "Sincronizar agora") e o estado do último ciclo (`status`/`ultimoResultado`).
@@ -39,7 +44,7 @@ export interface SyncController {
 }
 
 export function useSync(): SyncController {
-  const { workspace, ensureAccessToken } = useAuth()
+  const { workspace, ensureAccessToken, status: authStatus } = useAuth()
   const online = useOnlineStatus()
 
   const [status, setStatus] = useState<SyncPhase>('idle')
@@ -50,6 +55,7 @@ export function useSync(): SyncController {
   const workspaceRef = useRef(workspace)
   const onlineRef = useRef(online)
   const ensureAccessTokenRef = useRef(ensureAccessToken)
+  const authStatusRef = useRef(authStatus)
 
   useEffect(() => {
     workspaceRef.current = workspace
@@ -63,6 +69,10 @@ export function useSync(): SyncController {
     ensureAccessTokenRef.current = ensureAccessToken
   }, [ensureAccessToken])
 
+  useEffect(() => {
+    authStatusRef.current = authStatus
+  }, [authStatus])
+
   const clearRetryTimer = useCallback(() => {
     if (retryTimerRef.current !== null) {
       window.clearTimeout(retryTimerRef.current)
@@ -74,6 +84,9 @@ export function useSync(): SyncController {
     if (inFlightRef.current) return null
     const currentWorkspace = workspaceRef.current
     if (!currentWorkspace || !onlineRef.current) return null
+
+    // Banco bloqueado: a fila espera a chave (não há como decifrar nem gravar).
+    if (authStatusRef.current === 'bloqueado') return null
 
     // Modo local: a "planilha" já é o banco do navegador — não existe fila a
     // enviar (mutações pendentes do Google nunca são reaplicadas aqui).
@@ -121,10 +134,12 @@ export function useSync(): SyncController {
     }
   }, [clearRetryTimer, sync])
 
-  // Dispara ao montar (uma vez) e a cada mudança de conectividade (reconexão).
+  // Dispara ao montar (uma vez), a cada mudança de conectividade (reconexão) e
+  // quando o estado da sessão muda — é assim que o flush volta a rodar logo
+  // depois do desbloqueio.
   useEffect(() => {
     void runAndSchedule()
-  }, [runAndSchedule, online])
+  }, [runAndSchedule, online, authStatus])
 
   // Limpa o timer de retry ao desmontar.
   useEffect(() => clearRetryTimer, [clearRetryTimer])

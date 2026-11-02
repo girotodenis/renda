@@ -8,6 +8,7 @@ import {
 import type { IntegracaoCotacao } from '@/domain/provedoresCotacao'
 import { integracaoBrapi } from '@/infrastructure/cotacoes/brapi'
 import { integracaoMaisRetorno } from '@/infrastructure/cotacoes/maisRetorno'
+import { integracaoPlanilhaGoogle } from '@/infrastructure/cotacoes/planilhaGoogle'
 
 /**
  * **Composição** das integrações de cotação.
@@ -18,6 +19,9 @@ import { integracaoMaisRetorno } from '@/infrastructure/cotacoes/maisRetorno'
  * cotaram. O token aparece automaticamente em Configurações → Integrações.
  */
 export const integracoesCotacao: readonly IntegracaoCotacao[] = [
+  // A planilha de cotações vem primeiro: quando autorizada é a fonte primária
+  // de B3 (1 leitura em lote); o que faltar segue para as APIs.
+  integracaoPlanilhaGoogle,
   integracaoBrapi,
   integracaoMaisRetorno,
 ]

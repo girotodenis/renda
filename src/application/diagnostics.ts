@@ -10,7 +10,13 @@ import {
   proventosRepo,
 } from '@/infrastructure/repositories'
 import type { RepositoryContext } from '@/infrastructure/repositories'
-import { getSheetsRequestCount, resetSheetsRequestCount } from '@/infrastructure/sheets/gatewayRouter'
+import { estadoDoBanco } from '@/application/criptografia'
+import { estadoPlanilhaCotacoes } from '@/application/planilhaCotacoes'
+import {
+  criptografiaDisponivel,
+  getSheetsRequestCount,
+  resetSheetsRequestCount,
+} from '@/infrastructure/sheets/gatewayRouter'
 import { CategoriaAtivo, OperacaoTipo, ProventoTipo } from '@/domain/entities'
 import type {
   Consolidado,
@@ -31,6 +37,10 @@ import type {
  * Google com `VITE_GOOGLE_BACKEND=sheets` contam chamadas à API do Sheets; com
  * `json`, contam chamadas à API de arquivos do Drive (onde cada escrita baixa e
  * sobe o arquivo do banco).
+ *
+ * Além dos contadores, o relatório traz o **estado do ambiente** —
+ * criptografia do banco e planilha de cotações (`lerDiagnosticoAmbiente`) —,
+ * lido sem escrever nada e sem derrubar o diagnóstico quando a leitura falha.
  */
 
 /** Ticker marcador usado nas linhas de teste. */
@@ -47,8 +57,29 @@ export interface DiagnosticSheetResult {
   cachedRowCount: number
 }
 
+/** Situação do banco quanto à cifra (`PLANO_CRIPTOGRAFIA.md` §3.3). */
+export interface DiagnosticCriptografia {
+  estado: 'nenhuma' | 'total'
+  /** `true` quando o banco está cifrado e esta sessão ainda não tem a chave. */
+  bloqueado: boolean
+  /** `true` quando este backend/navegador consegue cifrar o banco. */
+  disponivel: boolean
+}
+
+/** Situação da planilha de cotações — fonte opcional (§4.2). */
+export interface DiagnosticPlanilhaCotacoes {
+  estado: 'ativa' | 'nao-autorizada' | 'indisponivel'
+  motivo: string | null
+}
+
+/** Bloco do relatório que só **lê** o estado: nada é escrito no banco. */
+export interface DiagnosticAmbiente {
+  criptografia: DiagnosticCriptografia
+  planilhaCotacoes: DiagnosticPlanilhaCotacoes
+}
+
 /** Relatório completo do diagnóstico. */
-export interface DiagnosticReport {
+export interface DiagnosticReport extends DiagnosticAmbiente {
   startedAt: string
   finishedAt: string
   ticker: string
@@ -127,6 +158,34 @@ function buildTestEntities(ticker: string, today: string) {
   return { operacao, provento, consolidado, meta, snapshot }
 }
 
+/**
+ * Lê o estado da criptografia e da planilha de cotações **sem escrever** nada.
+ *
+ * A planilha de cotações responde só com o estado local (sem rede). A
+ * criptografia vem do gateway — magic do arquivo (uma leitura) ou meta do cofre
+ * local — e por isso fica em `try/catch`: um diagnóstico não pode falhar por
+ * causa de um dado auxiliar (offline, arquivo apagado, 403).
+ */
+export async function lerDiagnosticoAmbiente(
+  context: RepositoryContext | null,
+): Promise<DiagnosticAmbiente> {
+  const planilhaCotacoes = estadoPlanilhaCotacoes()
+  const semLeitura: DiagnosticCriptografia = {
+    estado: 'nenhuma',
+    bloqueado: false,
+    disponivel: criptografiaDisponivel(),
+  }
+
+  if (!context) return { criptografia: semLeitura, planilhaCotacoes }
+
+  try {
+    const { estado, bloqueado, disponivel } = await estadoDoBanco(context)
+    return { criptografia: { estado, bloqueado, disponivel }, planilhaCotacoes }
+  } catch {
+    return { criptografia: semLeitura, planilhaCotacoes }
+  }
+}
+
 /** Executa o diagnóstico completo e devolve o relatório (lança em caso de falha). */
 export async function runDataLayerDiagnostics(context: RepositoryContext): Promise<DiagnosticReport> {
   resetSheetsRequestCount()
@@ -184,17 +243,22 @@ export async function runDataLayerDiagnostics(context: RepositoryContext): Promi
   ]
 
   const cacheReadRequests = getSheetsRequestCount() - requestsBeforeCacheRead
+  const totalRequests = getSheetsRequestCount()
+  // O ambiente é lido **depois** de fechar os contadores: no cofre JSON ele
+  // baixa o arquivo, e o diagnóstico mede só as escritas e a releitura do cache.
+  const ambiente = await lerDiagnosticoAmbiente(context)
   const finishedAt = new Date().toISOString()
 
   return {
     startedAt,
     finishedAt,
     ticker,
-    totalRequests: getSheetsRequestCount(),
+    totalRequests,
     writeRequests,
     refreshRequests,
     cacheReadRequests,
     cacheReadUsedNoRequests: cacheReadRequests === 0,
     sheets,
+    ...ambiente,
   }
 }

@@ -60,6 +60,11 @@ export type TokensProvedores = Readonly<Record<string, string>>
 /** Opções de uma consulta de cotações. */
 export interface OpcoesConsultaCotacoes {
   tokens: TokensProvedores
+  /**
+   * Access token OAuth da sessão Google. Usado pelas integrações que falam
+   * diretamente com o Google (planilha de cotações); as demais ignoram.
+   */
+  accessToken?: string
   /** Ignora o cache local e consulta a API (atualização manual). */
   forceRefresh?: boolean
   /**

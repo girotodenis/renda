@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { MAGIC } from '@/domain/criptografia'
 import { SHEET_HEADERS, SHEET_NAMES } from '@/domain/sheetsSchema'
-import { gunzip, gzip } from '@/infrastructure/compression'
+import { gunzip, gzip, isGzip } from '@/infrastructure/compression'
 import { DRIVE_FILES_ENDPOINT, DRIVE_UPLOAD_ENDPOINT } from '@/infrastructure/driveFile/api'
 import { emptyDatabase } from '@/infrastructure/driveFile/format'
 import type { CellValue } from '@/infrastructure/sheets/sheetCells'
@@ -177,16 +178,54 @@ function linhaOperacao(id: string, ticker: string): CellValue[] {
 }
 
 let gateway: Gateway
+let cripto: typeof import('@/infrastructure/cripto/envelope')
+let chaves: typeof import('@/infrastructure/cripto/chaveSessao')
 
 beforeEach(async () => {
-  // O cache é por módulo: recarregar garante uma sessão nova em cada teste.
+  // O cache é por módulo: recarregar garante uma sessão nova em cada teste
+  // (inclusive para as chaves, que vivem em memória).
   vi.resetModules()
+  cripto = await import('@/infrastructure/cripto/envelope')
+  chaves = await import('@/infrastructure/cripto/chaveSessao')
+  chaves.esquecerTodasAsChaves()
   gateway = await import('@/infrastructure/driveFile/gateway')
 })
 
 afterEach(() => {
+  chaves.esquecerTodasAsChaves()
   vi.unstubAllGlobals()
 })
+
+/** Sessão de teste com poucas iterações: 600.000 deixaria a suíte lenta. */
+function sessaoDeTeste(senha = 'senha de teste') {
+  return cripto.criarSessao(senha, { iteracoes: 1000 })
+}
+
+/** Arquivo cifrado pronto para o Drive falso (gzip antes de cifrar). */
+async function cifrar(raw: unknown, sessao: Awaited<ReturnType<typeof sessaoDeTeste>>) {
+  return cripto.cifrarArquivo(await compactar(raw), sessao)
+}
+
+/** Abas de um arquivo cifrado lido por fora do gateway (inspeção do teste). */
+async function abasDecifradas(
+  bytes: Uint8Array,
+  sessao: Awaited<ReturnType<typeof sessaoDeTeste>>,
+): Promise<Record<string, CellValue[][]>> {
+  const claro = await cripto.decifrarArquivo(bytes, sessao.chave)
+  const texto = new TextDecoder().decode(await gunzip(claro))
+  return (JSON.parse(texto) as { sheets: Record<string, CellValue[][]> }).sheets
+}
+
+/** O conteúdo no Drive não pode ser lido sem a chave (não é gzip nem JSON). */
+function ilegivelSemChave(bytes: Uint8Array): boolean {
+  if (isGzip(bytes)) return false
+  try {
+    JSON.parse(new TextDecoder().decode(bytes))
+    return false
+  } catch {
+    return true
+  }
+}
 
 /* --------------------------------------------------------------------------
  * Criação e workspace
@@ -223,6 +262,18 @@ describe('createDefaultSpreadsheet', () => {
 
     expect(workspace.title).toBe(TITULO)
     expect(drive.nome).toBe(`${TITULO}${SUFIXO}`)
+  })
+
+  it('cria o arquivo dentro da pasta do app quando folderId é informado', async () => {
+    const drive = criarDriveFalso()
+
+    await gateway.createDefaultSpreadsheet('token', 'Carteira na pasta', { folderId: 'pasta-app' })
+
+    const criacao = drive.chamadas[0]
+    expect(JSON.parse(String(criacao?.body))).toMatchObject({
+      name: `Carteira na pasta${SUFIXO}`,
+      parents: ['pasta-app'],
+    })
   })
 })
 
@@ -514,6 +565,221 @@ describe('falhas de rede', () => {
     drive.falharRede = false
     await gateway.getValues('token', drive.id, "'Operacoes'!A2:L")
     expect(downloads(drive)).toBe(2)
+  })
+})
+
+/* --------------------------------------------------------------------------
+ * Cofre cifrado
+ * ------------------------------------------------------------------------ */
+
+describe('cofre cifrado', () => {
+  it('arquivo em claro continua abrindo e informa criptografia nenhuma', async () => {
+    const drive = criarDriveFalso({ bytes: await compactar(emptyDatabase()) })
+
+    const workspace = await gateway.loadSpreadsheetWorkspace('token', drive.id)
+
+    expect(workspace.criptografia).toBe('nenhuma')
+    expect(chaves.temChave(drive.id)).toBe(false)
+  })
+
+  it('abrir arquivo cifrado sem chave na sessão lança ChaveNecessariaError', async () => {
+    const sessao = await sessaoDeTeste()
+    const drive = criarDriveFalso({ bytes: await cifrar(emptyDatabase(), sessao) })
+
+    const erro = await capturarErro(gateway.loadSpreadsheetWorkspace('token', drive.id))
+
+    expect(erro).toBeInstanceOf(cripto.ChaveNecessariaError)
+    // Não é erro de rede: nada pode ser reenfileirado nem gravado.
+    expect(erro).not.toBeInstanceOf(gateway.SheetsApiError)
+    expect(escritas(drive)).toBe(0)
+  })
+
+  it('com a chave na sessão abre e lê as abas do arquivo cifrado', async () => {
+    const sessao = await sessaoDeTeste()
+    const inicial = emptyDatabase()
+    inicial.sheets.Operacoes = [
+      [...SHEET_HEADERS.Operacoes],
+      linhaOperacao('id-1', 'PETR4'),
+    ]
+    const drive = criarDriveFalso({ bytes: await cifrar(inicial, sessao) })
+    chaves.guardarChave(drive.id, sessao)
+
+    const workspace = await gateway.loadSpreadsheetWorkspace('token', drive.id)
+    const linhas = await gateway.getValues('token', drive.id, "'Operacoes'!A2:L")
+
+    expect(workspace.criptografia).toBe('total')
+    expect(linhas).toEqual([linhaOperacao('id-1', 'PETR4')])
+    expect(downloads(drive)).toBe(1)
+  })
+
+  it('createDefaultSpreadsheet com chave grava o arquivo cifrado e desbloqueia a sessão', async () => {
+    const sessao = await sessaoDeTeste()
+    const drive = criarDriveFalso()
+
+    const workspace = await gateway.createDefaultSpreadsheet('token', 'Cofre', { chave: sessao })
+
+    expect(workspace.criptografia).toBe('total')
+    expect(chaves.temChave(drive.id)).toBe(true)
+    expect(drive.enviados).toHaveLength(1)
+    expect(new TextDecoder().decode(drive.bytes.subarray(0, MAGIC.length))).toBe(MAGIC)
+    expect(ilegivelSemChave(drive.bytes)).toBe(true)
+
+    const abas = await abasDecifradas(drive.bytes, sessao)
+    expect(Object.keys(abas)).toHaveLength(SHEET_NAMES.length)
+    expect(abas.Operacoes?.[0]).toEqual([...SHEET_HEADERS.Operacoes])
+  })
+
+  it('alterarCriptografia liga (arquivo cifrado) e desliga (volta a gzip, chave esquecida)', async () => {
+    const sessao = await sessaoDeTeste()
+    const drive = criarDriveFalso({ bytes: await compactar(emptyDatabase()) })
+    await gateway.appendValues('token', drive.id, "'Operacoes'!A2:L", [
+      linhaOperacao('id-1', 'PETR4'),
+    ])
+
+    await gateway.alterarCriptografia('token', drive.id, sessao)
+
+    expect(escritas(drive)).toBe(2)
+    expect(cripto.estaCifrado(drive.bytes)).toBe(true)
+    expect(chaves.temChave(drive.id)).toBe(true)
+    expect(await gateway.estadoCriptografia('token', drive.id)).toEqual({
+      estado: 'total',
+      bloqueado: false,
+    })
+    // Os dados sobrevivem à recifragem.
+    expect((await abasDecifradas(drive.bytes, sessao)).Operacoes?.[1]?.[0]).toBe('id-1')
+
+    await gateway.alterarCriptografia('token', drive.id, null)
+
+    expect(escritas(drive)).toBe(3)
+    expect(chaves.temChave(drive.id)).toBe(false)
+    expect(isGzip(drive.bytes)).toBe(true)
+    expect((await descompactar(drive.bytes)).Operacoes?.[1]?.[0]).toBe('id-1')
+    expect(await gateway.estadoCriptografia('token', drive.id)).toEqual({
+      estado: 'nenhuma',
+      bloqueado: false,
+    })
+  })
+
+  it('alterarCriptografia é idempotente e relê o arquivo do Drive', async () => {
+    const sessao = await sessaoDeTeste()
+    const drive = criarDriveFalso({ bytes: await compactar(emptyDatabase()) })
+
+    await gateway.alterarCriptografia('token', drive.id, sessao)
+    await gateway.alterarCriptografia('token', drive.id, sessao)
+
+    expect(escritas(drive)).toBe(2)
+    expect(cripto.estaCifrado(drive.bytes)).toBe(true)
+    // Cada gravação usa um IV novo, então os bytes enviados nunca se repetem.
+    expect(drive.enviados).toHaveLength(2)
+    expect(drive.enviados[1]).not.toEqual(drive.enviados[0])
+  })
+
+  it('estadoCriptografia responde pela magic: cifrado sem sessão fica bloqueado', async () => {
+    const sessao = await sessaoDeTeste()
+    const drive = criarDriveFalso({ bytes: await cifrar(emptyDatabase(), sessao) })
+
+    expect(await gateway.estadoCriptografia('token', drive.id)).toEqual({
+      estado: 'total',
+      bloqueado: true,
+    })
+    expect(escritas(drive)).toBe(0)
+  })
+
+  it('conflito 412 com remoto cifrado resolve, mantém cifrado e preserva a mutação pendente', async () => {
+    const sessao = await sessaoDeTeste()
+    const drive = criarDriveFalso({ bytes: await cifrar(emptyDatabase(), sessao) })
+    chaves.guardarChave(drive.id, sessao)
+    await gateway.getValues('token', drive.id, "'Operacoes'!A2:L")
+
+    // Outro dispositivo (mesma senha) gravou entre a leitura e a escrita.
+    const remoto = emptyDatabase()
+    remoto.sheets.Operacoes = [
+      [...SHEET_HEADERS.Operacoes],
+      linhaOperacao('outro-1', 'VALE3'),
+    ]
+    drive.bytes = await cifrar(remoto, sessao)
+    drive.etag = 'etag-externo'
+
+    await gateway.appendValues('token', drive.id, "'Operacoes'!A2:L", [
+      linhaOperacao('local-1', 'PETR4'),
+    ])
+
+    expect(escritas(drive)).toBe(2)
+    expect(downloads(drive)).toBe(2)
+    expect(cripto.estaCifrado(drive.bytes)).toBe(true)
+    expect(ilegivelSemChave(drive.bytes)).toBe(true)
+
+    const linhas = ((await abasDecifradas(drive.bytes, sessao)).Operacoes ?? []).slice(1)
+    expect(linhas.map((linha) => linha[0])).toEqual(['outro-1', 'local-1'])
+  })
+
+  it('mutação em banco cifrado sem chave lança e não grava em claro', async () => {
+    const sessao = await sessaoDeTeste()
+    const drive = criarDriveFalso({ bytes: await cifrar(emptyDatabase(), sessao) })
+    chaves.guardarChave(drive.id, sessao)
+    await gateway.getValues('token', drive.id, "'Operacoes'!A2:L")
+    const bytesAntes = drive.bytes.slice()
+
+    chaves.esquecerChave(drive.id)
+    const erro = await capturarErro(
+      gateway.appendValues('token', drive.id, "'Operacoes'!A2:L", [
+        linhaOperacao('id-1', 'PETR4'),
+      ]),
+    )
+
+    expect(erro).toBeInstanceOf(cripto.ChaveNecessariaError)
+    expect(escritas(drive)).toBe(0)
+    expect(drive.bytes).toEqual(bytesAntes)
+    expect(cripto.estaCifrado(drive.bytes)).toBe(true)
+  })
+
+  it('desbloquear com a senha certa abre, guarda a chave e passa a ler do cache', async () => {
+    const sessao = await sessaoDeTeste()
+    const inicial = emptyDatabase()
+    inicial.sheets.Operacoes = [[...SHEET_HEADERS.Operacoes], linhaOperacao('id-1', 'PETR4')]
+    const drive = criarDriveFalso({ bytes: await cifrar(inicial, sessao) })
+
+    const workspace = await gateway.desbloquear('token', drive.id, 'senha de teste')
+
+    expect(workspace.spreadsheetId).toBe(drive.id)
+    expect(workspace.title).toBe(TITULO)
+    expect(workspace.criptografia).toBe('total')
+    expect(chaves.temChave(drive.id)).toBe(true)
+    // Nada é gravado no Drive ao desbloquear.
+    expect(escritas(drive)).toBe(0)
+
+    // A leitura seguinte vem do cache: um único download (o do desbloqueio).
+    const linhas = await gateway.getValues('token', drive.id, "'Operacoes'!A2:L")
+    expect(linhas).toEqual([linhaOperacao('id-1', 'PETR4')])
+    expect(downloads(drive)).toBe(1)
+  })
+
+  it('desbloquear com a senha errada lança ChaveIncorretaError sem guardar chave nem cache', async () => {
+    const sessao = await sessaoDeTeste()
+    const drive = criarDriveFalso({ bytes: await cifrar(emptyDatabase(), sessao) })
+
+    const erro = await capturarErro(gateway.desbloquear('token', drive.id, 'senha errada'))
+
+    expect(erro).toBeInstanceOf(cripto.ChaveIncorretaError)
+    // Não é erro de rede: o outbox não deve reenfileirar a tentativa.
+    expect(erro).not.toBeInstanceOf(gateway.SheetsApiError)
+    expect(chaves.temChave(drive.id)).toBe(false)
+
+    // Sem cache: a leitura seguinte tenta de novo e falha por falta de chave.
+    const erroLeitura = await capturarErro(gateway.getValues('token', drive.id, "'Operacoes'!A2:L"))
+    expect(erroLeitura).toBeInstanceOf(cripto.ChaveNecessariaError)
+    expect(downloads(drive)).toBe(2)
+    expect(escritas(drive)).toBe(0)
+  })
+
+  it('desbloquear um arquivo em claro recusa com 400 (não é falha de rede)', async () => {
+    const drive = criarDriveFalso({ bytes: await compactar(emptyDatabase()) })
+
+    const erro = await capturarErro(gateway.desbloquear('token', drive.id, 'qualquer senha'))
+
+    expect(erro).toBeInstanceOf(gateway.SheetsApiError)
+    expect(erro.status).toBe(400)
+    expect(chaves.temChave(drive.id)).toBe(false)
   })
 })
 

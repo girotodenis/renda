@@ -80,8 +80,8 @@ describe('aplicarImportacao (modo local)', () => {
 
     expect(resultado.linhasConsolidadas).toBe(1)
     // Cabeçalho preservado e dados na linha 2.
-    expect(readLocalSheet('Operacoes')[0]).toEqual([...SHEET_HEADERS.Operacoes])
-    expect(readLocalSheet('Operacoes')[1]?.slice(0, 5)).toEqual([
+    expect((await readLocalSheet('Operacoes'))[0]).toEqual([...SHEET_HEADERS.Operacoes])
+    expect((await readLocalSheet('Operacoes'))[1]?.slice(0, 5)).toEqual([
       'a1',
       '2026-01-05',
       'Compra',
@@ -89,14 +89,14 @@ describe('aplicarImportacao (modo local)', () => {
       'PETR4',
     ])
     // A aba derivada é recalculada pelo app, com valores estáticos.
-    const consolidado = readLocalSheet('Consolidado')
+    const consolidado = await readLocalSheet('Consolidado')
     expect(consolidado[0]).toEqual([...SHEET_HEADERS.Consolidado])
     expect(consolidado[1]?.[0]).toBe('PETR4')
     expect(consolidado[1]?.[4]).toBe(32.5)
   })
 
   it('substitui o conteúdo anterior em vez de mesclar', async () => {
-    ensureLocalSheetsWithHeaders()
+    await ensureLocalSheetsWithHeaders()
     await updateValues('', WORKSPACE_LOCAL_ID, "'Operacoes'!A2:L3", [
       LINHA_COMPRA,
       ['a9', '2026-03-01', 'Compra', 'Acao', 'VALE3', 5, 60, 0, '', '', '', ''],
@@ -109,7 +109,7 @@ describe('aplicarImportacao (modo local)', () => {
       dados: new Map([['Operacoes', [LINHA_COMPRA]]]),
     })
 
-    const linhas = readLocalSheet('Operacoes')
+    const linhas = await readLocalSheet('Operacoes')
     expect(linhas).toHaveLength(2)
     expect(linhas[1]?.[4]).toBe('PETR4')
   })
@@ -117,7 +117,7 @@ describe('aplicarImportacao (modo local)', () => {
 
 describe('ciclo exportar → importar (modo local)', () => {
   it('recupera os dados a partir do arquivo exportado', async () => {
-    ensureLocalSheetsWithHeaders()
+    await ensureLocalSheetsWithHeaders()
     await updateValues('', WORKSPACE_LOCAL_ID, "'Operacoes'!A2:L2", [LINHA_COMPRA])
     await updateValues('', WORKSPACE_LOCAL_ID, "'Proventos'!A2:G2", [
       ['p1', '2026-02-01', '2026-02-15', 'Acao', 'PETR4', 'Dividendo', 12.5],
@@ -133,14 +133,14 @@ describe('ciclo exportar → importar (modo local)', () => {
 
     // O backup traz as abas do app; `Consolidado` é derivada e não é importada.
     expect(resultado.abas.map((aba) => aba.nome)).toEqual([...ABAS_IMPORTAVEIS])
-    expect(readLocalSheet('Operacoes')[1]?.slice(0, 5)).toEqual([
+    expect((await readLocalSheet('Operacoes'))[1]?.slice(0, 5)).toEqual([
       'a1',
       '2026-01-05',
       'Compra',
       'Acao',
       'PETR4',
     ])
-    expect(readLocalSheet('Proventos')[1]?.slice(0, 7)).toEqual([
+    expect((await readLocalSheet('Proventos'))[1]?.slice(0, 7)).toEqual([
       'p1',
       '2026-02-01',
       '2026-02-15',
@@ -150,6 +150,6 @@ describe('ciclo exportar → importar (modo local)', () => {
       12.5,
     ])
     expect(resultado.linhasConsolidadas).toBe(1)
-    expect(readLocalSheet('Consolidado')[1]?.[0]).toBe('PETR4')
+    expect((await readLocalSheet('Consolidado'))[1]?.[0]).toBe('PETR4')
   })
 })

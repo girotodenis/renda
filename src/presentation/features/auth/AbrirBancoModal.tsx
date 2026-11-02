@@ -1,9 +1,11 @@
 import { Database, Loader2, Search } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import type { PlanilhaExistente } from '@/domain/workspace'
+import { isJsonBackend } from '@/infrastructure/googleConfig'
 import { useAuth } from '@/presentation/app/providers/authContext'
 import { Alert } from '@/presentation/components/Alert'
 import { Modal } from '@/presentation/components/Modal'
+import { ModalSenha } from '@/presentation/components/ModalSenha'
 
 interface AbrirBancoModalProps {
   /** Controla a visibilidade do modal. */
@@ -26,15 +28,31 @@ function formatarData(iso: string | null | undefined): string | null {
 
 /**
  * Lista os bancos já existentes na origem ativa (arquivos JSON no Drive ou
- * planilhas visíveis para o app) e abre o escolhido. O Google Picker, quando
- * disponível, fica como ação secundária para uma planilha ainda desconhecida.
+ * planilhas visíveis para o app) e abre o escolhido. O Google Picker só existe
+ * no build `sheets` — no cofre JSON a lista do Drive já mostra tudo o que o app
+ * pode abrir.
+ *
+ * Banco **cifrado** não abre direto: `abrirBancoPorId` devolve
+ * `chave-necessaria` e o mesmo modal pede a senha, sem trocar o banco ativo
+ * enquanto a chave não for aceita (§6.8 — "escolher banco cifrado na lista").
  */
 export function AbrirBancoModal({ open, onClose }: AbrirBancoModalProps) {
-  const { listarBancos, abrirBancoPorId, abrirPlanilhaNoPicker, isPickerConfigured, isBusy, error } =
-    useAuth()
+  const {
+    listarBancos,
+    abrirBancoPorId,
+    abrirPlanilhaNoPicker,
+    desbloquearBanco,
+    clearError,
+    isPickerConfigured,
+    isBusy,
+    error,
+    workspace,
+  } = useAuth()
   const [bancos, setBancos] = useState<PlanilhaExistente[]>([])
   const [carregando, setCarregando] = useState(false)
   const [idAbrindo, setIdAbrindo] = useState<string | null>(null)
+  /** Banco escolhido que está cifrado: vira o 2º passo (senha). */
+  const [protegido, setProtegido] = useState<{ spreadsheetId: string; title: string } | null>(null)
 
   const carregar = useCallback(async () => {
     setCarregando(true)
@@ -49,16 +67,31 @@ export function AbrirBancoModal({ open, onClose }: AbrirBancoModalProps) {
     if (!open) {
       setBancos([])
       setIdAbrindo(null)
+      setProtegido(null)
       return
     }
     void carregar()
   }, [open, carregar])
 
+  // Desbloqueado com sucesso: o banco escolhido passou a ser o ativo.
+  useEffect(() => {
+    if (!protegido || workspace?.spreadsheetId !== protegido.spreadsheetId) return
+    setProtegido(null)
+    onClose()
+  }, [onClose, protegido, workspace])
+
   async function abrir(spreadsheetId: string) {
     setIdAbrindo(spreadsheetId)
+    clearError()
     try {
-      await abrirBancoPorId(spreadsheetId)
-      onClose()
+      const resultado = await abrirBancoPorId(spreadsheetId)
+      // Adiar o desbloqueio não troca o banco ativo: o workspace já salvo
+      // permanece e `error` continua limpo.
+      if (resultado.status === 'chave-necessaria') {
+        setProtegido({ spreadsheetId: resultado.spreadsheetId, title: resultado.title })
+        return
+      }
+      if (resultado.status === 'aberto') onClose()
     } finally {
       setIdAbrindo(null)
     }
@@ -72,9 +105,15 @@ export function AbrirBancoModal({ open, onClose }: AbrirBancoModalProps) {
   return (
     <Modal open={open} onClose={onClose} titulo="Abrir banco de dados" className="max-w-xl">
       <div className="space-y-4">
-        {error ? (
+        {error && !protegido ? (
           <Alert variant="error" title="Não foi possível listar os bancos">
             {error}
+          </Alert>
+        ) : null}
+
+        {protegido ? (
+          <Alert variant="info" title={`${protegido.title} está protegido`}>
+            Este banco está protegido. Informe a senha para abri-lo.
           </Alert>
         ) : null}
 
@@ -136,7 +175,7 @@ export function AbrirBancoModal({ open, onClose }: AbrirBancoModalProps) {
             Atualizar lista
           </button>
 
-          {isPickerConfigured ? (
+          {isPickerConfigured && !isJsonBackend() ? (
             <button
               type="button"
               onClick={() => void abrirComPicker()}
@@ -148,6 +187,23 @@ export function AbrirBancoModal({ open, onClose }: AbrirBancoModalProps) {
           ) : null}
         </div>
       </div>
+
+      <ModalSenha
+        open={protegido !== null}
+        onClose={() => {
+          setProtegido(null)
+          clearError()
+        }}
+        titulo={protegido?.title ?? 'Banco protegido'}
+        descricao="Este banco está protegido."
+        rotuloConfirmar="Desbloquear"
+        erro={error}
+        pending={isBusy}
+        onConfirmar={(senha) => {
+          if (!protegido) return
+          void desbloquearBanco(senha, protegido.spreadsheetId)
+        }}
+      />
     </Modal>
   )
 }

@@ -1,13 +1,17 @@
 import type { LucideIcon } from 'lucide-react'
 import { ArrowRight, BarChart3, Download, LineChart, Plane, Receipt, Scale, Smartphone, Split, Target, Wallet } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import {
+  ondeFicaOCofreGoogle,
+  textoCriptografiaOpcional,
+} from '@/presentation/app/textosArmazenamento'
 
 const destaques: { icon: LucideIcon; titulo: string; descricao: string }[] = [
   {
     icon: Receipt,
     titulo: 'Operações e proventos',
     descricao:
-      'Lance compras, vendas e dividendos/JCP em segundos. O histórico completo fica salvo na sua planilha.',
+      'Lance compras, vendas e dividendos/JCP em segundos. O histórico completo fica salvo no seu banco de dados.',
   },
   {
     icon: BarChart3,
@@ -62,17 +66,17 @@ export function HomePage() {
               Controle de Investimentos
             </h1>
             <p className="text-sm text-slate-500">
-              Sua carteira, na sua planilha do Google Sheets — ou só neste navegador.
+              Sua carteira {ondeFicaOCofreGoogle()} — ou só neste navegador.
             </p>
           </div>
         </div>
 
         <p className="mt-4 max-w-3xl text-slate-600">
-          Entre com sua conta Google e use sua própria planilha do Google Sheets como base de
-          dados. Nada fica guardado com a gente: o app é só uma tela para a sua planilha — tudo o
-          que você lança fica salvo na sua conta, sob seu controle. Prefere não usar o Google?
-          Dá para usar com o banco de dados do próprio navegador e exportar/importar a carteira
-          em <code className="rounded bg-slate-100 px-1">.ods</code>.
+          Entre com sua conta Google e guarde a carteira {ondeFicaOCofreGoogle()}.
+          {textoCriptografiaOpcional()} Nada fica guardado com a gente: o app é só uma tela para o
+          seu banco de dados — tudo o que você lança fica salvo na sua conta, sob seu controle.
+          Prefere não usar o Google? Dá para usar com o banco de dados do próprio navegador e
+          exportar/importar a carteira em <code className="rounded bg-slate-100 px-1">.ods</code>.
         </p>
 
         <div className="mt-6 flex flex-wrap gap-3">

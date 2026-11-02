@@ -72,7 +72,7 @@ export function DetalheAtivoEventos({
 
   const resolveContext = useCallback(async (): Promise<RepositoryContext | null> => {
     if (!workspace) {
-      setError('Configure uma planilha antes de registrar eventos.')
+      setError('Configure um banco de dados antes de registrar eventos.')
       return null
     }
     const token = await ensureAccessToken()

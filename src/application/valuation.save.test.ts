@@ -8,10 +8,10 @@ import type { Valuation } from '@/domain/entities'
 
 const CONTEXTO = { accessToken: 'local', spreadsheetId: WORKSPACE_LOCAL_ID }
 
-beforeEach(() => {
+beforeEach(async () => {
   clearLocalSheets()
   setModoArmazenamento(MODO_LOCAL)
-  ensureLocalSheetsWithHeaders()
+  await ensureLocalSheetsWithHeaders()
 })
 
 afterEach(() => {
@@ -40,7 +40,7 @@ describe('salvarValuation (modo local)', () => {
 
     await salvarValuation(CONTEXTO, valuation)
 
-    const linhas = readLocalSheet('Valuation')
+    const linhas = await readLocalSheet('Valuation')
     expect(linhas[1]?.[0]).toBe('PETR4')
     expect(linhas[1]?.[12]).toBe(5) // LPA em reais
     expect(linhas[1]?.[13]).toBe(40) // VPA em reais

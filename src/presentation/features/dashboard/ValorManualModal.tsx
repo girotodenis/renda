@@ -78,7 +78,7 @@ export function ValorManualModal({
 
     setError(null)
     if (!workspace) {
-      setError('Configure uma planilha antes de informar valores.')
+      setError('Configure um banco de dados antes de informar valores.')
       return
     }
     const token = await ensureAccessToken()
