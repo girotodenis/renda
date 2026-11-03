@@ -52,7 +52,7 @@ export function TabelaDesvios({ desvios }: TabelaDesviosProps) {
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm">
+        <table className="tabela-responsiva w-full text-left text-sm">
           <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
             <tr>
               <th scope="col" className="px-4 py-2 font-semibold">Ticker</th>
@@ -67,7 +67,7 @@ export function TabelaDesvios({ desvios }: TabelaDesviosProps) {
           <tbody>
             {desvios.map((desvio) => (
               <tr key={desvio.ticker} className="border-t border-slate-100">
-                <td className="px-4 py-2 font-mono font-medium text-slate-900">
+                <td className="px-4 py-2 font-mono font-medium text-slate-900" data-card-title>
                   {desvio.ticker}
                   {desvio.acimaDoTeto ? (
                     <span
@@ -79,11 +79,13 @@ export function TabelaDesvios({ desvios }: TabelaDesviosProps) {
                     </span>
                   ) : null}
                 </td>
-                <td className="px-4 py-2 text-slate-600">{categoriaLabel(desvio.categoria)}</td>
-                <td className="px-4 py-2 text-right tabular-nums text-slate-700">
+                <td className="px-4 py-2 text-slate-600" data-label="Classe">
+                  {categoriaLabel(desvio.categoria)}
+                </td>
+                <td className="px-4 py-2 text-right tabular-nums text-slate-700" data-label="Meta %">
                   {formatarPercentual(desvio.metaPercent)}
                 </td>
-                <td className="px-4 py-2 text-right tabular-nums text-slate-700">
+                <td className="px-4 py-2 text-right tabular-nums text-slate-700" data-label="% atual">
                   {formatarPercentual(desvio.percentualAtual)}
                 </td>
                 <td
@@ -91,13 +93,14 @@ export function TabelaDesvios({ desvios }: TabelaDesviosProps) {
                     'px-4 py-2 text-right tabular-nums font-medium',
                     classeValor(desvio.desvioValor),
                   )}
+                  data-label="Desvio %"
                 >
                   {formatarPercentual(desvio.desvioPercent)}
                 </td>
-                <td className="px-4 py-2 text-right tabular-nums text-slate-700">
+                <td className="px-4 py-2 text-right tabular-nums text-slate-700" data-label="Valor atual">
                   {formatarCentavos(desvio.valorAtual)}
                 </td>
-                <td className="px-4 py-2">
+                <td className="px-4 py-2" data-label="Situação">
                   <span
                     className={cn(
                       'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold',
