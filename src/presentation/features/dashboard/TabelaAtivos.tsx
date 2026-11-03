@@ -90,10 +90,30 @@ export function TabelaAtivos({
         <h2 className="text-base font-semibold text-slate-900">Meus ativos</h2>
       </div>
 
+      {/* No celular as abas de categoria viram um menu (select). */}
+      <div className="border-b border-slate-200 bg-slate-100 p-2 md:hidden">
+        <label htmlFor={`${idBase}-menu`} className="sr-only">
+          Categoria de ativos
+        </label>
+        <select
+          id={`${idBase}-menu`}
+          value={grupoAtivo.categoria}
+          onChange={(event) => setCategoriaSelecionada(event.target.value as CategoriaAtivo)}
+          className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-900 transition-colors focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/40"
+        >
+          {grupos.map((grupo) => (
+            <option key={grupo.categoria} value={grupo.categoria}>
+              {categoriaLabel(grupo.categoria)} ({grupo.abertos.length})
+              {grupoTemOportunidade(grupo, oportunidades) ? ' 🎯' : ''}
+            </option>
+          ))}
+        </select>
+      </div>
+
       <div
         role="tablist"
         aria-label="Categorias de ativos"
-        className="flex flex-wrap gap-1 border-b border-slate-200 bg-slate-100 p-2"
+        className="hidden flex-wrap gap-1 border-b border-slate-200 bg-slate-100 p-2 md:flex"
       >
         {grupos.map((grupo) => {
           const ativa = grupo.categoria === categoriaAtiva
@@ -363,7 +383,7 @@ function TabelaPosicoes({
   const podeMarcarValor = permiteMarcacaoManual(categoria)
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-left text-sm">
+      <table className="tabela-responsiva w-full text-left text-sm">
         <caption className="sr-only">
           Posições de {rotulo} com preço médio, cotação atual, total investido, valor total,
           lucro e variação.
@@ -394,7 +414,7 @@ function TabelaPosicoes({
                 : classeValor(variacaoDia)
             return (
               <tr key={ativo.ticker} className="border-t border-slate-100">
-                <td className="px-4 py-2">
+                <td className="px-4 py-2" data-card-title>
                   <div className="flex items-center gap-1.5">
                     {oportunidades?.has(ativo.ticker.trim().toUpperCase()) ? (
                       <AlertaOportunidade />
@@ -413,13 +433,13 @@ function TabelaPosicoes({
                     ) : null}
                   </div>
                 </td>
-                <td className="px-4 py-2 text-right tabular-nums text-slate-700">
+                <td className="px-4 py-2 text-right tabular-nums text-slate-700" data-label="Quantidade">
                   {ativo.quantidadeAtual.toLocaleString('pt-BR', { maximumFractionDigits: 8 })}
                 </td>
-                <td className="px-4 py-2 text-right tabular-nums text-slate-700">
+                <td className="px-4 py-2 text-right tabular-nums text-slate-700" data-label="Preço médio">
                   {formatarCentavos(ativo.precoMedio)}
                 </td>
-                <td className={cn('px-4 py-2 text-right tabular-nums', classeCotacao)}>
+                <td className={cn('px-4 py-2 text-right tabular-nums', classeCotacao)} data-label="Cotação atual">
                   <span className="block" title={tituloVariacao}>
                     {formatarCentavos(ativo.precoAtual)}
                   </span>
@@ -427,10 +447,13 @@ function TabelaPosicoes({
                     <CotacaoSelo status={cotacao.status} />
                   ) : null}
                 </td>
-                <td className="px-4 py-2 text-right tabular-nums text-slate-700">
+                <td className="px-4 py-2 text-right tabular-nums text-slate-700" data-label="Total investido">
                   {formatarCentavos(ativo.totalInvestido)}
                 </td>
-                <td className="px-4 py-2 text-right tabular-nums font-medium text-slate-900">
+                <td
+                  className="px-4 py-2 text-right tabular-nums font-medium text-slate-900"
+                  data-label="Valor total"
+                >
                   {formatarCentavos(ativo.valorAtual)}
                 </td>
                 <td
@@ -438,6 +461,7 @@ function TabelaPosicoes({
                     'px-4 py-2 text-right tabular-nums font-medium',
                     classeValor(ativo.lucroPrejuizo),
                   )}
+                  data-label="Lucro"
                 >
                   <span className="block">{formatarCentavos(ativo.lucroPrejuizo)}</span>
                   <span className="block text-xs">
@@ -450,6 +474,7 @@ function TabelaPosicoes({
                     'px-4 py-2 text-right tabular-nums font-medium',
                     classeValor(ativo.lucroPrejuizoPercent),
                   )}
+                  data-label="Variação"
                 >
                   {formatarPercentual(ativo.lucroPrejuizoPercent)}
                 </td>
@@ -478,7 +503,7 @@ function TabelaEncerrados({
 }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full text-left text-sm">
+      <table className="tabela-responsiva w-full text-left text-sm">
         <caption className="sr-only">
           Ativos completamente vendidos: tickers com posição zerada. Clique no ticker para ver o
           histórico e o resultado realizado.
@@ -493,7 +518,7 @@ function TabelaEncerrados({
         <tbody>
           {encerrados.map((ativo) => (
             <tr key={ativo.ticker} className="border-t border-slate-100">
-              <td className="px-4 py-2">
+              <td className="px-4 py-2" data-card-title>
                 <div className="flex items-center gap-1.5">
                   {oportunidades?.has(ativo.ticker.trim().toUpperCase()) ? (
                     <AlertaOportunidade />
@@ -501,8 +526,10 @@ function TabelaEncerrados({
                   <TickerBotao ticker={ativo.ticker} onSelecionarAtivo={onSelecionarAtivo} />
                 </div>
               </td>
-              <td className="px-4 py-2 text-right tabular-nums text-slate-500">0</td>
-              <td className="px-4 py-2 text-right">
+              <td className="px-4 py-2 text-right tabular-nums text-slate-500" data-label="Quantidade">
+                0
+              </td>
+              <td className="px-4 py-2 text-right" data-label="Situação">
                 <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
                   Encerrada
                 </span>

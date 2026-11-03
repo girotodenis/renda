@@ -189,7 +189,7 @@ export function ImportarB3Page() {
                 Prévia de proventos
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
+                <table className="tabela-responsiva w-full text-left text-sm">
                   <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                     <tr>
                       <th scope="col" className="px-4 py-2 font-semibold">Ticker</th>
@@ -201,12 +201,16 @@ export function ImportarB3Page() {
                   <tbody>
                     {proventos.slice(0, 20).map((provento) => (
                       <tr key={provento.id} className="border-t border-slate-100">
-                        <td className="px-4 py-2 font-mono font-medium text-slate-900">{provento.ticker}</td>
-                        <td className="px-4 py-2 tabular-nums text-slate-700">
+                        <td className="px-4 py-2 font-mono font-medium text-slate-900" data-card-title>
+                          {provento.ticker}
+                        </td>
+                        <td className="px-4 py-2 tabular-nums text-slate-700" data-label="Pagamento">
                           {formatarDataBR(provento.dataPagamento)}
                         </td>
-                        <td className="px-4 py-2 text-slate-700">{provento.tipo}</td>
-                        <td className="px-4 py-2 text-right tabular-nums text-slate-700">
+                        <td className="px-4 py-2 text-slate-700" data-label="Tipo">
+                          {provento.tipo}
+                        </td>
+                        <td className="px-4 py-2 text-right tabular-nums text-slate-700" data-label="Valor">
                           {formatarBRL(fromCentavos(provento.valorTotal))}
                         </td>
                       </tr>
@@ -228,7 +232,7 @@ export function ImportarB3Page() {
                 Prévia de operações
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
+                <table className="tabela-responsiva w-full text-left text-sm">
                   <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                     <tr>
                       <th scope="col" className="px-4 py-2 font-semibold">Data</th>
@@ -241,11 +245,19 @@ export function ImportarB3Page() {
                   <tbody>
                     {operacoes.slice(0, 20).map((operacao) => (
                       <tr key={operacao.id} className="border-t border-slate-100">
-                        <td className="px-4 py-2 tabular-nums text-slate-700">{formatarDataBR(operacao.data)}</td>
-                        <td className="px-4 py-2 text-slate-700">{operacao.tipo}</td>
-                        <td className="px-4 py-2 font-mono font-medium text-slate-900">{operacao.ticker}</td>
-                        <td className="px-4 py-2 text-right tabular-nums text-slate-700">{operacao.quantidade}</td>
-                        <td className="px-4 py-2 text-right tabular-nums text-slate-700">
+                        <td className="px-4 py-2 tabular-nums text-slate-700" data-card-title>
+                          {formatarDataBR(operacao.data)}
+                        </td>
+                        <td className="px-4 py-2 text-slate-700" data-label="Tipo">
+                          {operacao.tipo}
+                        </td>
+                        <td className="px-4 py-2 font-mono font-medium text-slate-900" data-label="Ticker">
+                          {operacao.ticker}
+                        </td>
+                        <td className="px-4 py-2 text-right tabular-nums text-slate-700" data-label="Qtd">
+                          {operacao.quantidade}
+                        </td>
+                        <td className="px-4 py-2 text-right tabular-nums text-slate-700" data-label="Preço">
                           {formatarBRL(fromCentavos(operacao.precoUnitario))}
                         </td>
                       </tr>
