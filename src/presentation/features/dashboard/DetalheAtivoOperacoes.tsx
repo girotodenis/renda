@@ -183,7 +183,7 @@ export function DetalheAtivoOperacoes({
           </p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
+            <table className="tabela-responsiva w-full text-left text-sm">
               <caption className="sr-only">Operações do ativo {ticker}</caption>
               <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                 <tr>
@@ -199,10 +199,10 @@ export function DetalheAtivoOperacoes({
               <tbody>
                 {pageItems.map((operacao) => (
                   <tr key={operacao.id} className="border-t border-slate-100">
-                    <td className="px-3 py-2 tabular-nums text-slate-700">
+                    <td className="px-3 py-2 tabular-nums text-slate-700" data-card-title>
                       {formatarDataBR(operacao.data)}
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2" data-label="Tipo">
                       <span
                         className={
                           operacao.tipo === OperacaoTipo.Compra
@@ -213,21 +213,27 @@ export function DetalheAtivoOperacoes({
                         {operacao.tipo}
                       </span>
                     </td>
-                    <td className="px-3 py-2 text-slate-700">
+                    <td className="px-3 py-2 text-slate-700" data-label="Categoria">
                       {categoriaLabel(operacao.categoria)}
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums text-slate-700">
+                    <td
+                      className="px-3 py-2 text-right tabular-nums text-slate-700"
+                      data-label="Quantidade"
+                    >
                       {operacao.quantidade.toLocaleString('pt-BR', {
                         maximumFractionDigits: 8,
                       })}
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums text-slate-700">
+                    <td
+                      className="px-3 py-2 text-right tabular-nums text-slate-700"
+                      data-label="Preço unitário"
+                    >
                       {formatarBRL(fromCentavos(operacao.precoUnitario))}
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums text-slate-700">
+                    <td className="px-3 py-2 text-right tabular-nums text-slate-700" data-label="Taxas">
                       {formatarBRL(fromCentavos(operacao.taxas))}
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2" data-actions>
                       <div className="flex justify-end gap-1">
                         <button
                           type="button"

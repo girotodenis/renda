@@ -33,7 +33,7 @@ function ResultadoTabela({ titulo, itens }: { titulo: string; itens: readonly It
     <div>
       <h4 className="mb-2 text-sm font-semibold text-slate-700">{titulo}</h4>
       <div className="overflow-x-auto rounded-lg border border-slate-200">
-        <table className="w-full text-left text-sm">
+        <table className="tabela-responsiva w-full text-left text-sm">
           <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
             <tr>
               <th scope="col" className="px-3 py-2 font-semibold">Ticker</th>
@@ -44,20 +44,25 @@ function ResultadoTabela({ titulo, itens }: { titulo: string; itens: readonly It
           <tbody>
             {itens.map((item) => (
               <tr key={item.ticker} className="border-t border-slate-100">
-                <td className="px-3 py-2 font-mono font-medium text-slate-900">{item.ticker}</td>
-                <td className="px-3 py-2 text-right tabular-nums text-slate-700">
+                <td className="px-3 py-2 font-mono font-medium text-slate-900" data-card-title>
+                  {item.ticker}
+                </td>
+                <td className="px-3 py-2 text-right tabular-nums text-slate-700" data-label="Quantidade">
                   {item.qtd.toLocaleString('pt-BR', { maximumFractionDigits: 4 })}
                 </td>
-                <td className="px-3 py-2 text-right tabular-nums text-slate-700">
+                <td className="px-3 py-2 text-right tabular-nums text-slate-700" data-label="Valor">
                   {formatarCentavos(item.valorAlocado)}
                 </td>
               </tr>
             ))}
             <tr className="border-t border-slate-200 bg-slate-50">
-              <td className="px-3 py-2 font-semibold text-slate-700" colSpan={2}>
+              <td className="px-3 py-2 font-semibold text-slate-700" colSpan={2} data-card-title>
                 Total
               </td>
-              <td className="px-3 py-2 text-right tabular-nums font-semibold text-slate-900">
+              <td
+                className="px-3 py-2 text-right tabular-nums font-semibold text-slate-900"
+                data-label="Valor"
+              >
                 {formatarCentavos(totalAlocado(itens))}
               </td>
             </tr>

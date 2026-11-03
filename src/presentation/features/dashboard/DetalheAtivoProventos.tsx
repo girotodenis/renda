@@ -173,7 +173,7 @@ export function DetalheAtivoProventos({
           </p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
+            <table className="tabela-responsiva w-full text-left text-sm">
               <caption className="sr-only">Proventos do ativo {ticker}</caption>
               <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                 <tr>
@@ -188,18 +188,25 @@ export function DetalheAtivoProventos({
               <tbody>
                 {pageItems.map((provento) => (
                   <tr key={provento.id} className="border-t border-slate-100">
-                    <td className="px-3 py-2 tabular-nums text-slate-700">
+                    <td className="px-3 py-2 tabular-nums text-slate-700" data-label="Data com">
                       {provento.dataCom ? formatarDataBR(provento.dataCom) : '—'}
                     </td>
-                    <td className="px-3 py-2 tabular-nums text-slate-700">
+                    <td className="px-3 py-2 tabular-nums text-slate-700" data-card-title>
                       {formatarDataBR(provento.dataPagamento)}
                     </td>
-                    <td className="px-3 py-2 text-slate-700">{categoriaLabel(provento.categoria)}</td>
-                    <td className="px-3 py-2 text-slate-700">{provento.tipo}</td>
-                    <td className="px-3 py-2 text-right tabular-nums text-slate-700">
+                    <td className="px-3 py-2 text-slate-700" data-label="Categoria">
+                      {categoriaLabel(provento.categoria)}
+                    </td>
+                    <td className="px-3 py-2 text-slate-700" data-label="Tipo">
+                      {provento.tipo}
+                    </td>
+                    <td
+                      className="px-3 py-2 text-right tabular-nums text-slate-700"
+                      data-label="Valor total"
+                    >
                       {formatarBRL(fromCentavos(provento.valorTotal))}
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2" data-actions>
                       <div className="flex justify-end gap-1">
                         <button
                           type="button"

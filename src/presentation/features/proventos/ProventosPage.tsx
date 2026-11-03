@@ -279,7 +279,7 @@ export function ProventosPage() {
             ) : (
               <>
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left text-sm">
+                  <table className="tabela-responsiva w-full text-left text-sm">
                     <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                       <tr>
                         <th scope="col" className="px-4 py-2 font-semibold">
@@ -308,23 +308,28 @@ export function ProventosPage() {
                     <tbody>
                       {pageItems.map((provento) => (
                         <tr key={provento.id} className="border-t border-slate-100">
-                          <td className="px-4 py-2 tabular-nums text-slate-700">
+                          <td className="px-4 py-2 tabular-nums text-slate-700" data-card-title>
                             {provento.dataCom ? formatarDataBR(provento.dataCom) : '—'}
                           </td>
-                          <td className="px-4 py-2 tabular-nums text-slate-700">
+                          <td className="px-4 py-2 tabular-nums text-slate-700" data-label="Pagamento">
                             {formatarDataBR(provento.dataPagamento)}
                           </td>
-                          <td className="px-4 py-2 text-slate-700">
+                          <td className="px-4 py-2 text-slate-700" data-label="Categoria">
                             {categoriaLabel(provento.categoria)}
                           </td>
-                          <td className="px-4 py-2 font-mono font-medium text-slate-900">
+                          <td className="px-4 py-2 font-mono font-medium text-slate-900" data-label="Ticker">
                             {provento.ticker}
                           </td>
-                          <td className="px-4 py-2 text-slate-700">{provento.tipo}</td>
-                          <td className="px-4 py-2 text-right tabular-nums text-slate-700">
+                          <td className="px-4 py-2 text-slate-700" data-label="Tipo">
+                            {provento.tipo}
+                          </td>
+                          <td
+                            className="px-4 py-2 text-right tabular-nums text-slate-700"
+                            data-label="Valor total"
+                          >
                             {formatarBRL(fromCentavos(provento.valorTotal))}
                           </td>
-                          <td className="px-4 py-2">
+                          <td className="px-4 py-2" data-actions>
                             <div className="flex justify-end gap-1">
                               <button
                                 type="button"

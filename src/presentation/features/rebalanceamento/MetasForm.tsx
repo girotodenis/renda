@@ -136,7 +136,7 @@ export function MetasForm({
           </p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
+            <table className="tabela-responsiva w-full text-left text-sm">
               <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                 <tr>
                   <th scope="col" className="px-3 py-2 font-semibold">Ticker</th>
@@ -152,7 +152,7 @@ export function MetasForm({
                   const semPosicao = !tickersNaCarteira.has(item.ticker)
                   return (
                     <tr key={item.ticker} className="border-t border-slate-100">
-                      <td className="px-3 py-2 font-mono font-medium text-slate-900">
+                      <td className="px-3 py-2 font-mono font-medium text-slate-900" data-card-title>
                         {item.ticker}
                         {semPosicao ? (
                           <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
@@ -160,10 +160,10 @@ export function MetasForm({
                           </span>
                         ) : null}
                       </td>
-                      <td className="px-3 py-2 text-slate-600">
+                      <td className="px-3 py-2 text-slate-600" data-label="Classe">
                         {CATEGORIA_ATIVO_LABELS[item.categoria]}
                       </td>
-                      <td className="px-3 py-2">
+                      <td className="px-3 py-2" data-label="Nota (0–10)">
                         <input
                           type="text"
                           inputMode="decimal"
@@ -174,7 +174,7 @@ export function MetasForm({
                           className={cn(inputClassName, 'w-20 px-2 py-1')}
                         />
                       </td>
-                      <td className="px-3 py-2">
+                      <td className="px-3 py-2" data-label="Meta individual (%)">
                         <input
                           type="text"
                           inputMode="decimal"
@@ -187,7 +187,7 @@ export function MetasForm({
                           className={cn(inputClassName, 'w-24 px-2 py-1')}
                         />
                       </td>
-                      <td className="px-3 py-2">
+                      <td className="px-3 py-2" data-label="Preço teto (R$)">
                         <input
                           type="text"
                           inputMode="decimal"
@@ -198,7 +198,10 @@ export function MetasForm({
                           className={cn(inputClassName, 'w-28 px-2 py-1')}
                         />
                       </td>
-                      <td className="px-3 py-2 text-right tabular-nums font-medium text-slate-700">
+                      <td
+                        className="px-3 py-2 text-right tabular-nums font-medium text-slate-700"
+                        data-label="Meta efetiva"
+                      >
                         {formatarPercentual(metasEfetivas[item.ticker] ?? 0)}
                       </td>
                     </tr>

@@ -29,6 +29,121 @@
 }
 
 /* ========================================================================
+ * Tabelas responsivas (mobile)
+ * Use a classe `tabela-responsiva` no <table> e `data-label="Rótulo"` em cada
+ * <td>. Abaixo do breakpoint `md` (768px) cada <tr> vira um cartão com o
+ * rótulo da coluna ao lado do valor — sem rolagem horizontal.
+ * `data-card-title` destaca a célula principal (ex.: o ticker) no topo do
+ * cartão e `data-actions` marca a célula de botões (sem rótulo).
+ * ======================================================================== */
+@layer components {
+  @media (max-width: 767px) {
+    .tabela-responsiva {
+      display: block;
+      width: 100%;
+      font-size: 0.875rem;
+    }
+
+    /* O cabeçalho da tabela fica acessível a leitores de tela, mas invisível. */
+    .tabela-responsiva thead {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    .tabela-responsiva tbody {
+      display: block;
+      padding: 0.5rem;
+    }
+
+    .tabela-responsiva tr {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      margin-bottom: 0.5rem;
+      border: 1px solid #e2e8f0;
+      border-radius: 0.5rem;
+      background-color: #ffffff;
+    }
+
+    .tabela-responsiva tbody tr:last-child {
+      margin-bottom: 0;
+    }
+
+    .tabela-responsiva td,
+    .tabela-responsiva th[data-label] {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 0.75rem;
+      width: auto;
+      padding: 0.375rem 0.75rem;
+      text-align: right;
+      border-width: 0;
+    }
+
+    .tabela-responsiva td[data-label]::before,
+    .tabela-responsiva th[data-label]::before {
+      content: attr(data-label);
+      flex: none;
+      text-align: left;
+      font-size: 0.6875rem;
+      font-weight: 600;
+      letter-spacing: 0.025em;
+      text-transform: uppercase;
+      color: #64748b;
+    }
+
+    /* Célula principal do cartão (ex.: ticker/data), sempre no topo. */
+    .tabela-responsiva td[data-card-title] {
+      order: -1;
+      justify-content: flex-start;
+      padding-top: 0.5rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid #e2e8f0;
+      background-color: #f8fafc;
+      font-size: 0.9375rem;
+      text-align: left;
+    }
+
+    .tabela-responsiva td[data-card-title]::before {
+      content: none;
+    }
+
+    /* Célula de ações (botões): sem rótulo e alinhada à direita. */
+    .tabela-responsiva td[data-actions] {
+      justify-content: flex-end;
+      padding-top: 0.25rem;
+      padding-bottom: 0.5rem;
+    }
+
+    .tabela-responsiva td[data-actions]::before {
+      content: none;
+    }
+  }
+}
+
+/* Tabelas responsivas no tema escuro. */
+[data-tema='propaganda'] .tabela-responsiva tr {
+  background-color: #16223c;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+[data-tema='propaganda'] .tabela-responsiva td[data-label]::before,
+[data-tema='propaganda'] .tabela-responsiva th[data-label]::before {
+  color: #9fb0cf;
+}
+[data-tema='propaganda'] .tabela-responsiva td[data-card-title] {
+  background-color: #111a2e;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+/* ========================================================================
  * Tema "propaganda" — visual da tela de propaganda (incluindo as cores).
  * Regras sem `@layer` para sobrescrever as utilities do Tailwind (camadas têm
  * prioridade menor que CSS fora de camada).

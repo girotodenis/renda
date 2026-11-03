@@ -415,42 +415,64 @@ function BarraAbas({ aba, onChange, contadores }: BarraAbasProps) {
   ]
 
   return (
-    <div
-      role="tablist"
-      aria-label="Seções do ativo"
-      className="flex flex-wrap gap-1 rounded-lg bg-slate-100 p-1"
-    >
-      {abas.map((item) => {
-        const ativa = aba === item.id
-        return (
-          <button
-            key={item.id}
-            type="button"
-            role="tab"
-            id={`aba-${item.id}`}
-            aria-selected={ativa}
-            aria-controls={`painel-${item.id}`}
-            onClick={() => onChange(item.id)}
-            className={cn(
-              'inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600',
-              ativa ? 'bg-white text-brand-700 shadow-sm' : 'text-slate-600 hover:text-slate-900',
-            )}
-          >
-            {item.rotulo}
-            {item.contagem !== undefined ? (
-              <span
-                className={cn(
-                  'rounded-full px-1.5 text-xs tabular-nums',
-                  ativa ? 'bg-brand-50 text-brand-700' : 'bg-slate-200 text-slate-600',
-                )}
-              >
-                {item.contagem}
-              </span>
-            ) : null}
-          </button>
-        )
-      })}
-    </div>
+    <>
+      {/* No celular as abas viram um menu (select). */}
+      <div className="rounded-lg bg-slate-100 p-1 md:hidden">
+        <label htmlFor="aba-ativo-menu" className="sr-only">
+          Seções do ativo
+        </label>
+        <select
+          id="aba-ativo-menu"
+          value={aba}
+          onChange={(event) => onChange(event.target.value as AbaId)}
+          className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-900 transition-colors focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/40"
+        >
+          {abas.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.rotulo}
+              {item.contagem !== undefined ? ` (${item.contagem})` : ''}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div
+        role="tablist"
+        aria-label="Seções do ativo"
+        className="hidden flex-wrap gap-1 rounded-lg bg-slate-100 p-1 md:flex"
+      >
+        {abas.map((item) => {
+          const ativa = aba === item.id
+          return (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              id={`aba-${item.id}`}
+              aria-selected={ativa}
+              aria-controls={`painel-${item.id}`}
+              onClick={() => onChange(item.id)}
+              className={cn(
+                'inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600',
+                ativa ? 'bg-white text-brand-700 shadow-sm' : 'text-slate-600 hover:text-slate-900',
+              )}
+            >
+              {item.rotulo}
+              {item.contagem !== undefined ? (
+                <span
+                  className={cn(
+                    'rounded-full px-1.5 text-xs tabular-nums',
+                    ativa ? 'bg-brand-50 text-brand-700' : 'bg-slate-200 text-slate-600',
+                  )}
+                >
+                  {item.contagem}
+                </span>
+              ) : null}
+            </button>
+          )
+        })}
+      </div>
+    </>
   )
 }
 

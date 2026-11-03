@@ -219,7 +219,7 @@ export function DiagnosticoPage() {
                 Concluído em {formatTimestamp(report.finishedAt)}
               </span>
             </div>
-            <table className="w-full text-left text-sm">
+            <table className="tabela-responsiva w-full text-left text-sm">
               <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                 <tr>
                   <th scope="col" className="px-4 py-2 font-semibold">
@@ -239,12 +239,19 @@ export function DiagnosticoPage() {
               <tbody>
                 {report.sheets.map((sheet) => (
                   <tr key={sheet.sheetName} className="border-t border-slate-100">
-                    <td className="px-4 py-2 font-medium text-slate-700">{sheet.sheetName}</td>
-                    <td className="px-4 py-2 font-mono text-xs text-slate-500">
+                    <td className="px-4 py-2 font-medium text-slate-700" data-card-title>
+                      {sheet.sheetName}
+                    </td>
+                    <td className="px-4 py-2 font-mono text-xs text-slate-500" data-label="ID gerado">
                       {sheet.appendId ?? '—'}
                     </td>
-                    <td className="px-4 py-2 font-mono text-slate-600">{report.ticker}</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-slate-700">
+                    <td className="px-4 py-2 font-mono text-slate-600" data-label="Ticker">
+                      {report.ticker}
+                    </td>
+                    <td
+                      className="px-4 py-2 text-right tabular-nums text-slate-700"
+                      data-label="Linhas no cache"
+                    >
                       {sheet.cachedRowCount}
                     </td>
                   </tr>

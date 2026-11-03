@@ -200,7 +200,7 @@ export function EventosPage() {
           </p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
+            <table className="tabela-responsiva w-full text-left text-sm">
               <caption className="sr-only">Eventos corporativos registrados</caption>
               <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                 <tr>
@@ -215,20 +215,22 @@ export function EventosPage() {
               <tbody>
                 {sorted.map((evento) => (
                   <tr key={evento.id} className="border-t border-slate-100">
-                    <td className="px-4 py-2 tabular-nums text-slate-700">
+                    <td className="px-4 py-2 tabular-nums text-slate-700" data-card-title>
                       {formatarDataBR(evento.data)}
                     </td>
-                    <td className="px-4 py-2 font-mono font-medium text-slate-900">
+                    <td className="px-4 py-2 font-mono font-medium text-slate-900" data-label="Ticker">
                       {evento.ticker}
                     </td>
-                    <td className="px-4 py-2 text-slate-700">{categoriaLabel(evento.categoria)}</td>
-                    <td className="px-4 py-2 text-slate-700">
+                    <td className="px-4 py-2 text-slate-700" data-label="Categoria">
+                      {categoriaLabel(evento.categoria)}
+                    </td>
+                    <td className="px-4 py-2 text-slate-700" data-label="Tipo">
                       {EVENTO_CORPORATIVO_LABELS[evento.tipo]}
                     </td>
-                    <td className="px-4 py-2 font-medium text-slate-900">
+                    <td className="px-4 py-2 font-medium text-slate-900" data-label="Evento">
                       {descreverEvento(evento)}
                     </td>
-                    <td className="px-4 py-2">
+                    <td className="px-4 py-2" data-actions>
                       <div className="flex justify-end">
                         <button
                           type="button"
