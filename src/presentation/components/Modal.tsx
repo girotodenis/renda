@@ -21,6 +21,32 @@ interface ModalProps {
 }
 
 /**
+ * Bloqueio de rolagem do `body` com contador: modais podem se sobrepor (ex.:
+ * trocar banco → escolher arquivo). Sem o contador, o fechamento do modal
+ * interno podia restaurar o estado errado e deixar `overflow: hidden` preso —
+ * a página então "não rolava" nem depois de fechar tudo (o sintoma aparecia
+ * principalmente em telas de celular, onde o conteúdo é longo).
+ */
+let bloqueiosDeRolagem = 0
+let overflowAnteriorDoBody = ''
+
+function bloquearRolagemDoBody() {
+  if (bloqueiosDeRolagem === 0) {
+    overflowAnteriorDoBody = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+  }
+  bloqueiosDeRolagem += 1
+}
+
+function liberarRolagemDoBody() {
+  bloqueiosDeRolagem = Math.max(0, bloqueiosDeRolagem - 1)
+  if (bloqueiosDeRolagem === 0) {
+    document.body.style.overflow = overflowAnteriorDoBody
+    overflowAnteriorDoBody = ''
+  }
+}
+
+/**
  * Modal acessível e reutilizável (overlay fixo + `role="dialog"`).
  *
  * Comportamentos: fecha com **Esc**, clique no **backdrop** e botão **Fechar**;
@@ -53,12 +79,11 @@ export function Modal({ open, onClose, titulo, children, className, corpoClassNa
     }
 
     document.addEventListener('keydown', aoTeclar)
-    const overflowAnterior = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
+    bloquearRolagemDoBody()
 
     return () => {
       document.removeEventListener('keydown', aoTeclar)
-      document.body.style.overflow = overflowAnterior
+      liberarRolagemDoBody()
       focoAnteriorRef.current?.focus()
     }
   }, [open])
