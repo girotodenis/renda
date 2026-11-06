@@ -1,7 +1,10 @@
 import {
   CheckCircle2,
   Database,
+  Gauge,
+  KeyRound,
   Loader2,
+  PlugZap,
   RefreshCw,
   ShieldCheck,
   Stethoscope,
@@ -16,6 +19,9 @@ import { ConfirmarBloqueio } from '@/presentation/components/ConfirmarBloqueio'
 import { clearAllSheetCache } from '@/infrastructure/cache'
 import { lerDiagnosticoAmbiente, runDataLayerDiagnostics } from '@/application/diagnostics'
 import type { DiagnosticAmbiente, DiagnosticReport } from '@/application/diagnostics'
+import { testarIntegracoesCotacao } from '@/application/integracoesCotacao'
+import type { DiagnosticoIntegracoes, TesteIntegracaoInfo } from '@/application/integracoesCotacao'
+import type { QuotaProvedor } from '@/domain/provedoresCotacao'
 import { describeSheetsError } from '@/infrastructure/sheets/gateway'
 
 const ROTULO_PLANILHA: Record<DiagnosticAmbiente['planilhaCotacoes']['estado'], string> = {
@@ -25,20 +31,23 @@ const ROTULO_PLANILHA: Record<DiagnosticAmbiente['planilhaCotacoes']['estado'], 
 }
 
 /**
- * Tela de teste/diagnóstico da camada de dados (Etapa 2).
+ * Tela de teste/diagnóstico da camada de dados e das integrações.
  *
- * Escreve uma linha em cada aba, atualiza o cache com um único `batchGet` e
- * relê do cache **sem novas chamadas** à API (comprovado pelo contador de
- * requisições exibido na tela). O bloco "Estado do ambiente" resume a cifra do
- * banco e a planilha de cotações, lido ao montar — sem rodar as escritas.
+ * O bloco da camada de dados é **somente leitura**: lê as abas com um único
+ * `batchGet` e relê do cache **sem novas chamadas** à API (comprovado pelo
+ * contador de requisições exibido na tela). Nenhuma linha de teste é gravada.
+ * O bloco de integrações testa cada API de cotação com o token do usuário e
+ * mostra a cota restante quando a API devolve os headers `RateLimit-*`.
  */
 export function DiagnosticoPage() {
   const { workspace, status, criptografiaDoBanco, ensureAccessToken } = useAuth()
   const [report, setReport] = useState<DiagnosticReport | null>(null)
   const [ambiente, setAmbiente] = useState<DiagnosticAmbiente | null>(null)
+  const [integracoes, setIntegracoes] = useState<DiagnosticoIntegracoes | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [cacheNotice, setCacheNotice] = useState<string | null>(null)
   const [isRunning, setIsRunning] = useState(false)
+  const [isTestingIntegrations, setIsTestingIntegrations] = useState(false)
 
   const spreadsheetId = workspace?.spreadsheetId ?? null
   // O metadado do workspace responde antes da leitura do arquivo terminar.
@@ -79,16 +88,44 @@ export function DiagnosticoPage() {
         setError('Sessão expirada. Faça login novamente.')
         return
       }
-      const result = await runDataLayerDiagnostics({
-        accessToken: token,
-        spreadsheetId: workspace.spreadsheetId,
-      })
+      const contexto = { accessToken: token, spreadsheetId: workspace.spreadsheetId }
+      // Sequencial: o teste das integrações lê as configurações e não pode
+      // contaminar os contadores de requisição da camada de dados.
+      const result = await runDataLayerDiagnostics(contexto)
       setReport(result)
       setAmbiente({ criptografia: result.criptografia, planilhaCotacoes: result.planilhaCotacoes })
+      const testes = await testarIntegracoesCotacao(contexto)
+      setIntegracoes(testes)
     } catch (diagnosticError) {
       setError(describeSheetsError(diagnosticError))
     } finally {
       setIsRunning(false)
+    }
+  }
+
+  async function runIntegrationTests() {
+    setError(null)
+    if (!workspace) {
+      setError('Configure um banco de dados antes de testar as integrações.')
+      return
+    }
+
+    setIsTestingIntegrations(true)
+    try {
+      const token = await ensureAccessToken()
+      if (!token) {
+        setError('Sessão expirada. Faça login novamente.')
+        return
+      }
+      const testes = await testarIntegracoesCotacao({
+        accessToken: token,
+        spreadsheetId: workspace.spreadsheetId,
+      })
+      setIntegracoes(testes)
+    } catch (testError) {
+      setError(describeSheetsError(testError))
+    } finally {
+      setIsTestingIntegrations(false)
     }
   }
 
@@ -107,9 +144,10 @@ export function DiagnosticoPage() {
             <Stethoscope className="h-6 w-6" aria-hidden />
           </span>
           <div>
-            <h1 className="text-xl font-semibold text-slate-900">Diagnóstico da camada de dados</h1>
+            <h1 className="text-xl font-semibold text-slate-900">Diagnóstico do banco e integrações</h1>
             <p className="text-sm text-slate-500">
-              Escreve uma linha em cada aba, atualiza o cache e relê sem novas chamadas à API.
+              Verifica as integrações, a cota das APIs e o estado do banco — sem gravar nenhuma
+              linha de teste.
             </p>
           </div>
         </div>
@@ -118,7 +156,7 @@ export function DiagnosticoPage() {
           <button
             type="button"
             onClick={() => void runDiagnostics()}
-            disabled={isRunning || !workspace}
+            disabled={isRunning || isTestingIntegrations || !workspace}
             className="inline-flex items-center gap-2 rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isRunning ? (
@@ -127,6 +165,19 @@ export function DiagnosticoPage() {
               <RefreshCw className="h-4 w-4" aria-hidden />
             )}
             Executar diagnóstico
+          </button>
+          <button
+            type="button"
+            onClick={() => void runIntegrationTests()}
+            disabled={isRunning || isTestingIntegrations || !workspace}
+            className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {isTestingIntegrations ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            ) : (
+              <PlugZap className="h-4 w-4" aria-hidden />
+            )}
+            Testar integrações
           </button>
           <button
             type="button"
@@ -169,12 +220,14 @@ export function DiagnosticoPage() {
 
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
             <StatCard
-              label="Criptografia"
+              label="Banco criptografado"
               value={rotuloCriptografia(ambiente)}
               hint={
-                ambiente && !ambiente.criptografia.disponivel
-                  ? 'Este backend ou navegador não cifra o banco.'
-                  : null
+                ambiente && !ambiente.criptografia.verificado
+                  ? 'Não foi possível ler o arquivo do banco agora — estado não verificado.'
+                  : ambiente && !ambiente.criptografia.disponivel
+                    ? 'Este backend ou navegador não cifra o banco.'
+                    : null
               }
             />
             <StatCard
@@ -186,12 +239,106 @@ export function DiagnosticoPage() {
         </section>
       ) : null}
 
+      {workspace ? (
+        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+            <div className="flex items-center gap-2">
+              <PlugZap className="h-4 w-4 text-slate-400" aria-hidden />
+              <h2 className="text-sm font-semibold text-slate-700">Integrações de cotação</h2>
+            </div>
+            {integracoes ? (
+              <span
+                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${
+                  integracoes.todasOk
+                    ? 'bg-emerald-50 text-emerald-700'
+                    : 'bg-amber-50 text-amber-700'
+                }`}
+              >
+                {integracoes.todasOk ? (
+                  <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
+                ) : (
+                  <XCircle className="h-3.5 w-3.5" aria-hidden />
+                )}
+                {integracoes.todasOk ? 'Todas respondendo' : 'Verifique os avisos'}
+                <span className="font-normal text-slate-500">
+                  · {formatTimestamp(integracoes.finishedAt)}
+                </span>
+              </span>
+            ) : null}
+          </div>
+
+          {integracoes ? (
+            <table className="tabela-responsiva w-full text-left text-sm">
+              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th scope="col" className="px-4 py-2 font-semibold">
+                    Integração
+                  </th>
+                  <th scope="col" className="px-4 py-2 font-semibold">
+                    Status
+                  </th>
+                  <th scope="col" className="px-4 py-2 font-semibold">
+                    Requisições disponíveis
+                  </th>
+                  <th scope="col" className="px-4 py-2 font-semibold">
+                    Detalhe
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {integracoes.testes.map((teste) => {
+                  const status = rotuloTeste(teste)
+                  const quota = rotuloQuota(teste.resultado.quota)
+                  return (
+                    <tr key={teste.id} className="border-t border-slate-100 align-top">
+                      <td className="px-4 py-3" data-card-title>
+                        <p className="font-medium text-slate-700">{teste.nome}</p>
+                        {teste.exigeToken ? (
+                          <p className="mt-0.5 inline-flex items-center gap-1 text-xs text-slate-500">
+                            <KeyRound className="h-3 w-3" aria-hidden />
+                            {teste.tokenConfigurado ? 'Token configurado' : 'Sem token'}
+                          </p>
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-3" data-label="Status">
+                        <span
+                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${status.classe}`}
+                        >
+                          {status.texto}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3" data-label="Requisições disponíveis">
+                        <p className="inline-flex items-center gap-1.5 tabular-nums text-slate-700">
+                          <Gauge className="h-3.5 w-3.5 text-slate-400" aria-hidden />
+                          {quota.valor}
+                        </p>
+                        {quota.detalhe ? (
+                          <p className="mt-0.5 text-xs text-slate-500">{quota.detalhe}</p>
+                        ) : null}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-slate-600" data-label="Detalhe">
+                        {teste.resultado.mensagem}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          ) : (
+            <p className="px-4 py-4 text-sm text-slate-500">
+              Clique em “Testar integrações” para consultar cada API com o token configurado e ver
+              a cota restante. Cada integração faz uma única requisição ao ticker de referência
+              (consome 1 requisição/crédito do plano).
+            </p>
+          )}
+        </section>
+      ) : null}
+
       {report ? (
         <div className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard label="Requisições à API" value={String(report.totalRequests)} />
-            <StatCard label="Escritas (5 abas)" value={String(report.writeRequests)} />
-            <StatCard label="Refresh (batchGet)" value={String(report.refreshRequests)} />
+          <div className="grid gap-4 sm:grid-cols-3">
+            <StatCard label="Requisições totais" value={String(report.totalRequests)} />
+            <StatCard label="Leituras (batchGet)" value={String(report.readRequests)} />
             <StatCard
               label="Leitura do cache"
               value={report.cacheReadRequests === 0 ? '0 chamadas' : `${report.cacheReadRequests}`}
@@ -206,7 +353,7 @@ export function DiagnosticoPage() {
                 <XCircle className="h-4 w-4" aria-hidden />
               )}
               {report.cacheReadUsedNoRequests
-                ? 'Releitura do cache concluída sem novas chamadas à API.'
+                ? 'Releitura do cache concluída sem novas chamadas à API. Nenhuma linha de teste foi gravada.'
                 : 'A releitura disparou chamadas à API — verifique o cache.'}
             </span>
           </Alert>
@@ -214,7 +361,7 @@ export function DiagnosticoPage() {
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
             <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-3">
               <Database className="h-4 w-4 text-slate-400" aria-hidden />
-              <h2 className="text-sm font-semibold text-slate-700">Abas testadas</h2>
+              <h2 className="text-sm font-semibold text-slate-700">Abas lidas</h2>
               <span className="ml-auto text-xs text-slate-500">
                 Concluído em {formatTimestamp(report.finishedAt)}
               </span>
@@ -224,12 +371,6 @@ export function DiagnosticoPage() {
                 <tr>
                   <th scope="col" className="px-4 py-2 font-semibold">
                     Aba
-                  </th>
-                  <th scope="col" className="px-4 py-2 font-semibold">
-                    ID gerado
-                  </th>
-                  <th scope="col" className="px-4 py-2 font-semibold">
-                    Ticker
                   </th>
                   <th scope="col" className="px-4 py-2 text-right font-semibold">
                     Linhas no cache
@@ -241,12 +382,6 @@ export function DiagnosticoPage() {
                   <tr key={sheet.sheetName} className="border-t border-slate-100">
                     <td className="px-4 py-2 font-medium text-slate-700" data-card-title>
                       {sheet.sheetName}
-                    </td>
-                    <td className="px-4 py-2 font-mono text-xs text-slate-500" data-label="ID gerado">
-                      {sheet.appendId ?? '—'}
-                    </td>
-                    <td className="px-4 py-2 font-mono text-slate-600" data-label="Ticker">
-                      {report.ticker}
                     </td>
                     <td
                       className="px-4 py-2 text-right tabular-nums text-slate-700"
@@ -278,8 +413,52 @@ function StatCard({ label, value, hint }: { label: string; value: string; hint?:
 /** Rótulos da §3.3: sem cifra, cifrado e desbloqueado, cifrado e bloqueado. */
 function rotuloCriptografia(ambiente: DiagnosticAmbiente | null): string {
   if (!ambiente) return 'Lendo…'
-  if (ambiente.criptografia.estado !== 'total') return 'Sem criptografia'
-  return ambiente.criptografia.bloqueado ? 'Bloqueado' : 'Arquivo criptografado'
+  if (!ambiente.criptografia.verificado) return 'Não verificado'
+  if (ambiente.criptografia.estado !== 'total') return 'Não'
+  return ambiente.criptografia.bloqueado ? 'Sim (bloqueado nesta sessão)' : 'Sim (AES-256-GCM)'
+}
+
+/** Status exibido para cada integração testada. */
+function rotuloTeste(teste: TesteIntegracaoInfo): { texto: string; classe: string } {
+  if (teste.resultado.ok) {
+    return { texto: 'Funcionando', classe: 'bg-emerald-50 text-emerald-700' }
+  }
+  // Fonte opcional (sem token): não estar ativa não é falha.
+  if (!teste.exigeToken) {
+    return { texto: 'Não ativa', classe: 'bg-slate-100 text-slate-600' }
+  }
+  if (!teste.tokenConfigurado) {
+    return { texto: 'Sem token', classe: 'bg-amber-50 text-amber-700' }
+  }
+  return { texto: 'Falha', classe: 'bg-red-50 text-red-700' }
+}
+
+/**
+ * Cota restante informada pela API (`RateLimit-*`).
+ *
+ * Sem headers de cota — ou em provedores que não os enviam — mostra só “não
+ * informado”, sem inventar números.
+ */
+function rotuloQuota(quota: QuotaProvedor | null): { valor: string; detalhe: string | null } {
+  if (!quota) return { valor: 'Não informado', detalhe: null }
+  const restante = quota.restante === null ? null : quota.restante.toLocaleString('pt-BR')
+  const limite = quota.limite === null ? null : quota.limite.toLocaleString('pt-BR')
+  const valor =
+    restante !== null && limite !== null
+      ? `${restante} de ${limite}`
+      : (restante ?? limite ?? 'Não informado')
+  const detalhe =
+    quota.reinicioEmSegundos === null
+      ? null
+      : `Reinicia em ${formatarDuracao(quota.reinicioEmSegundos)}`
+  return { valor, detalhe }
+}
+
+function formatarDuracao(segundos: number): string {
+  if (segundos < 60) return `${segundos}s`
+  if (segundos < 3600) return `${Math.ceil(segundos / 60)} min`
+  if (segundos < 86400) return `${Math.round(segundos / 3600)} h`
+  return `${Math.round(segundos / 86400)} dias`
 }
 
 function formatTimestamp(iso: string): string {

@@ -14,7 +14,7 @@ import { clearStorageKeys, readStorageJson, writeStorageJson } from '@/infrastru
  */
 
 /** Endpoint base de cotações da Brapi (sem token). */
-const DEFAULT_BRAPI_API_URL = 'https://brapi.dev/api/quote'
+export const BRAPI_QUOTE_URL = 'https://brapi.dev/api/quote'
 
 /** Tempo máximo de espera pela API antes de desistir (fallback). */
 const REQUEST_TIMEOUT_MS = 8000
@@ -200,7 +200,7 @@ async function buscarCotacao(
   const cancelar = () => controller.abort()
   signal?.addEventListener('abort', cancelar, { once: true })
   try {
-    const url = `${DEFAULT_BRAPI_API_URL}/${encodeURIComponent(ticker)}?token=${encodeURIComponent(token)}`
+    const url = `${BRAPI_QUOTE_URL}/${encodeURIComponent(ticker)}?token=${encodeURIComponent(token)}`
     const response = await fetch(url, {
       signal: controller.signal,
       headers: { Accept: 'application/json' },

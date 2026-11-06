@@ -83,6 +83,44 @@ export interface TituloTesouroCarteira {
   vencimento: string | null
 }
 
+/**
+ * Cota da API (rate limit) relatada pela própria resposta do provedor.
+ *
+ * A Brapi devolve `RateLimit-Limit`, `RateLimit-Remaining` e `RateLimit-Reset`
+ * em cada resposta; provedores que não informam deixam o campo `null`.
+ */
+export interface QuotaProvedor {
+  /** Limite/cota do plano (`null` quando o provedor não informa). */
+  limite: number | null
+  /** Requisições ainda disponíveis (`null` quando não informado). */
+  restante: number | null
+  /** Segundos até a cota reiniciar (`null` quando não informado). */
+  reinicioEmSegundos: number | null
+}
+
+/**
+ * Resultado do teste de conexão de uma integração (diagnóstico).
+ *
+ * O contrato é o mesmo dos demais provedores: **nunca lança**. Token ausente,
+ * 401/403/429, rede ou formato inesperado viram `ok: false` com mensagem
+ * pronta para a tela.
+ */
+export interface ResultadoTesteIntegracao {
+  /** `true` quando a integração respondeu e devolveu a cotação de teste. */
+  ok: boolean
+  /** Explicação exibida na tela (sucesso, token ausente ou motivo da falha). */
+  mensagem: string
+  /** Cota informada pela API na resposta deste teste, quando disponível. */
+  quota: QuotaProvedor | null
+  /** ISO do momento em que a integração respondeu (`null` sem resposta). */
+  testadoEm: string | null
+}
+
+/** Teste de conexão de uma integração externa (usado no diagnóstico). */
+export interface ProvedorTesteConexao {
+  testar(opcoes: OpcoesConsultaCotacoes): Promise<ResultadoTesteIntegracao>
+}
+
 /** Cotações por ticker (B3 ou cripto) — fallback do `GOOGLEFINANCE` e das APIs. */
 interface ProvedorCotacoesPorTicker {
   /** Cotação do cache local ainda válida (modo offline). */
@@ -149,6 +187,8 @@ export interface IntegracaoCotacao {
   tesouro?: ProvedorCotacoesTesouro
   tickers?: ProvedorListaTickers
   setores?: ProvedorSetores
+  /** Teste de conexão exibido no diagnóstico (`undefined` = não testável). */
+  teste?: ProvedorTesteConexao
   /** Remove os caches locais (ex.: após trocar o token). */
   limparCache(): void
 }

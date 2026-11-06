@@ -15,6 +15,7 @@ import {
   clearMaisRetornoSetorCache,
   provedorSetoresMaisRetorno,
 } from '@/infrastructure/cotacoes/maisRetorno/assetInfo'
+import { testarConexaoMaisRetorno } from '@/infrastructure/cotacoes/maisRetorno/teste'
 
 export const MAIS_RETORNO_ID = 'maisretorno'
 
@@ -64,6 +65,9 @@ export const integracaoMaisRetorno: IntegracaoCotacao = {
       }),
   },
   setores: provedorSetoresMaisRetorno,
+  teste: {
+    testar: ({ tokens, signal }) => testarConexaoMaisRetorno(tokens[MAIS_RETORNO_ID], signal),
+  },
   limparCache() {
     clearMaisRetornoCache()
     clearMaisRetornoTesouroCache()

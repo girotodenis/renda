@@ -1,6 +1,7 @@
-import { toISO } from '@/domain/dates'
-import type { CellValue } from '@/infrastructure/sheets/sheetCells'
+import { estadoDoBanco } from '@/application/criptografia'
+import { estadoPlanilhaCotacoes } from '@/application/planilhaCotacoes'
 import type { SheetName } from '@/domain/sheetsSchema'
+import type { RepositoryContext } from '@/infrastructure/repositories'
 import {
   consolidadoRepo,
   historicoRepo,
@@ -9,53 +10,28 @@ import {
   prefetchAllSheets,
   proventosRepo,
 } from '@/infrastructure/repositories'
-import type { RepositoryContext } from '@/infrastructure/repositories'
-import { estadoDoBanco } from '@/application/criptografia'
-import { estadoPlanilhaCotacoes } from '@/application/planilhaCotacoes'
 import {
   criptografiaDisponivel,
   getSheetsRequestCount,
   resetSheetsRequestCount,
 } from '@/infrastructure/sheets/gatewayRouter'
-import { CategoriaAtivo, OperacaoTipo, ProventoTipo } from '@/domain/entities'
-import type {
-  Consolidado,
-  MetaRebalanceamento,
-  Operacao,
-  Provento,
-  Snapshot,
-} from '@/domain/entities'
 
 /**
- * Diagnóstico da camada de dados (critério de conclusão da Etapa 2).
+ * Diagnóstico da camada de dados e das integrações.
  *
- * Escreve uma linha em cada uma das abas, faz **um** `batchGet` para atualizar
- * o cache e relê do cache **sem novas chamadas** à API. Conta as requisições de
- * rede para comprovar o comportamento.
+ * O teste da camada de dados é **somente leitura**: faz **um** `batchGet` para
+ * atualizar o cache de todas as abas e relê do cache **sem novas chamadas** à
+ * API. Nenhuma linha de teste é gravada — o diagnóstico não cria tickers nem
+ * polui as abas do usuário.
  *
  * Os contadores vêm do `gatewayRouter`, ou seja, do backend ativo: no modo
  * Google com `VITE_GOOGLE_BACKEND=sheets` contam chamadas à API do Sheets; com
- * `json`, contam chamadas à API de arquivos do Drive (onde cada escrita baixa e
- * sobe o arquivo do banco).
+ * `json`, contam chamadas à API de arquivos do Drive.
  *
  * Além dos contadores, o relatório traz o **estado do ambiente** —
  * criptografia do banco e planilha de cotações (`lerDiagnosticoAmbiente`) —,
  * lido sem escrever nada e sem derrubar o diagnóstico quando a leitura falha.
  */
-
-/** Ticker marcador usado nas linhas de teste. */
-export const DIAGNOSTIC_TICKER = 'DIAG3'
-
-/** Resultado por aba. */
-export interface DiagnosticSheetResult {
-  sheetName: SheetName
-  /** ID gerado para a linha de teste (`null` em abas sem coluna `ID`). */
-  appendId: string | null
-  /** Linha de teste que foi escrita. */
-  appended: Readonly<Record<string, CellValue>>
-  /** Quantidade de linhas lidas do cache após a escrita (sem rede). */
-  cachedRowCount: number
-}
 
 /** Situação do banco quanto à cifra (`PLANO_CRIPTOGRAFIA.md` §3.3). */
 export interface DiagnosticCriptografia {
@@ -64,6 +40,12 @@ export interface DiagnosticCriptografia {
   bloqueado: boolean
   /** `true` quando este backend/navegador consegue cifrar o banco. */
   disponivel: boolean
+  /**
+   * `true` quando o estado foi lido do arquivo/cofre (magic dos bytes).
+   * `false` significa que só existe uma estimativa local — a tela não deve
+   * afirmar "sem criptografia" nesse caso.
+   */
+  verificado: boolean
 }
 
 /** Situação da planilha de cotações — fonte opcional (§4.2). */
@@ -78,84 +60,26 @@ export interface DiagnosticAmbiente {
   planilhaCotacoes: DiagnosticPlanilhaCotacoes
 }
 
+/** Resultado por aba (só leitura do cache). */
+export interface DiagnosticSheetResult {
+  sheetName: SheetName
+  /** Quantidade de linhas lidas do cache após a leitura agrupada. */
+  cachedRowCount: number
+}
+
 /** Relatório completo do diagnóstico. */
 export interface DiagnosticReport extends DiagnosticAmbiente {
   startedAt: string
   finishedAt: string
-  ticker: string
-  /** Total de requisições de rede à API do Sheets durante o diagnóstico. */
+  /** Total de requisições de rede ao backend durante o diagnóstico. */
   totalRequests: number
-  /** Requisições gastas nas 5 escritas (`values.append`). */
-  writeRequests: number
-  /** Requisições gastas no refresh agrupado (`values.batchGet`). */
-  refreshRequests: number
+  /** Requisições gastas na leitura agrupada das abas (`values.batchGet`). */
+  readRequests: number
   /** Requisições gastas ao reler do cache (deve ser `0`). */
   cacheReadRequests: number
   /** `true` quando reler do cache não gerou nenhuma chamada à API. */
   cacheReadUsedNoRequests: boolean
   sheets: DiagnosticSheetResult[]
-}
-
-function buildTestEntities(ticker: string, today: string) {
-  const operacao: Operacao = {
-    id: operacoesRepo.newId(),
-    data: today,
-    tipo: OperacaoTipo.Compra,
-    categoria: CategoriaAtivo.Acao,
-    ticker,
-    quantidade: 1,
-    precoUnitario: 1000,
-    taxas: 0,
-    indexador: null,
-    percentualIndexador: null,
-    vencimento: null,
-    valorBrutoAtual: null,
-  }
-
-  const provento: Provento = {
-    id: proventosRepo.newId(),
-    dataCom: null,
-    dataPagamento: today,
-    categoria: CategoriaAtivo.Acao,
-    ticker,
-    tipo: ProventoTipo.Dividendo,
-    valorTotal: 100,
-  }
-
-  const consolidado: Consolidado = {
-    ticker,
-    categoria: CategoriaAtivo.Acao,
-    quantidadeAtual: 1,
-    precoMedio: 1000,
-    precoAtual: 1000,
-    totalInvestido: 1000,
-    valorAtual: 1000,
-    lucroPrejuizo: 0,
-    lucroPrejuizoPercent: 0,
-    percentualCarteira: 0,
-  }
-
-  const meta: MetaRebalanceamento = {
-    ticker,
-    categoria: CategoriaAtivo.Acao,
-    nota: 5,
-    metaPercent: 0,
-    valorAtual: 0,
-    percentualAtual: 0,
-    desvioPercent: 0,
-    aporteSugerido: 0,
-    quantidadeSugerida: 0,
-    precoTeto: null,
-  }
-
-  const snapshot: Snapshot = {
-    data: today,
-    patrimonioTotal: 0,
-    totalInvestido: 0,
-    lucroAcumulado: 0,
-  }
-
-  return { operacao, provento, consolidado, meta, snapshot }
 }
 
 /**
@@ -174,88 +98,70 @@ export async function lerDiagnosticoAmbiente(
     estado: 'nenhuma',
     bloqueado: false,
     disponivel: criptografiaDisponivel(),
+    verificado: false,
   }
 
   if (!context) return { criptografia: semLeitura, planilhaCotacoes }
 
   try {
     const { estado, bloqueado, disponivel } = await estadoDoBanco(context)
-    return { criptografia: { estado, bloqueado, disponivel }, planilhaCotacoes }
+    return {
+      criptografia: { estado, bloqueado, disponivel, verificado: true },
+      planilhaCotacoes,
+    }
   } catch {
     return { criptografia: semLeitura, planilhaCotacoes }
   }
 }
 
-/** Executa o diagnóstico completo e devolve o relatório (lança em caso de falha). */
-export async function runDataLayerDiagnostics(context: RepositoryContext): Promise<DiagnosticReport> {
+/** Executa o diagnóstico da camada de dados (lança em caso de falha de leitura). */
+export async function runDataLayerDiagnostics(
+  context: RepositoryContext,
+): Promise<DiagnosticReport> {
   resetSheetsRequestCount()
   const startedAt = new Date().toISOString()
-  const today = toISO(new Date())
-  const ticker = DIAGNOSTIC_TICKER
-  const { operacao, provento, consolidado, meta, snapshot } = buildTestEntities(ticker, today)
 
-  // 1) Escrita: uma linha em cada aba (5 chamadas `values.append`).
-  await operacoesRepo.append(context, operacao)
-  await proventosRepo.append(context, provento)
-  await consolidadoRepo.append(context, consolidado)
-  await metasRepo.append(context, meta)
-  await historicoRepo.append(context, snapshot)
-  const writeRequests = getSheetsRequestCount()
-
-  // 2) Refresh agrupado: uma única chamada `values.batchGet` para as abas.
+  // 1) Leitura agrupada: uma única chamada `values.batchGet` para todas as abas.
   await prefetchAllSheets(context)
-  const refreshRequests = getSheetsRequestCount() - writeRequests
+  const readRequests = getSheetsRequestCount()
 
-  // 3) Releitura do cache: não deve disparar nenhuma chamada à API.
+  // 2) Releitura do cache: não deve disparar nenhuma chamada à API.
   const requestsBeforeCacheRead = getSheetsRequestCount()
-
   const sheets: DiagnosticSheetResult[] = [
     {
       sheetName: 'Operacoes',
-      appendId: operacao.id,
-      appended: { id: operacao.id, ticker, data: today },
       cachedRowCount: operacoesRepo.readCache(context.spreadsheetId)?.length ?? 0,
     },
     {
       sheetName: 'Proventos',
-      appendId: provento.id,
-      appended: { id: provento.id, ticker, data: today },
       cachedRowCount: proventosRepo.readCache(context.spreadsheetId)?.length ?? 0,
     },
     {
       sheetName: 'Consolidado',
-      appendId: null,
-      appended: { ticker, data: today },
       cachedRowCount: consolidadoRepo.readCache(context.spreadsheetId)?.length ?? 0,
     },
     {
       sheetName: 'Metas_Rebalanceamento',
-      appendId: null,
-      appended: { ticker, data: today },
       cachedRowCount: metasRepo.readCache(context.spreadsheetId)?.length ?? 0,
     },
     {
       sheetName: 'Historico',
-      appendId: null,
-      appended: { data: today },
       cachedRowCount: historicoRepo.readCache(context.spreadsheetId)?.length ?? 0,
     },
   ]
-
   const cacheReadRequests = getSheetsRequestCount() - requestsBeforeCacheRead
   const totalRequests = getSheetsRequestCount()
+
   // O ambiente é lido **depois** de fechar os contadores: no cofre JSON ele
-  // baixa o arquivo, e o diagnóstico mede só as escritas e a releitura do cache.
+  // baixa o arquivo, e o diagnóstico mede só a leitura das abas e o cache.
   const ambiente = await lerDiagnosticoAmbiente(context)
   const finishedAt = new Date().toISOString()
 
   return {
     startedAt,
     finishedAt,
-    ticker,
     totalRequests,
-    writeRequests,
-    refreshRequests,
+    readRequests,
     cacheReadRequests,
     cacheReadUsedNoRequests: cacheReadRequests === 0,
     sheets,
