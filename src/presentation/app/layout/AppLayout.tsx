@@ -94,7 +94,7 @@ export function AppLayout() {
       ] as const)
 
   return (
-    <div className="flex min-h-full flex-col">
+    <div className="flex min-h-screen flex-col">
       <a
         href="#conteudo"
         className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-brand-600 focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white"
@@ -238,7 +238,7 @@ export function AppLayout() {
       {/* Oferta de migração (§6.6): no shell para aparecer em qualquer tela após o upgrade. */}
       <MigrarPlanilha />
 
-      <main id="conteudo" tabIndex={-1} className="mx-auto w-full max-w-6xl flex-1 px-4 py-8 focus:outline-none">
+      <main id="conteudo" tabIndex={-1} className="mx-auto w-full max-w-6xl flex-1 overflow-x-clip px-4 py-8 focus:outline-none">
         <Outlet />
       </main>
 

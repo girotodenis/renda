@@ -45,7 +45,7 @@ export function AlocacaoChart({ porCategoria, porSetor, porAtivo }: AlocacaoChar
   const rotuloModo = modo === 'categoria' ? 'categoria' : modo === 'setor' ? 'setor' : 'ativo'
 
   return (
-    <section className="flex flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+    <section className="flex min-w-0 flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
       <header className="flex flex-col gap-3">
         <div>
           <h2 className="text-base font-semibold text-slate-900">Alocação da carteira</h2>
@@ -86,7 +86,7 @@ export function AlocacaoChart({ porCategoria, porSetor, porAtivo }: AlocacaoChar
       ) : (
         <>
           <div
-            className="mt-4 h-64 w-full"
+            className="mt-4 h-64 w-full overflow-hidden"
             role="img"
             aria-label={`Gráfico de alocação por ${rotuloModo}`}
           >
