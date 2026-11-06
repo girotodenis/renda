@@ -16,6 +16,7 @@ import {
 } from '@/infrastructure/cotacoes/brapi/tesouro'
 import { listarTickersBrapi } from '@/infrastructure/cotacoes/brapi/tickers'
 import { clearBrapiSetorCache, provedorSetoresBrapi } from '@/infrastructure/cotacoes/brapi/perfil'
+import { testarConexaoBrapi } from '@/infrastructure/cotacoes/brapi/teste'
 
 export const BRAPI_ID = 'brapi'
 
@@ -60,6 +61,9 @@ export const integracaoBrapi: IntegracaoCotacao = {
   },
   tickers: { listar: listarTickersBrapi },
   setores: provedorSetoresBrapi,
+  teste: {
+    testar: ({ tokens, signal }) => testarConexaoBrapi(tokens[BRAPI_ID], signal),
+  },
   limparCache() {
     clearBrapiCache()
     clearBrapiCriptoCache()

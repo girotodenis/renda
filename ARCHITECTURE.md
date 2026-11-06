@@ -97,9 +97,10 @@ cabeçalhos, valores tipados) nunca vaze para o domínio:
 - `application/historico.ts` — snapshot patrimonial idempotente (RF18).
 - `application/rebalanceamento.ts` — metas/aporte/desvios (RF12–RF17).
 - `application/b3Import.ts` — importar extrato B3 com deduplicação (RF23).
-- `application/diagnostics.ts` — diagnóstico da camada de dados; o relatório
-  inclui o estado do ambiente (criptografia + planilha de cotações), lido por
-  `lerDiagnosticoAmbiente` sem escrever nada.
+- `application/diagnostics.ts` — diagnóstico da camada de dados **somente
+  leitura** (um `batchGet` + releitura do cache, sem gravar linhas de teste); o
+  relatório inclui o estado do ambiente (criptografia verificada + planilha de
+  cotações), lido por `lerDiagnosticoAmbiente` sem escrever nada.
 - `application/criptografia.ts` — ativar/desativar a cifra, "Bloquear agora" e
   `estadoDoBanco` (estado real do arquivo/abas). Concentra as pré-condições e as
   mensagens exibidas pela UI: Web Crypto disponível, backend capaz de cifrar,
@@ -147,6 +148,9 @@ cabeçalhos, valores tipados) nunca vaze para o domínio:
   `OpcoesConsultaCotacoes` aceita ainda `aoConsultar` (avisa cada item
   consultado) e `signal` (cancelamento) — usados pela modal de progresso do
   botão **Atualizar** (`ProgressoModal` + `useDashboard.atualizarComProgresso`).
+  Cada integração pode expor `teste` (`ProvedorTesteConexao`): o diagnóstico
+  faz uma chamada ao ticker de referência e lê a cota pelos headers
+  `RateLimit-*` (`cotacoes/quota.ts`), sem depender do nome de cada API.
 - `storage.ts` — `localStorage` para token/workspace/consent (RNF05).
 - `db.ts` + `kvStore.ts` — IndexedDB (stores `sheets`/`outbox`) com espelho em
   memória para leitura síncrona e migração única do `localStorage`.

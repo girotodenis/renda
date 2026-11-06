@@ -91,7 +91,12 @@ No backend `json` e no modo local, **Configurações → Segurança do banco** l
 
 ## Diagnóstico
 
-A tela **Diagnóstico** (menu lateral) faz um teste rápido da camada de dados: escreve uma linha em cada aba, atualiza o cache com um único `batchGet` e relê sem novas chamadas à API, mostrando os contadores de requisição. Ela também resume o **estado do ambiente**: criptografia do banco (`Sem criptografia` / `Arquivo criptografado` / `Bloqueado`, com o botão **Bloquear agora**) e a planilha de cotações (estado e motivo).
+A tela **Diagnóstico** (menu lateral) faz um teste rápido e **somente leitura** da camada de dados: lê as abas com um único `batchGet` e relê do cache sem novas chamadas à API, mostrando os contadores de requisição — nenhuma linha de teste é gravada no banco. A mesma tela:
+
+- **testa cada integração de cotação** com o token configurado (uma requisição ao ticker de referência) e mostra se está funcionando, sem token ou com falha;
+- mostra a **cota restante** informada pela API (`RateLimit-Remaining` / `RateLimit-Limit`) e quando ela reinicia;
+- valida se o **banco está criptografado** lendo o arquivo/cofre (`Sim (AES-256-GCM)` / `Não` / `Não verificado`), com o botão **Bloquear agora**;
+- resume a **planilha de cotações** (ativa, não autorizada ou indisponível, com o motivo).
 
 ## Scripts
 

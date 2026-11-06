@@ -199,6 +199,31 @@ export const integracaoPlanilhaGoogle: IntegracaoCotacao = {
     lerCache: lerCotacaoPlanilhaCache,
     atualizar: atualizarCotacoesPlanilha,
   },
+  // Teste local (sem rede): a planilha é "testada" pelo estado da autorização,
+  // já que só a ação explícita do usuário libera o escopo.
+  teste: {
+    async testar() {
+      const { estado, motivo } = estadoPlanilhaGoogle()
+      if (estado === 'ativa') {
+        return {
+          ok: true,
+          mensagem: 'Planilha autorizada — é a fonte primária de B3 quando disponível.',
+          quota: null,
+          testadoEm: new Date().toISOString(),
+        }
+      }
+      return {
+        ok: false,
+        mensagem:
+          motivo ??
+          (estado === 'nao-autorizada'
+            ? 'Não autorizada. Autorize em Configurações → Integrações.'
+            : 'A planilha respondeu com falha.'),
+        quota: null,
+        testadoEm: null,
+      }
+    },
+  },
   limparCache() {
     clearPlanilhaCache()
     resetEstadoPlanilhaGoogle()

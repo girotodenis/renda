@@ -1,26 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  DIAGNOSTIC_TICKER,
   lerDiagnosticoAmbiente,
   runDataLayerDiagnostics,
 } from '@/application/diagnostics'
 
 /**
- * Testes do bloco de **estado do ambiente** do diagnóstico (Fase 9).
+ * Testes do diagnóstico.
  *
  * O objetivo é provar três coisas: o bloco traduz o estado do gateway e da
- * planilha, nunca derruba o diagnóstico quando a leitura falha e não contamina
- * os contadores de requisição (a leitura do magic acontece depois de fechá-los).
+ * planilha, nunca derruba o diagnóstico quando a leitura falha e a camada de
+ * dados é **somente leitura** — sem `append` e sem contaminar os contadores.
  */
 
 const mocks = vi.hoisted(() => {
   const state = { requests: 0 }
 
   const repo = () => ({
-    append: vi.fn(async () => {
-      state.requests += 1
-    }),
-    newId: vi.fn(() => 'id-teste'),
     readCache: vi.fn(() => []),
   })
 
@@ -40,6 +35,7 @@ const mocks = vi.hoisted(() => {
     historicoRepo: repo(),
     prefetchAllSheets: vi.fn(async () => {
       state.requests += 1
+      return 5
     }),
   }
 })
@@ -84,7 +80,7 @@ describe('lerDiagnosticoAmbiente', () => {
     })
 
     await expect(lerDiagnosticoAmbiente(contexto)).resolves.toEqual({
-      criptografia: { estado: 'total', bloqueado: true, disponivel: true },
+      criptografia: { estado: 'total', bloqueado: true, disponivel: true, verificado: true },
       planilhaCotacoes: { estado: 'indisponivel', motivo: 'Planilha apagada.' },
     })
   })
@@ -95,14 +91,14 @@ describe('lerDiagnosticoAmbiente', () => {
     mocks.estadoPlanilhaCotacoes.mockReturnValue({ estado: 'ativa', motivo: null })
 
     await expect(lerDiagnosticoAmbiente(contexto)).resolves.toEqual({
-      criptografia: { estado: 'nenhuma', bloqueado: false, disponivel: false },
+      criptografia: { estado: 'nenhuma', bloqueado: false, disponivel: false, verificado: false },
       planilhaCotacoes: { estado: 'ativa', motivo: null },
     })
   })
 
   it('sem banco ativo não consulta o gateway', async () => {
     await expect(lerDiagnosticoAmbiente(null)).resolves.toEqual({
-      criptografia: { estado: 'nenhuma', bloqueado: false, disponivel: true },
+      criptografia: { estado: 'nenhuma', bloqueado: false, disponivel: true, verificado: false },
       planilhaCotacoes: { estado: 'nao-autorizada', motivo: null },
     })
     expect(mocks.estadoDoBanco).not.toHaveBeenCalled()
@@ -110,7 +106,7 @@ describe('lerDiagnosticoAmbiente', () => {
 })
 
 describe('runDataLayerDiagnostics', () => {
-  it('inclui o estado do ambiente sem contá-lo nos contadores', async () => {
+  it('lê as abas sem gravar nenhuma linha', async () => {
     mocks.estadoDoBanco.mockImplementation(async () => {
       mocks.state.requests += 1
       return { estado: 'total', bloqueado: false, disponivel: true }
@@ -119,15 +115,21 @@ describe('runDataLayerDiagnostics', () => {
 
     const report = await runDataLayerDiagnostics(contexto)
 
-    expect(report.ticker).toBe(DIAGNOSTIC_TICKER)
-    expect(report.writeRequests).toBe(5)
-    expect(report.refreshRequests).toBe(1)
+    // Um único batchGet, nenhuma escrita e nenhuma chamada na releitura do cache.
+    expect(mocks.prefetchAllSheets).toHaveBeenCalledTimes(1)
+    expect(report.readRequests).toBe(1)
     expect(report.cacheReadRequests).toBe(0)
     expect(report.cacheReadUsedNoRequests).toBe(true)
-    // 5 escritas + 1 refresh: a leitura do magic ficou fora do total.
-    expect(report.totalRequests).toBe(6)
-    expect(report.criptografia).toEqual({ estado: 'total', bloqueado: false, disponivel: true })
+    // A leitura do magic fica fora do total (contadores fechados antes).
+    expect(report.totalRequests).toBe(1)
+    expect(report.criptografia).toEqual({
+      estado: 'total',
+      bloqueado: false,
+      disponivel: true,
+      verificado: true,
+    })
     expect(report.planilhaCotacoes).toEqual({ estado: 'ativa', motivo: null })
+    expect(report.sheets).toHaveLength(5)
   })
 
   it('não falha quando a leitura do ambiente falha', async () => {
@@ -136,6 +138,7 @@ describe('runDataLayerDiagnostics', () => {
     const report = await runDataLayerDiagnostics(contexto)
 
     expect(report.criptografia.estado).toBe('nenhuma')
+    expect(report.criptografia.verificado).toBe(false)
     expect(report.planilhaCotacoes.estado).toBe('nao-autorizada')
     expect(report.sheets).toHaveLength(5)
   })
