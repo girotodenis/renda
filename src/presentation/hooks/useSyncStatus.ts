@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { contarPendencias } from '@/application/sync'
+import { aoEnfileirar, contarPendencias } from '@/application/sync'
 import type { SyncResult } from '@/application/sync'
 import { useOnlineStatus } from './useOnlineStatus'
 import { useSync } from './useSync'
@@ -13,9 +13,9 @@ import type { SyncPhase } from './useSync'
  * via `contarPendencias()` — wrapper de `application/sync` — para não importar
  * `infrastructure` na apresentação (regra `presentation → application`).
  *
- * A contagem é recalculada: ao montar, a cada mudança de conectividade
- * (reconexão) e sempre que um ciclo de sincronização termina — incluindo os
- * disparados automaticamente pelo retry periódico da `useSync`.
+ * A contagem é recalculada: ao montar, a cada escrita enfileirada (as gravações
+ * são local-first, então o badge precisa acusar "pendente" na hora), a cada
+ * mudança de conectividade e sempre que um ciclo de sincronização termina.
  */
 
 /** Estado consolidado exibido pelo `SyncStatusBadge`. */
@@ -50,6 +50,9 @@ export function useSyncStatus(): SyncStatus {
   useEffect(() => {
     setPendentes(contarPendencias())
   }, [online])
+
+  // Reconta a cada escrita enfileirada (as gravações são local-first).
+  useEffect(() => aoEnfileirar(() => setPendentes(contarPendencias())), [])
 
   // Reconta sempre que um ciclo de sincronização termina (inclusive os
   // disparados automaticamente pelo mount/retry periódico da `useSync`).

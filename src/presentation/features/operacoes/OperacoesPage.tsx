@@ -106,7 +106,7 @@ export function OperacoesPage() {
         })
         setNotice('Operação atualizada com sucesso.')
       }
-      setOperacoes(await operacoesRepo.refresh(context))
+      setOperacoes(await operacoesRepo.list(context))
       await sincronizarConsolidadoESnapshot(context)
       setFormState({ mode: 'closed' })
     } catch (saveError) {
@@ -130,7 +130,7 @@ export function OperacoesPage() {
     setNotice(null)
     try {
       await operacoesRepo.remove(context, operacao.id)
-      setOperacoes(await operacoesRepo.refresh(context))
+      setOperacoes(await operacoesRepo.list(context))
       await sincronizarConsolidadoESnapshot(context)
       setNotice('Operação excluída com sucesso.')
     } catch (deleteError) {

@@ -160,9 +160,10 @@ cabeçalhos, valores tipados) nunca vaze para o domínio:
 - `db.ts` + `kvStore.ts` — IndexedDB (stores `sheets`/`outbox`) com espelho em
   memória para leitura síncrona e migração única do `localStorage`.
 - `cache.ts` — cache das abas (IndexedDB) (RNF02/RNF08).
-- `outbox.ts` — fila persistente de mutações offline.
-- `offlineRepositories.ts` — decorador que roteia escritas para o outbox quando
-  offline (atualização otimista no cache).
+- `outbox.ts` — fila persistente das mutações de aba (padrão outbox).
+- `offlineRepositories.ts` — decorador **local-first**: toda escrita atualiza o
+  cache e entra na fila; `comEscritaImediata` desvia dela nos fluxos
+  administrativos.
 - `repositories.ts` — repositórios por aba (envoltos) + repositórios crus para
   o replay da sincronização.
 
@@ -200,25 +201,34 @@ requisições ao Google carregam `Bearer token`.
 ```mermaid
 flowchart LR
   UI[presentation] --> APP[application]
-  APP --> REPO[repositories<br/>offline-aware]
-  REPO -->|online| API[(Google Drive<br/>JSON .gz)]
-  REPO -->|offline| OUTBOX[outbox<br/>IndexedDB]
-  REPO --> CACHE[cache de abas<br/>IndexedDB]
+  APP --> REPO[repositories<br/>local-first]
+  REPO -->|toda escrita| CACHE[cache de abas<br/>IndexedDB]
+  REPO -->|toda escrita| OUTBOX[outbox<br/>IndexedDB]
   APP --> SYNC[sync.ts]
-  SYNC --> OUTBOX
-  SYNC -->|online / retry| API
+  SYNC -->|flush em lote| API[(Google Drive<br/>JSON .gz)]
+  OUTBOX --> SYNC
 ```
 
 - **Leitura offline**: cache-first — `repositories.ts` lê do cache e só busca a
   API em cache frio/`forceRefresh`; `application/dashboard.ts` monta o dashboard
   inteiro do cache (`lerDashboardDoCache`).
-- **Escrita offline**: `offlineRepositories.ts` aplica a mutação de forma
-  otimista no cache e a enfileira no outbox; a aba derivada `Consolidado`
-  **nunca** enfileira.
+- **Escrita local-first**: `offlineRepositories.ts` aplica a mutação no cache
+  (a UI reflete na hora) e a enfileira no outbox — sem rede. A aba derivada
+  `Consolidado` **nunca** enfileira: é recalculada no app
+  (`recalcularConsolidadoNoCache`) e regravada pelo flush.
 - **Sincronização**: `application/sync.ts` reaplica a fila em ordem FIFO com
   idempotência por ID, renova o token em 401, interrompe em falha de rede/quota
   (mantendo o item) e, ao final, recalcula o `Consolidado` **uma vez** e
-  refresca o cache. É disparada por `useSync` (mount, reconexão, retry 60s).
+  refresca o cache. O flush inteiro roda em `executarEmLote`: no backend JSON do
+  Drive, N mutações custam **1 download + 1 upload**. É disparada por `useSync`
+  (debounce de 10 s após a última escrita, teto de 30 s, `pagehide`, mount,
+  reconexão e retry de 60 s enquanto houver pendências).
+- **Leituras durante a janela de 10 s**: ao reler a origem, as mutações ainda
+  pendentes são reaplicadas sobre o resultado (`aplicarPendenciasNoCache`) — o
+  que o usuário salvou não "desaparece" da tela.
+- **Ações que exigem a verdade remota** (exportar `.ods`, importar, migrar,
+  ativar/desativar criptografia, consolidar) chamam `garantirSincronizado`
+  antes: com fila pendente elas abortam em vez de ler/sobrescrever dados velhos.
 - **Auth offline**: o `AuthProvider` não desloga por falta de rede e renova o
   token ao reconectar.
 - **UX**: `useSyncStatus` + `SyncStatusBadge` mostram online/offline, pendências

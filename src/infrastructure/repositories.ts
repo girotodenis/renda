@@ -39,7 +39,7 @@ import type {
   Repository,
   RepositoryContext,
 } from '@/domain/repositories/ports'
-import { withOfflineOutbox } from '@/infrastructure/offlineRepositories'
+import { withOfflineOutbox, aplicarPendenciasNoCache } from '@/infrastructure/offlineRepositories'
 import type { Mutation } from '@/infrastructure/outbox'
 
 export type {
@@ -57,6 +57,16 @@ interface RepositoryConfig<T> {
    * as fórmulas das colunas calculadas).
    */
   writableColumnCount?: number
+  /**
+   * Quando `false`, o repositório **não mexe no cache das abas**.
+   *
+   * É o caso dos repositórios crus usados pelo replay da fila
+   * (`rawRepositories`): o flush grava na origem e o cache é reidratado pelo
+   * `prefetchAllSheets` no fim (com as pendências reaplicadas). Se o replay
+   * também escrevesse o cache, uma falha no meio do lote deixaria a UI sem as
+   * alterações que continuam na fila.
+   */
+  writeCache?: boolean
 }
 
 /** Intervalo de leitura que cobre todas as colunas de uma aba. */
@@ -75,6 +85,7 @@ function cellRow(values: readonly CellValue[] | undefined): CellValue[] {
 /** Cria um repositório para uma aba a partir do seu codec linha ↔ entidade. */
 export function createRepository<T>(config: RepositoryConfig<T>): Repository<T> {
   const { codec } = config
+  const writeCache = config.writeCache ?? true
   const { sheetName } = codec
   const writableColumnCount = config.writableColumnCount ?? SHEET_HEADERS[sheetName].length
   const dataRange = dataRangeFor(sheetName)
@@ -89,7 +100,7 @@ export function createRepository<T>(config: RepositoryConfig<T>): Repository<T> 
   async function refresh(context: RepositoryContext): Promise<T[]> {
     const values = await getValues(context.accessToken, context.spreadsheetId, dataRange)
     const entities = decodeRows(values)
-    writeSheetCache(context.spreadsheetId, sheetName, entities)
+    if (writeCache) writeSheetCache(context.spreadsheetId, sheetName, entities)
     return entities
   }
 
@@ -114,7 +125,7 @@ export function createRepository<T>(config: RepositoryConfig<T>): Repository<T> 
     async append(context, entity) {
       const row = cellRow(codec.toRow(entity)).slice(0, writableColumnCount)
       await appendValues(context.accessToken, context.spreadsheetId, `'${sheetName}'!A1`, [row])
-      invalidateSheetCache(context.spreadsheetId, sheetName)
+      if (writeCache) invalidateSheetCache(context.spreadsheetId, sheetName)
       return entity
     },
 
@@ -131,7 +142,7 @@ export function createRepository<T>(config: RepositoryConfig<T>): Repository<T> 
         const range = `'${sheetName}'!A2:${writableColumns}${rows.length + 1}`
         await updateValues(context.accessToken, context.spreadsheetId, range, rows)
       }
-      invalidateSheetCache(context.spreadsheetId, sheetName)
+      if (writeCache) invalidateSheetCache(context.spreadsheetId, sheetName)
     },
 
     invalidateCache(spreadsheetId) {
@@ -186,33 +197,57 @@ export function createCrudRepository<T>(
 const operacaoId = (operacao: Operacao): string => operacao.id
 const proventoId = (provento: Provento): string => provento.id
 
-// Repositórios **crus** (sem o decorador offline). Usados apenas pela
-// sincronização da Fase 2 (`replayMutation`), que reaplica as mutações do
-// outbox sem reenfileirá-las em caso de falha de rede.
-const operacoesRepoRaw = createCrudRepository<Operacao>({ codec: operacoesCodec, idOf: operacaoId })
-const proventosRepoRaw = createCrudRepository<Provento>({ codec: proventosCodec, idOf: proventoId })
-const consolidadoRepoRaw = createRepository<Consolidado>({
+/**
+ * Cada aba tem **dois** repositórios com o mesmo codec:
+ *
+ * - `base`: mantém o cache das abas (caminho normal da aplicação);
+ * - `raw`: não toca no cache (`writeCache: false`) — usado apenas pelo replay da
+ *   fila, para que uma falha no meio do lote não apague do cache o que o usuário
+ *   acabou de salvar.
+ */
+function par<T>(
+  criar: (config: RepositoryConfig<T>) => Repository<T>,
+  config: RepositoryConfig<T>,
+): { base: Repository<T>; raw: Repository<T> } {
+  return { base: criar(config), raw: criar({ ...config, writeCache: false }) }
+}
+
+function parCrud<T>(
+  criar: (config: RepositoryConfig<T> & { idOf: (entity: T) => string }) => CrudRepository<T>,
+  config: RepositoryConfig<T> & { idOf: (entity: T) => string },
+): { base: CrudRepository<T>; raw: CrudRepository<T> } {
+  return { base: criar(config), raw: criar({ ...config, writeCache: false }) }
+}
+
+const operacoesRepos = parCrud(createCrudRepository<Operacao>, {
+  codec: operacoesCodec,
+  idOf: operacaoId,
+})
+const proventosRepos = parCrud(createCrudRepository<Provento>, {
+  codec: proventosCodec,
+  idOf: proventoId,
+})
+const consolidadoRepos = par(createRepository<Consolidado>, {
   codec: consolidadoCodec,
   writableColumnCount: 2,
 })
-const metasRepoRaw = createRepository<MetaRebalanceamento>({ codec: metasCodec })
-const historicoRepoRaw = createRepository<Snapshot>({ codec: historicoCodec })
-const valuationRepoRaw = createRepository<Valuation>({ codec: valuationCodec })
-const ativosRepoRaw = createRepository<Ativo>({ codec: ativosCodec })
-const configuracoesRepoRaw = createRepository<Configuracao>({ codec: configuracoesCodec })
+const metasRepos = par(createRepository<MetaRebalanceamento>, { codec: metasCodec })
+const historicoRepos = par(createRepository<Snapshot>, { codec: historicoCodec })
+const valuationRepos = par(createRepository<Valuation>, { codec: valuationCodec })
+const ativosRepos = par(createRepository<Ativo>, { codec: ativosCodec })
+const configuracoesRepos = par(createRepository<Configuracao>, { codec: configuracoesCodec })
 
-// Repositórios da camada de dados já **envoltos pelo decorador offline** (Fase 1):
-// escritas sem rede (ou com falha de rede/quota) vão para o outbox e refletem no
-// cache local imediatamente. O `Consolidado` é aba derivada — passa direto
-// (sem outbox), pois é recalculado pela sincronização da Fase 2.
-export const operacoesRepo = withOfflineOutbox(operacoesRepoRaw, { idOf: operacaoId })
-export const proventosRepo = withOfflineOutbox(proventosRepoRaw, { idOf: proventoId })
-export const consolidadoRepo = withOfflineOutbox(consolidadoRepoRaw, { outboxEnabled: false })
-export const metasRepo = withOfflineOutbox(metasRepoRaw)
-export const historicoRepo = withOfflineOutbox(historicoRepoRaw)
-export const valuationRepo = withOfflineOutbox(valuationRepoRaw)
-export const ativosRepo = withOfflineOutbox(ativosRepoRaw)
-export const configuracoesRepo = withOfflineOutbox(configuracoesRepoRaw)
+// Repositórios da camada de dados já **envoltos pelo decorador local-first**:
+// toda escrita atualiza o cache e entra no outbox. O `Consolidado` é aba
+// derivada — passa direto (sem outbox), pois é recalculado pelo flush.
+export const operacoesRepo = withOfflineOutbox(operacoesRepos.base, { idOf: operacaoId })
+export const proventosRepo = withOfflineOutbox(proventosRepos.base, { idOf: proventoId })
+export const consolidadoRepo = withOfflineOutbox(consolidadoRepos.base, { outboxEnabled: false })
+export const metasRepo = withOfflineOutbox(metasRepos.base)
+export const historicoRepo = withOfflineOutbox(historicoRepos.base)
+export const valuationRepo = withOfflineOutbox(valuationRepos.base)
+export const ativosRepo = withOfflineOutbox(ativosRepos.base)
+export const configuracoesRepo = withOfflineOutbox(configuracoesRepos.base)
 
 /**
  * Repositório cru (sem decorador) com os contratos apagados para `unknown`.
@@ -261,14 +296,14 @@ function asRawSheetRepository<T>(
 
 /** Repositórios crus por aba, usados pelo replay da sincronização (Fase 2). */
 export const rawRepositories: Record<SheetName, RawSheetRepository> = {
-  Operacoes: asRawSheetRepository(operacoesRepoRaw, operacaoId),
-  Proventos: asRawSheetRepository(proventosRepoRaw, proventoId),
-  Consolidado: asRawSheetRepository(consolidadoRepoRaw),
-  Metas_Rebalanceamento: asRawSheetRepository(metasRepoRaw),
-  Historico: asRawSheetRepository(historicoRepoRaw),
-  Valuation: asRawSheetRepository(valuationRepoRaw),
-  Ativos: asRawSheetRepository(ativosRepoRaw),
-  Configuracoes: asRawSheetRepository(configuracoesRepoRaw),
+  Operacoes: asRawSheetRepository(operacoesRepos.raw, operacaoId),
+  Proventos: asRawSheetRepository(proventosRepos.raw, proventoId),
+  Consolidado: asRawSheetRepository(consolidadoRepos.raw),
+  Metas_Rebalanceamento: asRawSheetRepository(metasRepos.raw),
+  Historico: asRawSheetRepository(historicoRepos.raw),
+  Valuation: asRawSheetRepository(valuationRepos.raw),
+  Ativos: asRawSheetRepository(ativosRepos.raw),
+  Configuracoes: asRawSheetRepository(configuracoesRepos.raw),
 }
 
 /**
@@ -325,8 +360,17 @@ const sheetReaders: readonly SheetReader[] = [
 /**
  * Lê todas as abas em **uma única chamada** `values.batchGet` e atualiza o cache
  * (RNF02). Retorna quantos intervalos foram lidos.
+ *
+ * Depois de gravar o cache com o estado da origem, as mutações que ainda estão
+ * no outbox são reaplicadas — a exceção são as listadas em `excluirMutacoes`
+ * (as que o flush acabou de gravar e já vieram na leitura). Sem isso, um
+ * `prefetch` no meio da janela de sincronização faria a UI "perder" por alguns
+ * segundos o que o usuário acabou de salvar.
  */
-export async function prefetchAllSheets(context: RepositoryContext): Promise<number> {
+export async function prefetchAllSheets(
+  context: RepositoryContext,
+  options: { excluirMutacoes?: ReadonlySet<string> } = {},
+): Promise<number> {
   const ranges = sheetReaders.map((reader) => dataRangeFor(reader.sheetName))
   const valueRanges = await batchGetValues(context.accessToken, context.spreadsheetId, ranges)
 
@@ -338,6 +382,9 @@ export async function prefetchAllSheets(context: RepositoryContext): Promise<num
       .filter(isNonEmptyRow)
       .map((row) => reader.fromRow(row))
     writeSheetCache(context.spreadsheetId, reader.sheetName, rows)
+    aplicarPendenciasNoCache(context.spreadsheetId, reader.sheetName, {
+      excluirIds: options.excluirMutacoes,
+    })
   })
 
   return valueRanges.length

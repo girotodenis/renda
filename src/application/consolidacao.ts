@@ -1,4 +1,4 @@
-import { sincronizarConsolidadoESnapshot } from '@/application/escritasAtivo'
+import { gravarConsolidadoESnapshot } from '@/application/escritasAtivo'
 import {
   analisarPendencias,
   calcularConsolidacao,
@@ -16,9 +16,11 @@ import type { Operacao, Provento } from '@/domain/entities'
 import { newId } from '@/domain/ids'
 import type { RepositoryContext } from '@/domain/repositories/ports'
 import { isModoLocal } from '@/infrastructure/modoArmazenamento'
+import { comEscritaImediata } from '@/infrastructure/offlineRepositories'
 import { isOnline } from '@/infrastructure/outbox'
 import { operacoesRepo, proventosRepo } from '@/infrastructure/repositories'
 import { executarEmLote } from '@/infrastructure/sheets/gatewayRouter'
+import { garantirSincronizado } from '@/application/sync'
 
 /**
  * Caso de uso da página **Consolidação** (`PLANO_CONSOLIDACAO.md` §4).
@@ -60,6 +62,11 @@ export interface ConsolidacaoDependencies {
   replaceOperacoes: (context: RepositoryContext, operacoes: readonly Operacao[]) => Promise<void>
   replaceProventos: (context: RepositoryContext, proventos: readonly Provento[]) => Promise<void>
   executarEmLote: <T>(context: RepositoryContext, fn: () => Promise<T>) => Promise<T>
+  /**
+   * Grava a fila local-first antes de reler as abas (a consolidação compara a
+   * origem com o resultado calculado — não pode ignorar alterações recentes).
+   */
+  garantirSincronizado: (context: RepositoryContext) => Promise<void>
   /** Recalcula o `Consolidado` e registra snapshot (best-effort). */
   sincronizar: (context: RepositoryContext) => Promise<void>
   isOnline: () => boolean
@@ -81,7 +88,8 @@ const defaultDeps: ConsolidacaoDependencies = {
   replaceProventos: (context, proventos) => proventosRepo.replaceAll(context, proventos),
   executarEmLote: (context, fn) =>
     executarEmLote(context.accessToken, context.spreadsheetId, fn),
-  sincronizar: sincronizarConsolidadoESnapshot,
+  garantirSincronizado: (context) => garantirSincronizado(context),
+  sincronizar: gravarConsolidadoESnapshot,
   isOnline,
   isModoLocal,
   agora: () => new Date(),
@@ -191,6 +199,10 @@ export async function executarConsolidacao(
     throw new Error('Só é possível consolidar anos anteriores ao ano corrente.')
   }
 
+  // A origem tem de estar em dia com a fila local antes de ser relida: as
+  // linhas apagadas precisam ser exatamente as da planilha.
+  await deps.garantirSincronizado(context)
+
   // Relê da API: as linhas apagadas precisam ser exatamente as da planilha.
   const [operacoes, proventos] = await Promise.all([
     deps.refreshOperacoes(context),
@@ -215,10 +227,12 @@ export async function executarConsolidacao(
   const mudouOperacoes = resultado.absorvidas.operacoes.length > 0
   const mudouProventos = resultado.absorvidas.proventos.length > 0
 
-  await deps.executarEmLote(context, async () => {
-    if (mudouOperacoes) await deps.replaceOperacoes(context, resultado.operacoes)
-    if (mudouProventos) await deps.replaceProventos(context, resultado.proventos)
-  })
+  await deps.executarEmLote(context, () =>
+    comEscritaImediata(async () => {
+      if (mudouOperacoes) await deps.replaceOperacoes(context, resultado.operacoes)
+      if (mudouProventos) await deps.replaceProventos(context, resultado.proventos)
+    }),
+  )
 
   // Best-effort: o `sincronizarConsolidadoESnapshot` já trata as próprias falhas.
   await deps.sincronizar(context)
