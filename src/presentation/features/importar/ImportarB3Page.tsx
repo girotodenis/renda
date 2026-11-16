@@ -133,6 +133,12 @@ export function ImportarB3Page() {
       {error ? <Alert variant="error">{error}</Alert> : null}
       {notice ? <Alert variant="success">{notice}</Alert> : null}
 
+      <Alert variant="info" title="Consolidação e reimportação">
+        A página <strong>Consolidação</strong> substitui lançamentos originais por linhas
+        agregadas. Reimportar o extrato B3 de um período já consolidado <strong>recria</strong> os
+        lançamentos originais (duplicidade) — consolide apenas períodos que não serão reimportados.
+      </Alert>
+
       <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <label
           htmlFor="b3-arquivos"

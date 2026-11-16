@@ -47,7 +47,7 @@ flowchart LR
 | --- | --- |
 | **Entidades** (com identidade) | `domain/entities.ts` — `Operacao`, `Provento`, `Consolidado`, `Snapshot`, `MetaRebalanceamento`, `Ativo` |
 | **Objetos de valor / convenções** | `domain/money.ts` (centavos), `domain/dates.ts` (ISO `YYYY-MM-DD`), `domain/categoria.ts` (enum canônico) |
-| **Serviços de domínio** (lógica pura) | `domain/consolidado.ts`, `domain/dashboard.ts`, `domain/detalheAtivo.ts`, `domain/cotacoes.ts`, `domain/eventosCorporativos.ts`, `domain/b3Import.ts`, `domain/rebalanceamento/*` |
+| **Serviços de domínio** (lógica pura) | `domain/consolidado.ts`, `domain/dashboard.ts`, `domain/detalheAtivo.ts`, `domain/consolidacao.ts`, `domain/cotacoes.ts`, `domain/eventosCorporativos.ts`, `domain/b3Import.ts`, `domain/rebalanceamento/*` |
 | **Formato do envelope cifrado** | `domain/criptografia.ts` — magic `MINHASACOES-ENC1`, cabeçalho em claro (`v`, `kdf`, `cifra`), Base64 e validação da senha (sem Web Crypto) |
 | **Ports (contratos de repositório)** | `domain/repositories/ports.ts` — `Repository<T>`, `CrudRepository<T>` |
 | **Linguagem ubíqua** | `Operacao`, `Provento`, `Consolidado`, `Snapshot`, `Carteira`, `Aporte`, `Desvio`, `Split`, `Grupamento`, `Bonificação` |
@@ -110,6 +110,11 @@ cabeçalhos, valores tipados) nunca vaze para o domínio:
 - `application/migrarPlanilha.ts` — migração do banco antigo (Sheets) para o
   cofre JSON: lê a planilha, cria o cofre, grava as abas e aponta o workspace;
   idempotente e **nunca** altera a planilha antiga.
+- `application/consolidacao.ts` — página **Consolidação**: analisa as pendências
+  (tickers encerrados e anos elegíveis), relê as abas da API, verifica as
+  invariantes (posição, preço médio, lucro realizado e proventos por ano/tipo)
+  e grava as duas abas em lote. A consolidação é **explícita e irreversível** —
+  nunca acontece em carga, sincronização ou importação.
 - `application/sync.ts` — sincronização da fila offline (FIFO), recálculo do
   `Consolidado` ao final do flush e `contarPendencias()` para a UX. O flush
   inteiro roda em `executarEmLote` (no backend JSON: 1 download + 1 upload) e a
@@ -160,6 +165,30 @@ cabeçalhos, valores tipados) nunca vaze para o domínio:
   offline (atualização otimista no cache).
 - `repositories.ts` — repositórios por aba (envoltos) + repositórios crus para
   o replay da sincronização.
+
+## Consolidação do histórico (opcional)
+
+A página **Consolidação** (`PLANO_CONSOLIDACAO.md`) enxuga o volume das abas
+`Operacoes`/`Proventos` sem alterar **nenhum** número do app:
+
+- **Sem estado novo:** não há aba, coluna, ledger nem "Desfazer". O critério de
+  pendência é objetivo (`domain/consolidacao.ts` → `precisaConsolidar`): só há o
+  que consolidar quando existe um grupo com 2+ linhas. Depois de consolidar, o
+  item sai da lista naturalmente.
+- **Ticker encerrado** (posição 0 com compra e venda) → 1 compra + 1 venda.
+  Cada linha é convertida para as unidades finais pelo produto dos fatores dos
+  eventos posteriores; o resíduo `P mod Q` sai dos dois lados, mantendo
+  `lucro = P − C` exato e `taxas` da compra em `[0, Q)`.
+- **Ticker com posição aberta** → consolidação por ano, apenas para anos
+  anteriores ao corrente. Anos auto-contidos (`q0 = q1 = 0`) consolidam também as
+  operações; os demais consolidam **somente** os proventos.
+- **Proventos** → 1 linha por `(ano, tipo)` na data do último pagamento.
+- **Invariantes bloqueantes:** `verificarInvariantes` compara posição, total
+  investido, preço médio, lucro realizado e Σ proventos por `(ticker, ano, tipo)`
+  com tolerância zero; qualquer divergência aborta a gravação.
+- **Risco aceito:** reimportar um extrato B3 de um período consolidado recria as
+  linhas originais (a dedupe é por ID determinístico do arquivo). A UI avisa na
+  página e na importação; consolide apenas períodos que não serão reimportados.
 
 ## PWA & Offline-first
 

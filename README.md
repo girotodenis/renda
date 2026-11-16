@@ -12,6 +12,7 @@ Acompanhe sua carteira de investimentos direto do navegador, usando **sua conta 
 - Rebalanceamento por metas e aporte inteligente
 - Importação de extratos da B3 (Área do Investidor)
 - Eventos corporativos (split, grupamento, bonificação)
+- **Consolidação** opcional do histórico (ticker encerrado ou por ano) sem alterar nenhum número
 - **PWA instalável** com funcionamento offline (leitura do último estado em cache)
 - **Sincronização automática**: alterações feitas offline são reaplicadas na planilha ao reconectar
 
@@ -88,6 +89,25 @@ No backend `json` e no modo local, **Configurações → Segurança do banco** l
 - **"Bloquear agora"** (cabeçalho, Configurações e Diagnóstico) sempre pede confirmação; ele esquece a chave e apaga o cache de abas em claro.
 - **O que não é protegido:** o `.ods` exportado é texto puro, o cache de abas e a fila offline do navegador ficam em claro, e os metadados do arquivo (nome, tamanho, datas) e os tickers da planilha de cotações são visíveis. O backend `sheets` não cifra (as células precisam ficar legíveis para as fórmulas).
 - **Esquecer este banco neste dispositivo** apaga o workspace, a chave e o verificador locais; o arquivo no Drive continua intacto e pode ser aberto em outro dispositivo com a senha.
+
+## Consolidação do histórico
+
+A página **Consolidação** (menu principal) reduz o volume de linhas das abas
+`Operações`/`Proventos` **sem alterar** posição, preço médio, total investido,
+lucro realizado nem totais de proventos:
+
+- **Ativos encerrados** (100% vendidos) com mais de uma linha são substituídos
+  por **1 compra + 1 venda**; os proventos viram **1 linha por tipo/ano**.
+- **Ativos com posição aberta** podem ser consolidados **por ano** — e somente
+  anos anteriores ao corrente. Anos que começam e terminam zerados consolidam
+  também as operações; os demais consolidam apenas os proventos.
+- Nada é automático: cada ação exige clique explícito, mostra o que será
+  apagado/criado e exige o aceite de que a operação é **irreversível**. Exporte
+  um backup `.ods` antes (botão no próprio modal).
+- Antes de gravar, o app relê as abas da API e confere as invariantes; qualquer
+  divergência cancela a gravação.
+- Reimportar um extrato B3 de um período consolidado **duplica** esse período —
+  consolide apenas períodos que não serão reimportados.
 
 ## Diagnóstico
 

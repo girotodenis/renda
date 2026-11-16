@@ -6,6 +6,7 @@ import { ProtectedRoute, PublicOnlyRoute } from '@/presentation/app/routes/Route
 import { ErrorBoundary } from '@/presentation/components/ErrorBoundary'
 import { LoginPage } from '@/presentation/features/auth/LoginPage'
 import { ConfiguracoesPage } from '@/presentation/features/configuracoes/ConfiguracoesPage'
+import { ConsolidacaoPage } from '@/presentation/features/consolidacao/ConsolidacaoPage'
 import { DashboardPage } from '@/presentation/features/dashboard/DashboardPage'
 import { DiagnosticoPage } from '@/presentation/features/diagnostico/DiagnosticoPage'
 import { EventosPage } from '@/presentation/features/eventos/EventosPage'
@@ -64,6 +65,14 @@ export function App() {
                 element={
                   <ProtectedRoute>
                     <EventosPage />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/consolidacao"
+                element={
+                  <ProtectedRoute>
+                    <ConsolidacaoPage />
                   </ProtectedRoute>
                 }
               />
