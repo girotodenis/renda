@@ -81,7 +81,7 @@ function DashboardContent() {
     error,
     notice,
     avisoCotacoes,
-    refresh,
+    reloadDoCache,
     atualizarComProgresso,
     progressoAtualizacao,
     cancelarAtualizacao,
@@ -316,7 +316,7 @@ function DashboardContent() {
             operacoes={data.operacoes}
             proventos={data.proventos}
             valuation={valuationAtivo}
-            onChanged={refresh}
+            onChanged={reloadDoCache}
             onAtualizarCotacao={atualizarCotacaoDoTicker}
             onClose={() => setAtivoSelecionado(null)}
             onAnterior={tickersNavegacao.length > 1 ? () => navegarAtivo(-1) : undefined}
@@ -327,7 +327,7 @@ function DashboardContent() {
           <NovaOperacaoModal
             categoria={categoriaNovaOperacao}
             onClose={() => setCategoriaNovaOperacao(null)}
-            onSaved={refresh}
+            onSaved={reloadDoCache}
             tickersConhecidos={consolidado}
           />
           <ValorManualModal
@@ -335,7 +335,7 @@ function DashboardContent() {
             valorManualAtual={valorManualAtual}
             cotacaoAtual={cotacaoManualAlvo}
             onClose={() => setValorManualAlvo(null)}
-            onSaved={refresh}
+            onSaved={reloadDoCache}
           />
         </>
       )}

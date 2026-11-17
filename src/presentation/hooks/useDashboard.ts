@@ -132,6 +132,14 @@ export interface UseDashboardResult {
    */
   refresh: () => Promise<void>
   /**
+   * Recarrega os dados **do cache local**, sem reler as abas da origem.
+   *
+   * É o caminho após uma escrita local-first: o cache já reflete a alteração
+   * (inclusive o `Consolidado` recalculado no app), então a tela se atualiza na
+   * hora, sem uma ida ao banco.
+   */
+  reloadDoCache: () => Promise<void>
+  /**
    * Atualização explícita de cotações com barra de progresso (botão "Atualizar"):
    * expõe `progressoAtualizacao` enquanto roda e pode ser interrompida por
    * `cancelarAtualizacao`.
@@ -192,10 +200,17 @@ export function useDashboard(): UseDashboardResult {
   const load = useCallback(
     async (
       forceRefresh: boolean,
-      extras: { onProgress?: AoProgredir; signal?: AbortSignal } = {},
+      extras: {
+        onProgress?: AoProgredir
+        signal?: AbortSignal
+        /** Não mexe nos indicadores de carregamento (recarga pós-escrita). */
+        silencioso?: boolean
+      } = {},
     ): Promise<DashboardData | null> => {
-      if (forceRefresh) setIsRefreshing(true)
-      else setIsLoading(true)
+      if (!extras.silencioso) {
+        if (forceRefresh) setIsRefreshing(true)
+        else setIsLoading(true)
+      }
       setError(null)
 
       // O total de etapas só é conhecido depois de ler a carteira; guardamos o
@@ -265,8 +280,10 @@ export function useDashboard(): UseDashboardResult {
         }
         return null
       } finally {
-        setIsLoading(false)
-        setIsRefreshing(false)
+        if (!extras.silencioso) {
+          setIsLoading(false)
+          setIsRefreshing(false)
+        }
       }
     },
     [resolveContext, workspace, online],
@@ -296,6 +313,12 @@ export function useDashboard(): UseDashboardResult {
       }
     })()
   }, [data, resolveContext, isOffline])
+
+  const reloadDoCache = useCallback(async () => {
+    // Recarga silenciosa: os dados já estão no cache e a tela não deve piscar
+    // um "carregando" depois de cada salvamento.
+    await load(false, { silencioso: true })
+  }, [load])
 
   const refresh = useCallback(async () => {
     setAvisoCotacoes(null)
@@ -384,6 +407,7 @@ export function useDashboard(): UseDashboardResult {
     notice,
     avisoCotacoes,
     refresh,
+    reloadDoCache,
     atualizarComProgresso,
     progressoAtualizacao,
     cancelarAtualizacao,

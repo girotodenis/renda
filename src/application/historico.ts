@@ -57,8 +57,10 @@ export function jaTemSnapshotDeHoje(
 /**
  * Grava (ou atualiza) o snapshot do dia a partir do resumo da carteira.
  *
- * Relê a aba para não sobrescrever snapshots de outras datas e reescreve a
- * região de dados de forma segura (preserva o cabeçalho).
+ * Lê o `Historico` do cache (cache-first) para não sobrescrever snapshots de
+ * outras datas e reescreve a região de dados de forma segura (preserva o
+ * cabeçalho). A escrita é local-first: entra na fila do outbox e vai ao banco
+ * no próximo flush.
  */
 export async function registrarSnapshot(
   context: RepositoryContext,
@@ -66,7 +68,7 @@ export async function registrarSnapshot(
   options: { data?: string } = {},
 ): Promise<Snapshot> {
   const snapshot = snapshotDoResumo(resumo, options.data)
-  const existentes = await historicoRepo.refresh(context)
+  const existentes = await historicoRepo.list(context)
   await historicoRepo.replaceAll(context, upsertHistorico(existentes, snapshot))
   return snapshot
 }

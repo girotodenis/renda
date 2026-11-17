@@ -1,7 +1,14 @@
-import { describe, expect, it, vi } from 'vitest'
-import { sincronizarPendentes } from '@/application/sync'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { garantirSincronizado, sincronizarPendentes } from '@/application/sync'
 import type { SyncDependencies } from '@/application/sync'
+import { MODO_GOOGLE, MODO_LOCAL } from '@/domain/armazenamento'
 import type { RepositoryContext } from '@/domain/repositories/ports'
+import { _resetForTests } from '@/infrastructure/kvStore'
+import {
+  _resetModoArmazenamentoForTests,
+  setModoArmazenamento,
+} from '@/infrastructure/modoArmazenamento'
+import { enqueue } from '@/infrastructure/outbox'
 import type { Mutation } from '@/infrastructure/outbox'
 
 /**
@@ -35,6 +42,7 @@ interface FakeSync {
   duplicados: Set<string>
   syncCalls: () => number
   prefetchCalls: () => number
+  prefetchOpcoes: () => Array<{ excluirMutacoes?: ReadonlySet<string> } | undefined>
   batchCalls: () => number
 }
 
@@ -48,6 +56,7 @@ function createFakes(initial: Mutation[]): FakeSync {
   const tentativas = new Map<string, number>()
   let syncCalls = 0
   let prefetchCalls = 0
+  const prefetchOpcoes: Array<{ excluirMutacoes?: ReadonlySet<string> } | undefined> = []
   let batchCalls = 0
 
   const deps: SyncDependencies = {
@@ -70,8 +79,9 @@ function createFakes(initial: Mutation[]): FakeSync {
     syncConsolidado: async () => {
       syncCalls += 1
     },
-    prefetchAllSheets: async () => {
+    prefetchAllSheets: async (_context, options) => {
       prefetchCalls += 1
+      prefetchOpcoes.push(options)
     },
     executarEmLote: async (_context, fn) => {
       batchCalls += 1
@@ -88,6 +98,7 @@ function createFakes(initial: Mutation[]): FakeSync {
     duplicados,
     syncCalls: () => syncCalls,
     prefetchCalls: () => prefetchCalls,
+    prefetchOpcoes: () => prefetchOpcoes,
     batchCalls: () => batchCalls,
   }
 }
@@ -210,5 +221,84 @@ describe('sincronizarPendentes', () => {
     expect(resultado.aplicadas).toBe(0)
     expect(resultado.pendentes).toBe(2)
     expect(resultado.erro).toContain('Drive')
+  })
+})
+
+describe('sincronizarPendentes — reidratação do cache', () => {
+  it('exclui do prefetch as mutações já gravadas (evita duplicar linhas)', async () => {
+    const m1 = makeMutation({ id: 'm1', entity: { id: 'op-1' } })
+    const m2 = makeMutation({ id: 'm2', entity: { id: 'op-2' } })
+    const m3 = makeMutation({ id: 'm3', entity: { id: 'op-3' } })
+    const fakes = createFakes([m1, m2, m3])
+    fakes.erros.set('m2', { status: 500 })
+
+    await sincronizarPendentes(context, { deps: fakes.deps })
+
+    expect(fakes.prefetchCalls()).toBe(1)
+    const [opcoes] = fakes.prefetchOpcoes()
+    expect([...(opcoes?.excluirMutacoes ?? [])].sort()).toEqual(['m1', 'm3'])
+  })
+})
+
+describe('garantirSincronizado', () => {
+  const flushes: Array<{ pendentes: number }> = []
+
+  function depsComResultado(pendentes: number): Partial<SyncDependencies> {
+    return {
+      listMutations: () => [makeMutation({ id: 'm1' })],
+      removeMutation: () => {},
+      replayMutation: async () => {},
+      appendJaExiste: async () => false,
+      syncConsolidado: async () => {},
+      prefetchAllSheets: async () => {},
+      executarEmLote: async (_context, fn) => {
+        const resultado = await fn()
+        flushes.push({ pendentes })
+        return resultado
+      },
+    }
+  }
+
+  beforeEach(() => {
+    flushes.length = 0
+    _resetForTests()
+    _resetModoArmazenamentoForTests()
+    setModoArmazenamento(MODO_GOOGLE)
+    vi.stubGlobal('navigator', { onLine: true })
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('não fala com o banco quando a fila está vazia', async () => {
+    await expect(garantirSincronizado(context, { deps: depsComResultado(0) })).resolves.toBeUndefined()
+    expect(flushes).toEqual([])
+  })
+
+  it('é no-op no modo local (o banco do navegador é a origem)', async () => {
+    setModoArmazenamento(MODO_LOCAL)
+    enqueue({ sheet: 'Operacoes', kind: 'append', entity: { id: 'op-1' } })
+
+    await expect(garantirSincronizado(context, { deps: depsComResultado(1) })).resolves.toBeUndefined()
+    expect(flushes).toEqual([])
+  })
+
+  it('lança quando há pendências e o flush não as zera', async () => {
+    enqueue({ sheet: 'Operacoes', kind: 'append', entity: { id: 'op-1' } })
+
+    await expect(
+      garantirSincronizado(context, { deps: depsComResultado(1) }),
+    ).rejects.toThrow(/alterações pendentes/i)
+    expect(flushes).toHaveLength(1)
+  })
+
+  it('lança quando não há conexão e existe fila', async () => {
+    vi.stubGlobal('navigator', { onLine: false })
+    enqueue({ sheet: 'Operacoes', kind: 'append', entity: { id: 'op-1' } })
+
+    await expect(garantirSincronizado(context, { deps: depsComResultado(0) })).rejects.toThrow(
+      /Conecte-se à internet/i,
+    )
   })
 })

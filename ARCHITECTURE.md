@@ -47,7 +47,7 @@ flowchart LR
 | --- | --- |
 | **Entidades** (com identidade) | `domain/entities.ts` — `Operacao`, `Provento`, `Consolidado`, `Snapshot`, `MetaRebalanceamento`, `Ativo` |
 | **Objetos de valor / convenções** | `domain/money.ts` (centavos), `domain/dates.ts` (ISO `YYYY-MM-DD`), `domain/categoria.ts` (enum canônico) |
-| **Serviços de domínio** (lógica pura) | `domain/consolidado.ts`, `domain/dashboard.ts`, `domain/detalheAtivo.ts`, `domain/cotacoes.ts`, `domain/eventosCorporativos.ts`, `domain/b3Import.ts`, `domain/rebalanceamento/*` |
+| **Serviços de domínio** (lógica pura) | `domain/consolidado.ts`, `domain/dashboard.ts`, `domain/detalheAtivo.ts`, `domain/consolidacao.ts`, `domain/cotacoes.ts`, `domain/eventosCorporativos.ts`, `domain/b3Import.ts`, `domain/rebalanceamento/*` |
 | **Formato do envelope cifrado** | `domain/criptografia.ts` — magic `MINHASACOES-ENC1`, cabeçalho em claro (`v`, `kdf`, `cifra`), Base64 e validação da senha (sem Web Crypto) |
 | **Ports (contratos de repositório)** | `domain/repositories/ports.ts` — `Repository<T>`, `CrudRepository<T>` |
 | **Linguagem ubíqua** | `Operacao`, `Provento`, `Consolidado`, `Snapshot`, `Carteira`, `Aporte`, `Desvio`, `Split`, `Grupamento`, `Bonificação` |
@@ -110,6 +110,11 @@ cabeçalhos, valores tipados) nunca vaze para o domínio:
 - `application/migrarPlanilha.ts` — migração do banco antigo (Sheets) para o
   cofre JSON: lê a planilha, cria o cofre, grava as abas e aponta o workspace;
   idempotente e **nunca** altera a planilha antiga.
+- `application/consolidacao.ts` — página **Consolidação**: analisa as pendências
+  (tickers encerrados e anos elegíveis), relê as abas da API, verifica as
+  invariantes (posição, preço médio, lucro realizado e proventos por ano/tipo)
+  e grava as duas abas em lote. A consolidação é **explícita e irreversível** —
+  nunca acontece em carga, sincronização ou importação.
 - `application/sync.ts` — sincronização da fila offline (FIFO), recálculo do
   `Consolidado` ao final do flush e `contarPendencias()` para a UX. O flush
   inteiro roda em `executarEmLote` (no backend JSON: 1 download + 1 upload) e a
@@ -155,11 +160,36 @@ cabeçalhos, valores tipados) nunca vaze para o domínio:
 - `db.ts` + `kvStore.ts` — IndexedDB (stores `sheets`/`outbox`) com espelho em
   memória para leitura síncrona e migração única do `localStorage`.
 - `cache.ts` — cache das abas (IndexedDB) (RNF02/RNF08).
-- `outbox.ts` — fila persistente de mutações offline.
-- `offlineRepositories.ts` — decorador que roteia escritas para o outbox quando
-  offline (atualização otimista no cache).
+- `outbox.ts` — fila persistente das mutações de aba (padrão outbox).
+- `offlineRepositories.ts` — decorador **local-first**: toda escrita atualiza o
+  cache e entra na fila; `comEscritaImediata` desvia dela nos fluxos
+  administrativos.
 - `repositories.ts` — repositórios por aba (envoltos) + repositórios crus para
   o replay da sincronização.
+
+## Consolidação do histórico (opcional)
+
+A página **Consolidação** (`PLANO_CONSOLIDACAO.md`) enxuga o volume das abas
+`Operacoes`/`Proventos` sem alterar **nenhum** número do app:
+
+- **Sem estado novo:** não há aba, coluna, ledger nem "Desfazer". O critério de
+  pendência é objetivo (`domain/consolidacao.ts` → `precisaConsolidar`): só há o
+  que consolidar quando existe um grupo com 2+ linhas. Depois de consolidar, o
+  item sai da lista naturalmente.
+- **Ticker encerrado** (posição 0 com compra e venda) → 1 compra + 1 venda.
+  Cada linha é convertida para as unidades finais pelo produto dos fatores dos
+  eventos posteriores; o resíduo `P mod Q` sai dos dois lados, mantendo
+  `lucro = P − C` exato e `taxas` da compra em `[0, Q)`.
+- **Ticker com posição aberta** → consolidação por ano, apenas para anos
+  anteriores ao corrente. Anos auto-contidos (`q0 = q1 = 0`) consolidam também as
+  operações; os demais consolidam **somente** os proventos.
+- **Proventos** → 1 linha por `(ano, tipo)` na data do último pagamento.
+- **Invariantes bloqueantes:** `verificarInvariantes` compara posição, total
+  investido, preço médio, lucro realizado e Σ proventos por `(ticker, ano, tipo)`
+  com tolerância zero; qualquer divergência aborta a gravação.
+- **Risco aceito:** reimportar um extrato B3 de um período consolidado recria as
+  linhas originais (a dedupe é por ID determinístico do arquivo). A UI avisa na
+  página e na importação; consolide apenas períodos que não serão reimportados.
 
 ## PWA & Offline-first
 
@@ -171,25 +201,34 @@ requisições ao Google carregam `Bearer token`.
 ```mermaid
 flowchart LR
   UI[presentation] --> APP[application]
-  APP --> REPO[repositories<br/>offline-aware]
-  REPO -->|online| API[(Google Drive<br/>JSON .gz)]
-  REPO -->|offline| OUTBOX[outbox<br/>IndexedDB]
-  REPO --> CACHE[cache de abas<br/>IndexedDB]
+  APP --> REPO[repositories<br/>local-first]
+  REPO -->|toda escrita| CACHE[cache de abas<br/>IndexedDB]
+  REPO -->|toda escrita| OUTBOX[outbox<br/>IndexedDB]
   APP --> SYNC[sync.ts]
-  SYNC --> OUTBOX
-  SYNC -->|online / retry| API
+  SYNC -->|flush em lote| API[(Google Drive<br/>JSON .gz)]
+  OUTBOX --> SYNC
 ```
 
 - **Leitura offline**: cache-first — `repositories.ts` lê do cache e só busca a
   API em cache frio/`forceRefresh`; `application/dashboard.ts` monta o dashboard
   inteiro do cache (`lerDashboardDoCache`).
-- **Escrita offline**: `offlineRepositories.ts` aplica a mutação de forma
-  otimista no cache e a enfileira no outbox; a aba derivada `Consolidado`
-  **nunca** enfileira.
+- **Escrita local-first**: `offlineRepositories.ts` aplica a mutação no cache
+  (a UI reflete na hora) e a enfileira no outbox — sem rede. A aba derivada
+  `Consolidado` **nunca** enfileira: é recalculada no app
+  (`recalcularConsolidadoNoCache`) e regravada pelo flush.
 - **Sincronização**: `application/sync.ts` reaplica a fila em ordem FIFO com
   idempotência por ID, renova o token em 401, interrompe em falha de rede/quota
   (mantendo o item) e, ao final, recalcula o `Consolidado` **uma vez** e
-  refresca o cache. É disparada por `useSync` (mount, reconexão, retry 60s).
+  refresca o cache. O flush inteiro roda em `executarEmLote`: no backend JSON do
+  Drive, N mutações custam **1 download + 1 upload**. É disparada por `useSync`
+  (debounce de 10 s após a última escrita, teto de 30 s, `pagehide`, mount,
+  reconexão e retry de 60 s enquanto houver pendências).
+- **Leituras durante a janela de 10 s**: ao reler a origem, as mutações ainda
+  pendentes são reaplicadas sobre o resultado (`aplicarPendenciasNoCache`) — o
+  que o usuário salvou não "desaparece" da tela.
+- **Ações que exigem a verdade remota** (exportar `.ods`, importar, migrar,
+  ativar/desativar criptografia, consolidar) chamam `garantirSincronizado`
+  antes: com fila pendente elas abortam em vez de ler/sobrescrever dados velhos.
 - **Auth offline**: o `AuthProvider` não desloga por falta de rede e renova o
   token ao reconectar.
 - **UX**: `useSyncStatus` + `SyncStatusBadge` mostram online/offline, pendências

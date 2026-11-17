@@ -12,8 +12,9 @@ Acompanhe sua carteira de investimentos direto do navegador, usando **sua conta 
 - Rebalanceamento por metas e aporte inteligente
 - Importação de extratos da B3 (Área do Investidor)
 - Eventos corporativos (split, grupamento, bonificação)
+- **Consolidação** opcional do histórico (ticker encerrado ou por ano) sem alterar nenhum número
 - **PWA instalável** com funcionamento offline (leitura do último estado em cache)
-- **Sincronização automática**: alterações feitas offline são reaplicadas na planilha ao reconectar
+- **Escrita local-first**: todo lançamento é aplicado e enfileirado no navegador na hora e enviado ao banco em segundo plano (padrão outbox), em lote, a cada ~10 s
 
 ## Tecnologias
 
@@ -72,8 +73,8 @@ O modo com login Google tem **dois backends**, escolhidos em tempo de **build** 
 - O build `sheets` continua compilável como alternativa, mas **sem criptografia**: as células precisam ficar legíveis para as fórmulas (`GOOGLEFINANCE`, Consolidado).
 - Em **Abrir banco existente** aparece a lista dos bancos já existentes (nome + última modificação); basta escolher um para carregar. No backend `sheets`, o Google Picker continua disponível como ação secundária para abrir uma planilha que o app ainda não conhece.
 - O arquivo é um JSON `{ version, sheets }` com uma matriz de células por aba, compactado com gzip (`CompressionStream` nativo) — o mesmo modelo do modo local e do `.ods`. Com criptografia ativada, o arquivo inteiro é cifrado (AES-GCM) e só abre com a senha.
-- Cada escrita faz *read-modify-write* com **etag + `If-Match`**; um conflito (HTTP 412) relê o arquivo e reaplica a alteração.
-- No flush da fila offline, todas as mutações pendentes são aplicadas numa única leitura + uma única escrita.
+- Cada escrita no arquivo faz *read-modify-write* com **etag + `If-Match`**; um conflito (HTTP 412) relê o arquivo e reaplica a alteração.
+- **As escritas não vão direto ao Drive:** entram na fila local e o flush aplica todas as mutações pendentes numa única leitura + uma única escrita (10 s após a última alteração, com teto de 30 s; ao esconder/fechar a aba; e em retry enquanto houver pendências).
 - **Migração automática:** quem já tinha um banco no formato antigo (planilha do Sheets) vê, na primeira abertura do build `json`, a oferta **"Migrar minha planilha para o novo formato"**. As abas são copiadas para um cofre novo — **a planilha antiga nunca é apagada nem alterada** — e a cópia é idempotente. Se o escopo for negado, o app oferece o caminho manual via `.ods` (Configurações → Exportar para .ods e depois importar).
 - Para publicar o build alternativo (sem criptografia): `VITE_GOOGLE_BACKEND=sheets npm run build` (o valor é lido em tempo de build; reinicie o `npm run dev` após alterar o `.env`).
 
@@ -88,6 +89,25 @@ No backend `json` e no modo local, **Configurações → Segurança do banco** l
 - **"Bloquear agora"** (cabeçalho, Configurações e Diagnóstico) sempre pede confirmação; ele esquece a chave e apaga o cache de abas em claro.
 - **O que não é protegido:** o `.ods` exportado é texto puro, o cache de abas e a fila offline do navegador ficam em claro, e os metadados do arquivo (nome, tamanho, datas) e os tickers da planilha de cotações são visíveis. O backend `sheets` não cifra (as células precisam ficar legíveis para as fórmulas).
 - **Esquecer este banco neste dispositivo** apaga o workspace, a chave e o verificador locais; o arquivo no Drive continua intacto e pode ser aberto em outro dispositivo com a senha.
+
+## Consolidação do histórico
+
+A página **Consolidação** (menu principal) reduz o volume de linhas das abas
+`Operações`/`Proventos` **sem alterar** posição, preço médio, total investido,
+lucro realizado nem totais de proventos:
+
+- **Ativos encerrados** (100% vendidos) com mais de uma linha são substituídos
+  por **1 compra + 1 venda**; os proventos viram **1 linha por tipo/ano**.
+- **Ativos com posição aberta** podem ser consolidados **por ano** — e somente
+  anos anteriores ao corrente. Anos que começam e terminam zerados consolidam
+  também as operações; os demais consolidam apenas os proventos.
+- Nada é automático: cada ação exige clique explícito, mostra o que será
+  apagado/criado e exige o aceite de que a operação é **irreversível**. Exporte
+  um backup `.ods` antes (botão no próprio modal).
+- Antes de gravar, o app relê as abas da API e confere as invariantes; qualquer
+  divergência cancela a gravação.
+- Reimportar um extrato B3 de um período consolidado **duplica** esse período —
+  consolide apenas períodos que não serão reimportados.
 
 ## Diagnóstico
 
@@ -118,8 +138,8 @@ O projeto aplica **SOLID** e **DDD** em camadas (Clean Architecture / Ports & Ad
 O app é um **PWA instalável** (manifest + service worker via `vite-plugin-pwa`) e funciona **offline**:
 
 - **Leitura offline:** o dashboard e as demais telas leem o **último estado em cache** (IndexedDB) quando não há conexão.
-- **Escrita offline:** operações e proventos lançados sem rede ficam numa fila local (outbox) e são reaplicados no banco da nuvem automaticamente ao reconectar.
-- **Sincronização:** ocorre ao abrir o app, a cada reconexão e por retry periódico; um indicador no cabeçalho mostra o estado (offline / pendências / sincronizado) e permite forçar a sincronização.
+- **Escrita local-first:** qualquer lançamento é aplicado no cache e enfileirado (outbox) na hora — a tela responde na hora, com ou sem rede. O envio ao banco da nuvem é assíncrono e em lote: 10 s após a última alteração (teto de 30 s), ao esconder/fechar a aba e em retry enquanto houver pendências.
+- **Sincronização:** um indicador no cabeçalho mostra o estado (offline / pendências / sincronizado) e permite forçar o envio; ao reler o banco, as alterações ainda pendentes são reaplicadas sobre o resultado. Ações que dependem do estado do banco (exportar `.ods`, importar, migrar, ativar/desativar criptografia, consolidar) enviam a fila antes de rodar.
 - **Atualizar cotações:** o botão **Atualizar** do dashboard relê os dados e busca os preços atuais de Ação/FII/BDR/ETF, **Cripto** e Tesouro Direto nas APIs de cotação configuradas — **Brapi** e, se ela não devolver o preço (ou não estiver configurada), **Mais Retorno** — ignorando o cache local, e os grava na carteira. Cripto usa o endpoint `/api/v2/crypto` da Brapi (planos Startup/Pro) ou o identifier `sigla:cc` da Mais Retorno (`BTC` → `btc:cc`); sem cotação, vale a marcação manual do valor atual. Os tokens são informados dentro do app, em **Configurações → Integrações** (não vão no `.env`) e ficam salvos na própria planilha/banco JSON. Se a integração não devolver preço, o dashboard exibe um aviso com o motivo; no banco **Google Sheets**, onde o preço já é calculado pelo `GOOGLEFINANCE`, a ausência de token **não** gera aviso (a integração é só o fallback).
 - **Progresso do Atualizar:** durante a atualização o dashboard mostra uma modal com a etapa em execução (ex.: `Atualizando ticker PETR4`), o contador de itens (`3/10`) e um botão **Cancelar** que interrompe a operação — nada é gravado no banco quando o usuário cancela.
 - **Setor de atuação:** o setor de cada ticker é buscado nas mesmas integrações (**Brapi** `/stocks/profile` e, como fallback, **Mais Retorno** `/asset-info`), gravado na aba **`Ativos`** (sheet e JSON) e usado no gráfico **Alocação da carteira → Por setor**. Ativos sem setor conhecido ficam fora desse gráfico.

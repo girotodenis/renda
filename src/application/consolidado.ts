@@ -5,6 +5,7 @@ import { buildConsolidadoRows, buildConsolidadoRowsEstaticas, formulaSeparatorFo
 import { SHEET_HEADERS } from '@/domain/sheetsSchema'
 import { consolidadoRepo, operacoesRepo } from '@/infrastructure/repositories'
 import type { RepositoryContext } from '@/infrastructure/repositories'
+import { writeSheetCache } from '@/infrastructure/cache'
 import { isModoLocal } from '@/infrastructure/modoArmazenamento'
 import { clearValues, columnLetter, ensureSheetHeaders, getSpreadsheetLocale, updateValues } from '@/infrastructure/sheets/gatewayRouter'
 import type { ValueInputOption } from '@/infrastructure/sheets/gatewayRouter'
@@ -125,8 +126,26 @@ export async function syncConsolidado(
   const operacoes = await operacoesRepo.list(context, {
     forceRefresh: options.forceRefreshOperacoes,
   })
-  const precosAtuais = options.precosAtuais ?? (await precosDaCarteira(operacoes))
+  const precosAtuais = options.precosAtuais ?? precosDaCarteira(operacoes)
   return writeConsolidado(context, operacoes, precosAtuais)
+}
+
+/**
+ * Recalcula o `Consolidado` **sem rede**: parte do cache das operações e grava
+ * o resultado no cache da aba derivada.
+ *
+ * É o caminho das escritas local-first: a UI enxerga o consolidado novo na
+ * hora, enquanto a planilha é reescrita depois, pelo flush da sincronização
+ * (`syncConsolidado` dentro de `executarEmLote`). Sem cache de operações não há
+ * o que recalcular — devolve vazio e deixa a próxima leitura buscar a origem.
+ */
+export function recalcularConsolidadoNoCache(context: RepositoryContext): Consolidado[] {
+  const operacoes = operacoesRepo.readCache(context.spreadsheetId)
+  if (!operacoes) return []
+
+  const consolidado = aplicarPrecosAtuais(calcularPosicoes(operacoes), precosDaCarteira(operacoes))
+  writeSheetCache(context.spreadsheetId, CONSOLIDADO_SHEET, consolidado)
+  return consolidado
 }
 
 /**
@@ -135,9 +154,7 @@ export async function syncConsolidado(
  * ter preço persistido via API de cotações (fallback do `GOOGLEFINANCE`). Sem
  * preço, o `writeConsolidado` cai no preço médio como fallback (RNF04).
  */
-async function precosDaCarteira(
-  operacoes: readonly Operacao[],
-): Promise<Map<string, number>> {
+function precosDaCarteira(operacoes: readonly Operacao[]): Map<string, number> {
   const precos = new Map<string, number>(precosManuaisDeOperacoes(operacoes))
 
   // B3 (Ação/FII/BDR/ETF): preço persistido via API de cotações (fallback do GOOGLEFINANCE).

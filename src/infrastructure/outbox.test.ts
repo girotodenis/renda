@@ -98,3 +98,19 @@ describe('outbox — ordenação FIFO por createdAt', () => {
   })
 })
 
+
+describe('outbox — FIFO na mesma janela de escrita', () => {
+  it('enfileira em rajada mantendo a ordem de chamada (createdAt estritamente crescente)', () => {
+    const primeira = enqueue({ sheet: 'Operacoes', kind: 'append', entity: { id: 'a' } })
+    const segunda = enqueue({ sheet: 'Operacoes', kind: 'append', entity: { id: 'b' } })
+    const terceira = enqueue({ sheet: 'Operacoes', kind: 'append', entity: { id: 'c' } })
+
+    expect(list().map((mutation) => mutation.id)).toEqual([
+      primeira.id,
+      segunda.id,
+      terceira.id,
+    ])
+    expect(primeira.createdAt < segunda.createdAt).toBe(true)
+    expect(segunda.createdAt < terceira.createdAt).toBe(true)
+  })
+})

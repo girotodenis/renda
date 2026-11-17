@@ -1,3 +1,4 @@
+import { garantirSincronizado } from '@/application/sync'
 import type { RepositoryContext } from '@/domain/repositories/ports'
 import { SHEET_HEADERS, SHEET_NAMES } from '@/domain/sheetsSchema'
 import type { SheetName } from '@/domain/sheetsSchema'
@@ -228,6 +229,11 @@ export async function migrarPlanilhaAntiga(
   const title = opcoes.title?.trim() || DEFAULT_DATABASE_TITLE
 
   try {
+    // O banco ativo (planilha antiga) deixa de ser usado depois da migração: a
+    // fila local precisa ir para o Drive antes, senão as alterações recentes
+    // ficariam só no cache.
+    await garantirSincronizado(context)
+
     const ranges = SHEET_NAMES.map(rangeDaAba)
     const rangesLeitura = SHEET_NAMES.map(rangeDaAbaLegada)
     let destino: SpreadsheetWorkspace | null = null

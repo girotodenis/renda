@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Coins, FileUp, HardDrive, Layers, LayoutDashboard, LogIn, LogOut, Menu, Scale, Settings, Stethoscope, Wallet, WifiOff, X } from 'lucide-react'
+import { Archive, ArrowLeftRight, Coins, FileUp, HardDrive, Layers, LayoutDashboard, LogIn, LogOut, Menu, Scale, Settings, Stethoscope, Wallet, WifiOff, X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
@@ -83,6 +83,7 @@ export function AppLayout() {
         { to: '/operacoes', label: 'Operações', icon: ArrowLeftRight, end: false },
         { to: '/proventos', label: 'Proventos', icon: Coins, end: false },
         { to: '/eventos', label: 'Eventos', icon: Layers, end: false },
+        { to: '/consolidacao', label: 'Consolidação', icon: Archive, end: false },
         { to: '/importar-b3', label: 'Importar B3', icon: FileUp, end: false },
         { to: '/rebalanceamento', label: 'Rebalanceamento', icon: Scale, end: false },
         { to: '/diagnostico', label: 'Diagnóstico', icon: Stethoscope, end: false },

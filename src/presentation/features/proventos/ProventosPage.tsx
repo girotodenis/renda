@@ -116,7 +116,7 @@ export function ProventosPage() {
         })
         setNotice('Provento atualizado com sucesso.')
       }
-      setProventos(await proventosRepo.refresh(context))
+      setProventos(await proventosRepo.list(context))
       await atualizarHistorico(context)
       setFormState({ mode: 'closed' })
     } catch (saveError) {
@@ -140,7 +140,7 @@ export function ProventosPage() {
     setNotice(null)
     try {
       await proventosRepo.remove(context, provento.id)
-      setProventos(await proventosRepo.refresh(context))
+      setProventos(await proventosRepo.list(context))
       await atualizarHistorico(context)
       setNotice('Provento excluído com sucesso.')
     } catch (deleteError) {

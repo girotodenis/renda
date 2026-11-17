@@ -54,7 +54,8 @@ function readAll(): Mutation[] {
  * Ordena por `createdAt` ASC, com `id` como desempate. A ordem de inserção
  * **não** pode ser usada: `newId()` usa `crypto.randomUUID` (não ordenável por
  * tempo), então duas mutações criadas no mesmo milissegundo teriam ordem
- * instável sem o desempate.
+ * instável sem o desempate — por isso `enqueue` garante `createdAt` estritamente
+ * crescente (ver `proximoCreatedAt`).
  */
 function compareByCreatedAt(a: Mutation, b: Mutation): number {
   const byCreatedAt = a.createdAt.localeCompare(b.createdAt)
@@ -62,14 +63,57 @@ function compareByCreatedAt(a: Mutation, b: Mutation): number {
   return a.id.localeCompare(b.id)
 }
 
+/**
+ * Observadores avisados a cada nova mutação enfileirada.
+ *
+ * É o gatilho do flush assíncrono: a UI agenda a sincronização (debounce) sem
+ * precisar de polling. Só `enqueue` notifica — remoções e limpezas são efeito do
+ * próprio flush e não devem reagendar nada.
+ */
+const enqueueListeners = new Set<() => void>()
+
+/** Registra um observador de enfileiramento e devolve a função de cancelamento. */
+export function onEnqueue(listener: () => void): () => void {
+  enqueueListeners.add(listener)
+  return () => {
+    enqueueListeners.delete(listener)
+  }
+}
+
+function notifyEnqueue(): void {
+  for (const listener of enqueueListeners) {
+    try {
+      listener()
+    } catch {
+      // Um observador com falha não pode impedir a escrita que já foi feita.
+    }
+  }
+}
+
+/** Último `createdAt` (ms) emitido nesta sessão — garante FIFO real. */
+let ultimoCreatedAtMs = 0
+
+/**
+ * `createdAt` estritamente crescente, mesmo em rajadas no mesmo milissegundo.
+ *
+ * Várias escritas local-first podem ser enfileiradas no mesmo `Date.now()`
+ * (ex.: três lançamentos seguidos). Sem isso, o desempate por `id` (UUID
+ * aleatório) embaralharia a ordem de reaplicação.
+ */
+function proximoCreatedAt(agoraMs: number = Date.now()): string {
+  ultimoCreatedAtMs = agoraMs > ultimoCreatedAtMs ? agoraMs : ultimoCreatedAtMs + 1
+  return new Date(ultimoCreatedAtMs).toISOString()
+}
+
 /** Adiciona uma mutação ao fim da fila e devolve o registro persistido. */
 export function enqueue(draft: MutationDraft): Mutation {
   const mutation: Mutation = {
     ...draft,
     id: newId(),
-    createdAt: new Date().toISOString(),
+    createdAt: proximoCreatedAt(),
   }
   kvSet('outbox', mutation.id, mutation)
+  notifyEnqueue()
   return mutation
 }
 

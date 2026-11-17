@@ -2,6 +2,7 @@ import type { RepositoryContext } from '@/domain/repositories/ports'
 import type { SheetName } from '@/domain/sheetsSchema'
 import { SHEET_HEADERS, SHEET_NAMES } from '@/domain/sheetsSchema'
 import { syncConsolidado } from '@/application/consolidado'
+import { garantirSincronizado } from '@/application/sync'
 import { invalidateSpreadsheetCache } from '@/infrastructure/cache'
 import type { AbaOdsLida } from '@/infrastructure/ods/odsReader'
 import { lerAbasOds } from '@/infrastructure/ods/odsReader'
@@ -141,6 +142,10 @@ export async function aplicarImportacao(
   context: RepositoryContext,
   analise: AnaliseImportacao,
 ): Promise<ResultadoImportacao> {
+  // A importação substitui abas inteiras: a fila local precisa estar gravada,
+  // senão as alterações pendentes seriam reaplicadas sobre o arquivo importado.
+  await garantirSincronizado(context)
+
   // Garante que as abas existam com a linha 1 de cabeçalho antes de escrever:
   // sem isso, a primeira linha de dados entraria na linha 1 e seria lida como
   // cabeçalho pelos codecs.

@@ -83,7 +83,7 @@ export function EventosPage() {
     try {
       const evento = toEventoPayload(values)
       await operacoesRepo.append(context, eventoToOperacao(evento))
-      const operacoes = await operacoesRepo.refresh(context)
+      const operacoes = await operacoesRepo.list(context)
       setEventos(eventosDeOperacoes(operacoes))
       await sincronizarConsolidadoESnapshot(context)
       setNotice(`${descreverEvento(evento)} de ${evento.ticker} registrado com sucesso.`)
@@ -109,7 +109,7 @@ export function EventosPage() {
     setNotice(null)
     try {
       await operacoesRepo.remove(context, evento.id)
-      const operacoes = await operacoesRepo.refresh(context)
+      const operacoes = await operacoesRepo.list(context)
       setEventos(eventosDeOperacoes(operacoes))
       await sincronizarConsolidadoESnapshot(context)
       setNotice('Evento excluído com sucesso.')

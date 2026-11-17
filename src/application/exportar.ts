@@ -3,6 +3,7 @@ import { ODS_MIMETYPE, buildOdsBytes } from '@/infrastructure/ods/odsWriter'
 import type { AbaOds } from '@/infrastructure/ods/odsWriter'
 import { salvarOuBaixarArquivo } from '@/infrastructure/ods/download'
 import type { ResultadoSalvamento } from '@/infrastructure/ods/download'
+import { garantirSincronizado } from '@/application/sync'
 import { lerAbasParaExportacao } from '@/infrastructure/sheets/gatewayRouter'
 
 /**
@@ -39,8 +40,14 @@ export function nomeArquivoOds(titulo: string, dataIso: string): string {
   return `${slug.length > 0 ? slug : 'minhas-acoes'}-${data}.ods`
 }
 
-/** Lê todas as abas da origem ativa (cabeçalho + dados) para exportação. */
+/**
+ * Lê todas as abas da origem ativa (cabeçalho + dados) para exportação.
+ *
+ * A leitura vai ao banco (não ao cache): a fila local é gravada antes, senão o
+ * arquivo sairia sem as últimas alterações.
+ */
 export async function gerarPlanilhaOds(context: RepositoryContext): Promise<AbaOds[]> {
+  await garantirSincronizado(context)
   return lerAbasParaExportacao(context)
 }
 

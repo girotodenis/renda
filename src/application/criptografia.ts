@@ -1,5 +1,5 @@
 import { isOnline } from '@/application/online'
-import { contarPendencias, sincronizarPendentes } from '@/application/sync'
+import { contarPendencias, garantirSincronizado, sincronizarPendentes } from '@/application/sync'
 import { validarChave } from '@/domain/criptografia'
 import type { RepositoryContext } from '@/domain/repositories/ports'
 import type { CriptografiaBanco } from '@/domain/workspace'
@@ -109,6 +109,7 @@ export async function ativarCriptografia(
   exigirDisponibilidade()
   // Senha em branco é recusada antes da derivação (mensagem §6.7).
   validarChave(senha)
+  await enviarFilaLocal(context)
   exigirOnlineComFilaVazia()
 
   const sessao = await criarSessao(senha)
@@ -126,6 +127,7 @@ export async function ativarCriptografia(
 export async function desativarCriptografia(context: RepositoryContext): Promise<void> {
   exigirDisponibilidade()
   if (!obterChave(context.spreadsheetId)) throw new ChaveNecessariaError()
+  await enviarFilaLocal(context)
   exigirOnlineComFilaVazia()
 
   await alterarCriptografiaNoGateway(context.accessToken, context.spreadsheetId, null)
@@ -169,6 +171,19 @@ export async function bloquearBanco(
 function exigirDisponibilidade(): void {
   const motivo = motivoCriptografiaIndisponivel()
   if (motivo) throw new ErroCriptografiaIndisponivel(motivo)
+}
+
+/**
+ * Grava a fila local antes de regravar o arquivo (a cifra recria o banco
+ * inteiro, então não pode haver mutação pendente de envio).
+ */
+async function enviarFilaLocal(context: RepositoryContext): Promise<void> {
+  if (isModoLocal() || contarPendencias() === 0) return
+  try {
+    await garantirSincronizado(context)
+  } catch {
+    throw new ErroCriptografiaIndisponivel(MSG_FILA_PENDENTE)
+  }
 }
 
 /** Regravar o arquivo exige internet e uma fila já gravada. */

@@ -1,7 +1,8 @@
 import { syncConsolidado } from '@/application/consolidado'
 import type { RepositoryContext } from '@/domain/repositories/ports'
 import type { SheetName } from '@/domain/sheetsSchema'
-import { count, list, remove } from '@/infrastructure/outbox'
+import { isModoLocal } from '@/infrastructure/modoArmazenamento'
+import { count, isOnline, list, onEnqueue, remove } from '@/infrastructure/outbox'
 import type { Mutation } from '@/infrastructure/outbox'
 import { prefetchAllSheets, rawRepositories, replayMutation } from '@/infrastructure/repositories'
 import { executarEmLote } from '@/infrastructure/sheets/gatewayRouter'
@@ -47,6 +48,17 @@ export function contarPendencias(): number {
 }
 
 /**
+ * Avisa a UI a cada escrita que entra na fila.
+ *
+ * Wrapper de `outbox.onEnqueue()` para que a apresentação (badge de
+ * sincronização) recontabilize as pendências imediatamente após um salvamento,
+ * sem importar `@/infrastructure/outbox`.
+ */
+export function aoEnfileirar(listener: () => void): () => void {
+  return onEnqueue(listener)
+}
+
+/**
  * Dependências injetáveis da sincronização (testes). Os valores padrão apontam
  * para os módulos reais de infraestrutura.
  */
@@ -68,8 +80,14 @@ export interface SyncDependencies {
   ) => Promise<boolean>
   /** Recalcula a aba derivada `Consolidado`. */
   syncConsolidado: (context: RepositoryContext) => Promise<unknown>
-  /** Refresca o cache de todas as abas. */
-  prefetchAllSheets: (context: RepositoryContext) => Promise<unknown>
+  /**
+   * Refresca o cache de todas as abas, reaplicando as mutações que continuam
+   * pendentes (exceto as listadas em `excluirMutacoes`).
+   */
+  prefetchAllSheets: (
+    context: RepositoryContext,
+    options?: { excluirMutacoes?: ReadonlySet<string> },
+  ) => Promise<unknown>
   /**
    * Executa o flush inteiro em lote (uma leitura + uma escrita no backend de
    * arquivo JSON). Nos demais backends é um pass-through.
@@ -203,7 +221,12 @@ export async function sincronizarPendentes(
         const contextAtual = { ...context, accessToken: accessTokenAtual }
         try {
           await deps.syncConsolidado(contextAtual)
-          await deps.prefetchAllSheets(contextAtual)
+          // As mutações aplicadas neste flush já estão na origem: se o cache for
+          // reidratado agora, elas não devem ser reaplicadas (duplicaria linhas).
+          // As que sobraram na fila (403/500) continuam sendo reaplicadas.
+          await deps.prefetchAllSheets(contextAtual, {
+            excluirMutacoes: new Set(aplicadas),
+          })
         } catch (error) {
           // Best-effort: as mutações já foram aplicadas; a falha aqui só atrasa o
           // recálculo do derivado, que será refeito no próximo acesso/ciclo.
@@ -223,4 +246,28 @@ export async function sincronizarPendentes(
   resultado.aplicadas = aplicadas.length
   resultado.pendentes = deps.listMutations().length
   return resultado
+}
+
+const MSG_SEM_REDE =
+  'Conecte-se à internet para continuar: existem alterações locais aguardando envio ao banco.'
+const MSG_FILA_PENDENTE =
+  'Não foi possível enviar as alterações pendentes ao banco. Tente novamente em instantes.'
+
+/**
+ * Grava a fila antes de uma ação que exige a **verdade remota** (exportar,
+ * importar, migrar, ativar/desativar criptografia, consolidar).
+ *
+ * Com as escritas local-first, essas ações não podem rodar com mutações na fila:
+ * leriam/sobrescreveriam a origem sem as alterações recentes. Diferente do
+ * flush automático, aqui a falha é **propagada** — o chamador deve abortar.
+ */
+export async function garantirSincronizado(
+  context: RepositoryContext,
+  options: SyncOptions = {},
+): Promise<void> {
+  if (isModoLocal() || count() === 0) return
+  if (!isOnline()) throw new Error(MSG_SEM_REDE)
+
+  const resultado = await sincronizarPendentes(context, options)
+  if (resultado.pendentes > 0) throw new Error(resultado.erro ?? MSG_FILA_PENDENTE)
 }
