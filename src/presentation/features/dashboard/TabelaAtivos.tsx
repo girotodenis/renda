@@ -8,6 +8,7 @@ import type { CotacaoResolvida } from '@/domain/cotacoes'
 import type { CategoriaAtivo, Consolidado } from '@/domain/entities'
 import { agruparAtivosParaTabela } from '@/domain/dashboard'
 import type { GrupoCategoriaTabela } from '@/domain/dashboard'
+import type { ResultadoEncerrado } from '@/domain/resultado'
 import {
   classeValor,
   formatarCentavos,
@@ -46,6 +47,11 @@ interface TabelaAtivosProps {
    * ausente, o botão não é exibido.
    */
   onEditarValorManual?: (ticker: string, categoria: CategoriaAtivo) => void
+  /**
+   * Resultado dos ativos **completamente vendidos** (realizado + proventos), por
+   * ticker. Sem ele, a aba "Vendidos" mostra apenas a situação.
+   */
+  resultadosEncerrados?: ReadonlyMap<string, ResultadoEncerrado>
 }
 
 /**
@@ -64,6 +70,7 @@ export function TabelaAtivos({
   onSelecionarAtivo,
   onNovaOperacao,
   onEditarValorManual,
+  resultadosEncerrados,
 }: TabelaAtivosProps) {
   const grupos = useMemo(() => agruparAtivosParaTabela(consolidado), [consolidado])
   const [categoriaSelecionada, setCategoriaSelecionada] = useState<CategoriaAtivo | null>(null)
@@ -155,6 +162,7 @@ export function TabelaAtivos({
           onSelecionarAtivo={onSelecionarAtivo}
           onNovaOperacao={onNovaOperacao}
           onEditarValorManual={onEditarValorManual}
+          resultadosEncerrados={resultadosEncerrados}
         />
       </div>
     </section>
@@ -176,6 +184,7 @@ function CategoriaPanel({
   onSelecionarAtivo,
   onNovaOperacao,
   onEditarValorManual,
+  resultadosEncerrados,
 }: {
   grupo: GrupoCategoriaTabela
   cotacoes?: ReadonlyMap<string, CotacaoResolvida>
@@ -183,6 +192,7 @@ function CategoriaPanel({
   onSelecionarAtivo?: (ticker: string) => void
   onNovaOperacao?: (categoria: CategoriaAtivo) => void
   onEditarValorManual?: (ticker: string, categoria: CategoriaAtivo) => void
+  resultadosEncerrados?: ReadonlyMap<string, ResultadoEncerrado>
 }) {
   const [abaSelecionada, setAbaSelecionada] = useState<AbaCategoria>('posicoes')
   const temAbertos = grupo.abertos.length > 0
@@ -260,6 +270,7 @@ function CategoriaPanel({
           {temEncerrados ? (
             <TabelaEncerrados
               encerrados={grupo.encerrados}
+              resultados={resultadosEncerrados}
               oportunidades={oportunidades}
               onSelecionarAtivo={onSelecionarAtivo}
             />
@@ -489,34 +500,59 @@ function TabelaPosicoes({
 
 /**
  * Aba **Vendidos**: ativos com posição totalmente encerrada (quantidade = 0).
- * O ticker permanece clicável para abrir o histórico e o resultado realizado.
- * Quando o ticker tem oportunidade de compra, exibe o alerta 🎯.
+ *
+ * O `Consolidado` de uma posição zerada não tem números (tudo zero), então a
+ * tabela exibe o **resultado apurado pelo fluxo de caixa**: capital aportado,
+ * lucro realizado (líquido de taxas), proventos atribuídos ao investidor
+ * (data-com) e o resultado total com o percentual sobre o capital aportado.
+ * O ticker permanece clicável para abrir o histórico.
  */
 function TabelaEncerrados({
   encerrados,
+  resultados,
   oportunidades,
   onSelecionarAtivo,
 }: {
   encerrados: Consolidado[]
+  resultados?: ReadonlyMap<string, ResultadoEncerrado>
   oportunidades?: ReadonlySet<string>
   onSelecionarAtivo?: (ticker: string) => void
 }) {
+  const linhas = encerrados.map((ativo) => ({
+    ativo,
+    resultado: resultados?.get(ativo.ticker.trim()) ?? null,
+  }))
+  const comResultado = linhas.filter((linha) => linha.resultado !== null)
+  const totais = comResultado.reduce(
+    (acc, linha) => ({
+      capitalAportado: acc.capitalAportado + (linha.resultado?.capitalAportado ?? 0),
+      lucroRealizado: acc.lucroRealizado + (linha.resultado?.lucroRealizado ?? 0),
+      proventos: acc.proventos + (linha.resultado?.proventos ?? 0),
+      resultado: acc.resultado + (linha.resultado?.resultado ?? 0),
+    }),
+    { capitalAportado: 0, lucroRealizado: 0, proventos: 0, resultado: 0 },
+  )
+
   return (
     <div className="overflow-x-auto">
       <table className="tabela-responsiva w-full text-left text-sm">
         <caption className="sr-only">
-          Ativos completamente vendidos: tickers com posição zerada. Clique no ticker para ver o
-          histórico e o resultado realizado.
+          Ativos completamente vendidos: capital aportado, lucro realizado líquido de taxas,
+          proventos atribuídos ao investidor e resultado total. Clique no ticker para ver o
+          histórico completo.
         </caption>
         <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
           <tr>
             <th scope="col" className="px-4 py-2 font-semibold">Ticker</th>
-            <th scope="col" className="px-4 py-2 text-right font-semibold">Quantidade</th>
+            <th scope="col" className="px-4 py-2 text-right font-semibold">Aportado</th>
+            <th scope="col" className="px-4 py-2 text-right font-semibold">Realizado</th>
+            <th scope="col" className="px-4 py-2 text-right font-semibold">Proventos</th>
+            <th scope="col" className="px-4 py-2 text-right font-semibold">Resultado</th>
             <th scope="col" className="px-4 py-2 text-right font-semibold">Situação</th>
           </tr>
         </thead>
         <tbody>
-          {encerrados.map((ativo) => (
+          {linhas.map(({ ativo, resultado }) => (
             <tr key={ativo.ticker} className="border-t border-slate-100">
               <td className="px-4 py-2" data-card-title>
                 <div className="flex items-center gap-1.5">
@@ -526,8 +562,44 @@ function TabelaEncerrados({
                   <TickerBotao ticker={ativo.ticker} onSelecionarAtivo={onSelecionarAtivo} />
                 </div>
               </td>
-              <td className="px-4 py-2 text-right tabular-nums text-slate-500" data-label="Quantidade">
-                0
+              <td className="px-4 py-2 text-right tabular-nums text-slate-700" data-label="Aportado">
+                {resultado ? formatarCentavos(resultado.capitalAportado) : '—'}
+              </td>
+              <td
+                className={cn(
+                  'px-4 py-2 text-right tabular-nums',
+                  resultado ? classeValor(resultado.lucroRealizado) : 'text-slate-400',
+                )}
+                data-label="Realizado"
+              >
+                {resultado ? formatarCentavos(resultado.lucroRealizado) : '—'}
+              </td>
+              <td
+                className={cn(
+                  'px-4 py-2 text-right tabular-nums',
+                  resultado && resultado.proventos !== 0 ? 'text-slate-700' : 'text-slate-400',
+                )}
+                data-label="Proventos"
+              >
+                {resultado ? formatarCentavos(resultado.proventos) : '—'}
+              </td>
+              <td
+                className={cn(
+                  'px-4 py-2 text-right tabular-nums font-medium',
+                  resultado ? classeValor(resultado.resultado) : 'text-slate-400',
+                )}
+                data-label="Resultado"
+              >
+                {resultado ? (
+                  <>
+                    <span className="block">{formatarCentavos(resultado.resultado)}</span>
+                    <span className="block text-xs">
+                      {formatarPercentual(resultado.resultadoPercent)}
+                    </span>
+                  </>
+                ) : (
+                  '—'
+                )}
               </td>
               <td className="px-4 py-2 text-right" data-label="Situação">
                 <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600">
@@ -538,6 +610,34 @@ function TabelaEncerrados({
           ))}
         </tbody>
       </table>
+      {comResultado.length > 0 ? (
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-2 border-t border-slate-200 bg-slate-50 px-4 py-3 text-xs sm:grid-cols-4">
+          <div>
+            <dt className="uppercase tracking-wide text-slate-500">Aportado</dt>
+            <dd className="tabular-nums font-semibold text-slate-900">
+              {formatarCentavos(totais.capitalAportado)}
+            </dd>
+          </div>
+          <div>
+            <dt className="uppercase tracking-wide text-slate-500">Realizado</dt>
+            <dd className={cn('tabular-nums font-semibold', classeValor(totais.lucroRealizado))}>
+              {formatarCentavos(totais.lucroRealizado)}
+            </dd>
+          </div>
+          <div>
+            <dt className="uppercase tracking-wide text-slate-500">Proventos</dt>
+            <dd className="tabular-nums font-semibold text-slate-900">
+              {formatarCentavos(totais.proventos)}
+            </dd>
+          </div>
+          <div>
+            <dt className="uppercase tracking-wide text-slate-500">Resultado</dt>
+            <dd className={cn('tabular-nums font-semibold', classeValor(totais.resultado))}>
+              {formatarCentavos(totais.resultado)}
+            </dd>
+          </div>
+        </dl>
+      ) : null}
     </div>
   )
 }

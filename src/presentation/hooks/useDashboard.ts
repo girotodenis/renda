@@ -304,7 +304,9 @@ export function useDashboard(): UseDashboardResult {
       const context = await resolveContext()
       if (!context) return
       try {
-        const snapshot = await registrarSnapshot(context, data.resumo)
+        const snapshot = await registrarSnapshot(context, data.resumo, {
+          lucroAcumulado: data.resultado.retornoTotal,
+        })
         setData((atual) =>
           atual ? { ...atual, historico: upsertHistorico(atual.historico, snapshot) } : atual,
         )
@@ -365,7 +367,9 @@ export function useDashboard(): UseDashboardResult {
     try {
       const context = await resolveContext()
       if (!context) return
-      const snapshot = await registrarSnapshot(context, data.resumo)
+      const snapshot = await registrarSnapshot(context, data.resumo, {
+        lucroAcumulado: data.resultado.retornoTotal,
+      })
       setData((atual) =>
         atual ? { ...atual, historico: upsertHistorico(atual.historico, snapshot) } : atual,
       )

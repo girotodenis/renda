@@ -24,6 +24,7 @@ import {
 import { precosManuaisDeOperacoes } from '@/domain/cotacoes'
 import { toISO } from '@/domain/dates'
 import { calcularDetalheAtivo } from '@/domain/detalheAtivo'
+import { resultadosDeEncerrados } from '@/domain/resultado'
 import { tickersComOportunidade } from '@/domain/valuation'
 import type { CategoriaAtivo } from '@/domain/entities'
 import { isJsonBackend } from '@/infrastructure/googleConfig'
@@ -97,7 +98,19 @@ function DashboardContent() {
     () => alocacaoPorSetor(consolidado, data?.setores ?? new Map<string, string>()),
     [consolidado, data],
   )
-  const serie = useMemo(() => serieEvolucao(data?.historico ?? []), [data])
+  const serie = useMemo(
+    () =>
+      serieEvolucao(data?.historico ?? [], {
+        operacoes: data?.operacoes ?? [],
+        proventos: data?.proventos ?? [],
+      }),
+    [data],
+  )
+  // Resultado dos ativos já vendidos (realizado líquido de taxas + proventos).
+  const resultadosEncerrados = useMemo(
+    () => resultadosDeEncerrados(consolidado, data?.operacoes ?? [], data?.proventos ?? []),
+    [consolidado, data],
+  )
   const [ativoSelecionado, setAtivoSelecionado] = useState<string | null>(null)
   const [categoriaNovaOperacao, setCategoriaNovaOperacao] = useState<CategoriaAtivo | null>(null)
   const [valorManualAlvo, setValorManualAlvo] = useState<AlvoValorManual | null>(null)
@@ -277,7 +290,7 @@ function DashboardContent() {
         </p>
       ) : !data ? null : (
         <>
-          <ResumoPatrimonial resumo={data.resumo} />
+          <ResumoPatrimonial resultado={data.resultado} desempenho={data.desempenho} />
 
           {consolidado.length === 0 && data.proventos.length === 0 ? (
             <Alert variant="info" title="Carteira vazia">
@@ -310,6 +323,7 @@ function DashboardContent() {
             onSelecionarAtivo={setAtivoSelecionado}
             onNovaOperacao={setCategoriaNovaOperacao}
             onEditarValorManual={(ticker, categoria) => setValorManualAlvo({ ticker, categoria })}
+            resultadosEncerrados={resultadosEncerrados}
           />
           <DetalheAtivoModal
             detalhe={detalheAtivo}

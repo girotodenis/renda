@@ -25,7 +25,7 @@ export function EvolucaoChart({ serie }: EvolucaoChartProps) {
       <header>
         <h2 className="text-base font-semibold text-slate-900">Evolução patrimonial</h2>
         <p className="text-sm text-slate-500">
-          Histórico de patrimônio, investimento e lucro ao longo do tempo.
+          Patrimônio, investimento e retorno acumulado (variação + realizado + proventos).
         </p>
       </header>
 
@@ -69,8 +69,16 @@ export function EvolucaoChart({ serie }: EvolucaoChartProps) {
               <Line
                 type="monotone"
                 dataKey="lucroAcumulado"
-                name="Lucro Acumulado"
+                name="Retorno Acumulado"
                 stroke="#10b981"
+                strokeWidth={2}
+                dot={false}
+              />
+              <Line
+                type="monotone"
+                dataKey="proventosAcumulados"
+                name="Proventos Acumulados"
+                stroke="#f59e0b"
                 strokeWidth={2}
                 dot={false}
               />

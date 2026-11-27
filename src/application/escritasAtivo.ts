@@ -1,4 +1,7 @@
 import { calcularResumo } from '@/domain/consolidado'
+import { calcularResultado } from '@/domain/resultado'
+import type { Consolidado } from '@/domain/entities'
+import { operacoesRepo, proventosRepo } from '@/infrastructure/repositories'
 import type { RepositoryContext } from '@/infrastructure/repositories'
 import { capturarSnapshot } from '@/application/dashboard'
 import { registrarSnapshot } from '@/application/historico'
@@ -13,6 +16,33 @@ import { recalcularConsolidadoNoCache, syncConsolidado } from '@/application/con
  */
 
 /**
+ * Resultado acumulado (retorno total) para o snapshot, a partir do consolidado
+ * e das operações/proventos já em cache — sem rede.
+ */
+function lucroAcumuladoDoConsolidado(
+  context: RepositoryContext,
+  consolidado: readonly Consolidado[],
+): number {
+  const operacoes = operacoesRepo.readCache(context.spreadsheetId) ?? []
+  const proventos = proventosRepo.readCache(context.spreadsheetId) ?? []
+  return calcularResultado(consolidado, operacoes, proventos).retornoTotal
+}
+
+/** Registra o snapshot do dia com o resultado total (nunca lança). */
+async function registrarSnapshotDoConsolidado(
+  context: RepositoryContext,
+  consolidado: readonly Consolidado[],
+): Promise<void> {
+  try {
+    await registrarSnapshot(context, calcularResumo(consolidado), {
+      lucroAcumulado: lucroAcumuladoDoConsolidado(context, consolidado),
+    })
+  } catch {
+    // Snapshot é best-effort — não bloqueia a operação já salva.
+  }
+}
+
+/**
  * Recalcula o `Consolidado` a partir das operações em cache e registra o
  * snapshot do dia — **sem rede**.
  *
@@ -25,11 +55,7 @@ export async function sincronizarConsolidadoESnapshot(
   context: RepositoryContext,
 ): Promise<void> {
   const consolidado = recalcularConsolidadoNoCache(context)
-  try {
-    await registrarSnapshot(context, calcularResumo(consolidado))
-  } catch {
-    // Snapshot é best-effort — não bloqueia a operação já salva.
-  }
+  await registrarSnapshotDoConsolidado(context, consolidado)
 }
 
 /**
@@ -41,11 +67,7 @@ export async function sincronizarConsolidadoESnapshot(
  */
 export async function gravarConsolidadoESnapshot(context: RepositoryContext): Promise<void> {
   const consolidado = await syncConsolidado(context)
-  try {
-    await registrarSnapshot(context, calcularResumo(consolidado))
-  } catch {
-    // Snapshot é best-effort — não bloqueia a operação já gravada.
-  }
+  await registrarSnapshotDoConsolidado(context, consolidado)
 }
 
 /** Registra um snapshot no `Historico` (best-effort). */

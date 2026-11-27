@@ -1,7 +1,9 @@
 import type { AgregadoProvento } from '@/domain/dashboard'
 import { formatarMesAnoBR } from '@/domain/dates'
-import { fatorQuantidade, isTipoEventoCorporativo } from '@/domain/eventosCorporativos'
+import { calcularFluxoResultado } from '@/domain/fluxoCaixa'
 import { round2 } from '@/domain/money'
+import { fluxosParaXirr, xirr } from '@/domain/performance'
+import { proventosAtribuidos } from '@/domain/proventos'
 import { OperacaoTipo } from '@/domain/entities'
 import type { CategoriaAtivo, Consolidado, Operacao, Provento } from '@/domain/entities'
 
@@ -16,6 +18,7 @@ import type { CategoriaAtivo, Consolidado, Operacao, Provento } from '@/domain/e
  * Visões de rentabilidade:
  * - **Posição**: `(variação do preço + proventos do período) ÷ valor investido`.
  * - **Total (fluxo de caixa)**: `(lucro realizado + lucro flutuante + proventos) ÷ capital aportado`.
+ *   O lucro realizado é apurado contra o custo médio e é **líquido das taxas de venda**.
  *
  * Sobre o **lucro realizado/flutuante**, usa-se o **custo médio incremental**:
  * o lucro realizado é apurado venda a venda contra o custo médio do momento e o
@@ -71,7 +74,10 @@ export interface DetalheAtivo {
   posicaoEncerrada: boolean
   /** Valor atual em centavos (vem do `Consolidado`). */
   valorAtual: number
-  /** Proventos recebidos na janela 1ª compra → data de referência, em centavos. */
+  /**
+   * Proventos **atribuídos ao investidor** (posição detida na data-com) e pagos
+   * na janela 1ª compra → data de referência, em centavos.
+   */
   proventosNoPeriodo: number
   /** Retorno da posição em centavos (`valorAtual − totalInvestido + proventos`). */
   retornoPosicao: number
@@ -87,6 +93,11 @@ export interface DetalheAtivo {
   retornoTotal: number
   /** Rentabilidade Total (fluxo de caixa) sobre o capital aportado, em %. */
   rentabilidadeTotalPercent: number
+  /**
+   * **XIRR** anual do ativo (%), considerando data e tamanho de cada aporte,
+   * venda e provento. `null` quando não há fluxos de sinais opostos.
+   */
+  xirrPercent: number | null
 }
 
 /** Resultado do fluxo de caixa incremental de um ticker. */
@@ -119,50 +130,18 @@ function normalizar(valor: string): string {
  * Apura o **lucro realizado** (custo médio incremental) e o **custo da posição
  * atual** de um ticker (Seção 4.1 da especificação).
  *
- * Regras:
- * 1. Ordena as operações do ticker por `data` (desempate por `id`).
- * 2. Compra: `custoTotal += qty × preço + taxas` e `qtd += qty`.
- * 3. Evento corporativo: aplica o fator de quantidade sem alterar o `custoTotal`.
- * 4. Venda: `custoMédio = custoTotal / qtd` (0 quando `qtd === 0`); acumula
- *    `lucroRealizado += qty × preçoVenda − qty × custoMédio`; reduz `custoTotal`
- *    em `qty × custoMédio` e `qtd` em `qty`.
+ * A apuração vive em `domain/fluxoCaixa.ts` e é compartilhada com o fluxo da
+ * carteira. O lucro de cada venda é líquido das **taxas de venda**.
  */
 export function calcularFluxoRealizado(
   ticker: string,
   operacoes: readonly Operacao[],
 ): FluxoRealizado {
-  const alvo = normalizar(ticker)
-  const doTicker = operacoes
-    .filter((operacao) => normalizar(operacao.ticker) === alvo)
-    .sort((a, b) => a.data.localeCompare(b.data) || a.id.localeCompare(b.id))
-
-  let qtdCarteira = 0
-  let custoTotal = 0
-  let lucroRealizado = 0
-
-  for (const operacao of doTicker) {
-    if (isTipoEventoCorporativo(operacao.tipo)) {
-      qtdCarteira = round2(qtdCarteira * fatorQuantidade(operacao.tipo, operacao.quantidade))
-      continue
-    }
-
-    if (operacao.tipo === OperacaoTipo.Compra) {
-      custoTotal += operacao.quantidade * operacao.precoUnitario + operacao.taxas
-      qtdCarteira = round2(qtdCarteira + operacao.quantidade)
-      continue
-    }
-
-    // Venda — apura o lucro contra o custo médio do momento (nunca divide por zero).
-    const custoMedio = qtdCarteira === 0 ? 0 : custoTotal / qtdCarteira
-    lucroRealizado += operacao.quantidade * operacao.precoUnitario - operacao.quantidade * custoMedio
-    custoTotal -= operacao.quantidade * custoMedio
-    qtdCarteira = round2(qtdCarteira - operacao.quantidade)
-  }
-
+  const fluxo = calcularFluxoResultado(operacoes, [], { ticker })
   return {
-    lucroRealizado: round2(lucroRealizado),
-    custoPosicaoAtual: round2(Math.max(custoTotal, 0)),
-    quantidadePosicao: qtdCarteira,
+    lucroRealizado: fluxo.lucroRealizado,
+    custoPosicaoAtual: fluxo.custoPosicaoAtual,
+    quantidadePosicao: fluxo.quantidadePosicao,
   }
 }
 
@@ -189,7 +168,9 @@ export function filtrarProventosDoTicker(
  *
  * Os proventos entram na janela `[1ª compra, dataReferencia]` (fim explícito,
  * calculado na borda pelo chamador), de modo que proventos recebidos após a
- * última compra continuem contando.
+ * última compra continuem contando — mas apenas os **atribuídos ao investidor**
+ * na data-com (`domain/proventos.ts`), evitando contar proventos de ciclos já
+ * encerrados antes do evento.
  */
 export function calcularDetalheAtivo(
   ticker: string,
@@ -237,8 +218,9 @@ export function calcularDetalheAtivo(
     ),
   )
 
+  const proventosDoAtivo = proventosAtribuidos(operacoes, proventos)
   const proventosNoPeriodo = round2(
-    filtrarProventosDoTicker(alvo, proventos, primeiraCompra, dataReferencia).reduce(
+    filtrarProventosDoTicker(alvo, proventosDoAtivo, primeiraCompra, dataReferencia).reduce(
       (soma, provento) => soma + provento.valorTotal,
       0,
     ),
@@ -262,6 +244,17 @@ export function calcularDetalheAtivo(
   const retornoTotal = round2(lucroRealizado + lucroFlutuante + proventosNoPeriodo)
   const rentabilidadeTotalPercent =
     capitalAportado === 0 ? 0 : round2((retornoTotal / capitalAportado) * 100)
+
+  const taxaXirr = xirr(
+    fluxosParaXirr({
+      operacoes,
+      proventos,
+      valorFinal: valorAtual,
+      dataFinal: dataReferencia,
+      ticker: alvo,
+    }),
+  )
+  const xirrPercent = taxaXirr === null ? null : round2(taxaXirr * 100)
 
   // O resumo usa a mesma base histórica da Rentabilidade Total; o custo da
   // posição atual continua disponível em `totalInvestido`.
@@ -297,6 +290,7 @@ export function calcularDetalheAtivo(
     lucroFlutuante,
     retornoTotal,
     rentabilidadeTotalPercent,
+    xirrPercent,
   }
 }
 

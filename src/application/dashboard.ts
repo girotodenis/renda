@@ -3,6 +3,11 @@ import { garantirNaoCancelado } from '@/domain/progresso'
 import type { AoProgredir } from '@/domain/progresso'
 import { aplicarPrecosAtuais, calcularPosicoes, calcularResumo } from '@/domain/consolidado'
 import type { PosicaoConsolidada, ResumoCarteira } from '@/domain/consolidado'
+import { calcularResultado } from '@/domain/resultado'
+import type { ResumoResultado } from '@/domain/resultado'
+import { desempenhoDaCarteira } from '@/domain/performance'
+import type { Desempenho } from '@/domain/performance'
+import { toISO } from '@/domain/dates'
 import {
   calcularVariacaoDiaPercent,
   precosDeCotacoes,
@@ -62,6 +67,13 @@ import type { Consolidado, Operacao, Provento, Snapshot, Valuation } from '@/dom
 export interface DashboardData {
   consolidado: Consolidado[]
   resumo: ResumoCarteira
+  /**
+   * Resultado em **retorno total** (variação de preço + lucro realizado +
+   * proventos), base dos cartões do resumo patrimonial.
+   */
+  resultado: ResumoResultado
+  /** XIRR (dinheiro) e TWR (tempo) da carteira. */
+  desempenho: Desempenho
   /** Operações lançadas (base do detalhe por ativo — RF10). */
   operacoes: Operacao[]
   proventos: Provento[]
@@ -242,7 +254,10 @@ function montarDashboard(consulta: MontarConsulta): DashboardData {
     modoLocal = false,
   } = consulta
 
-  const base: Omit<DashboardData, 'consolidado' | 'resumo' | 'cotacoes'> = {
+  const base: Omit<
+    DashboardData,
+    'consolidado' | 'resumo' | 'resultado' | 'desempenho' | 'cotacoes'
+  > = {
     operacoes: [...operacoes],
     proventos: [...proventos],
     historico: [...historico],
@@ -259,6 +274,14 @@ function montarDashboard(consulta: MontarConsulta): DashboardData {
       ...base,
       consolidado,
       resumo: calcularResumo(consolidado),
+      resultado: calcularResultado(consolidado, operacoes, proventos),
+      desempenho: desempenhoDaCarteira(
+        consolidado,
+        operacoes,
+        proventos,
+        historico,
+        toISO(new Date()),
+      ),
       cotacoes: cotacoesDoConsolidado(consolidado, modoLocal),
     }
   }
@@ -292,7 +315,20 @@ function montarDashboard(consulta: MontarConsulta): DashboardData {
   )
   const consolidado = aplicarPrecosAtuais(posicoes, precosDeCotacoes(cotacoes))
 
-  return { ...base, consolidado, resumo: calcularResumo(consolidado), cotacoes }
+  return {
+    ...base,
+    consolidado,
+    resumo: calcularResumo(consolidado),
+    resultado: calcularResultado(consolidado, operacoes, proventos),
+    desempenho: desempenhoDaCarteira(
+      consolidado,
+      operacoes,
+      proventos,
+      historico,
+      toISO(new Date()),
+    ),
+    cotacoes,
+  }
 }
 
 /**
@@ -361,7 +397,20 @@ export function aplicarCotacaoNoDashboard(
   precos.set(posicao.ticker, preco)
 
   const consolidado = aplicarPrecosAtuais(base, precos)
-  return { ...data, cotacoes, consolidado, resumo: calcularResumo(consolidado) }
+  return {
+    ...data,
+    cotacoes,
+    consolidado,
+    resumo: calcularResumo(consolidado),
+    resultado: calcularResultado(consolidado, data.operacoes, data.proventos),
+    desempenho: desempenhoDaCarteira(
+      consolidado,
+      data.operacoes,
+      data.proventos,
+      data.historico,
+      toISO(new Date()),
+    ),
+  }
 }
 
 /**
@@ -795,6 +844,6 @@ export async function obterResumo(context: RepositoryContext): Promise<ResumoCar
  * serviço de histórico.
  */
 export async function capturarSnapshot(context: RepositoryContext): Promise<Snapshot> {
-  const { resumo } = await carregarDashboard(context)
-  return registrarSnapshot(context, resumo)
+  const { resumo, resultado } = await carregarDashboard(context)
+  return registrarSnapshot(context, resumo, { lucroAcumulado: resultado.retornoTotal })
 }

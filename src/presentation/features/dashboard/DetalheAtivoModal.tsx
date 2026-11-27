@@ -9,6 +9,7 @@ import { cn } from '@/presentation/cn'
 import { formatarDataBR } from '@/domain/dates'
 import type { DetalheAtivo } from '@/domain/detalheAtivo'
 import { eventosDeOperacoes, isTipoEventoCorporativo } from '@/domain/eventosCorporativos'
+import { atribuirProventos, proventosAtribuidos } from '@/domain/proventos'
 import { alterarCategoriaDoTicker } from '@/application/operacoes'
 import type { ResultadoTrocaCategoria } from '@/application/operacoes'
 import { oportunidadeDeCompra } from '@/domain/valuation'
@@ -199,6 +200,20 @@ export function DetalheAtivoModal({
     }
   }, [detalhe, operacoes, proventos])
 
+  // Proventos do ticker que não pertencem ao investidor (sem posição na
+  // data-com): continuam listados na aba, mas sinalizados.
+  const proventosNaoAtribuidos = useMemo(() => {
+    const ids = new Set<string>()
+    if (!detalhe) return ids
+    const alvo = detalhe.ticker.trim().toUpperCase()
+    for (const item of atribuirProventos(operacoes, proventos)) {
+      if (item.atribuido) continue
+      if (item.provento.ticker.trim().toUpperCase() !== alvo) continue
+      ids.add(item.provento.id)
+    }
+    return ids
+  }, [detalhe, operacoes, proventos])
+
   /** Alerta de oportunidade de compra (cotação ≤ teto − margem) no cabeçalho. */
   const oportunidade = useMemo(
     () =>
@@ -265,6 +280,7 @@ export function DetalheAtivoModal({
               <DetalheAtivoResumo
                 detalhe={detalhe}
                 proventos={proventos}
+                operacoes={operacoes}
                 onAtualizarCotacao={onAtualizarCotacao}
               />
             </div>
@@ -287,6 +303,7 @@ export function DetalheAtivoModal({
                 ticker={detalhe.ticker}
                 categoria={detalhe.categoria}
                 proventos={proventos}
+                naoAtribuidos={proventosNaoAtribuidos}
                 onChanged={onChanged}
               />
             </div>
@@ -484,14 +501,26 @@ function BarraAbas({ aba, onChange, contadores }: BarraAbasProps) {
 export function DetalheAtivoResumo({
   detalhe,
   proventos,
+  operacoes,
   onAtualizarCotacao,
 }: {
   detalhe: DetalheAtivo
   proventos: readonly Provento[]
+  /** Operações do dashboard (base da atribuição de proventos por data-com). */
+  operacoes: readonly Operacao[]
   /** Atualiza a cotação **só deste** ativo (botão ao lado de "Preço atual"). */
   onAtualizarCotacao?: (ticker: string) => Promise<ResultadoCotacaoTicker>
 }) {
   const [atualizandoPreco, setAtualizandoPreco] = useState(false)
+  // O gráfico mensal usa apenas os proventos atribuídos ao investidor na
+  // data-com; a aba "Proventos" continua listando todos os lançamentos.
+  const proventosDoGrafico = useMemo(
+    () =>
+      proventosAtribuidos(operacoes, proventos).filter(
+        (provento) => provento.ticker.trim() === detalhe.ticker,
+      ),
+    [operacoes, proventos, detalhe.ticker],
+  )
   const [avisoPreco, setAvisoPreco] = useState<{
     tipo: 'success' | 'error' | 'info'
     texto: string
@@ -562,6 +591,12 @@ export function DetalheAtivoResumo({
         />
         <Metrica rotulo="Valor investido" valor={formatarCentavos(detalhe.valorInvestido)} />
         <Metrica rotulo="Valor atual" valor={formatarCentavos(detalhe.valorAtual)} />
+        <Metrica
+          rotulo="XIRR (a.a.)"
+          valor={
+            detalhe.xirrPercent === null ? '—' : formatarPercentual(detalhe.xirrPercent)
+          }
+        />
       </div>
 
       {avisoPreco ? (
@@ -657,6 +692,10 @@ export function DetalheAtivoResumo({
             <ul className="list-disc space-y-1 pl-5">
               <li>Retorno Total = Lucro Realizado + Variação + Proventos</li>
               <li>Rentabilidade Total = (Retorno Total ÷ Capital Aportado) × 100</li>
+              <li>
+                XIRR = taxa anual que zera o valor presente dos fluxos datados (aportes,
+                vendas, proventos e valor atual)
+              </li>
             </ul>
             <p>
               Capital aportado é a soma de todas as compras (quantidade × preço + taxas). Sem vendas,
@@ -675,7 +714,7 @@ export function DetalheAtivoResumo({
 
       <div className="border-t border-slate-200 pt-4">
         <Suspense fallback={<GraficosFallback />}>
-          <DetalheAtivoGraficos detalhe={detalhe} proventos={proventos} />
+          <DetalheAtivoGraficos detalhe={detalhe} proventos={proventosDoGrafico} />
         </Suspense>
       </div>
     </div>

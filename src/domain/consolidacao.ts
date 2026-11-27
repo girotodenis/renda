@@ -316,6 +316,8 @@ interface AritmeticaConsolidacao {
   precoCompra: number
   taxasCompra: number
   precoVenda: number
+  /** Σ taxas das vendas absorvidas, preservadas na venda consolidada. */
+  taxasVenda: number
 }
 
 /**
@@ -327,6 +329,10 @@ interface AritmeticaConsolidacao {
  * movimentação atuam sobre posição zero e não entram na escala). O resíduo
  * `r = P mod Q` é retirado dos dois lados — da receita (preço da venda) e do
  * custo (taxas da compra) — de modo que `lucro = (P − r) − (C − r) = P − C`.
+ *
+ * As **taxas de venda** são somadas e devolvidas à parte para a venda
+ * consolidada: elas entram no lucro realizado (`receita − taxas − custo`), de
+ * modo que consolidar não altera o resultado apurado.
  */
 function calcularAritmetica(
   ordenadas: readonly Operacao[],
@@ -361,6 +367,7 @@ function calcularAritmetica(
   let quantidadeVenda = 0
   let custoCompras = 0
   let receitaVendas = 0
+  let taxasVenda = 0
 
   for (let indice = 0; indice <= ultimaMovimentacao; indice += 1) {
     const operacao = ordenadas[indice]
@@ -369,6 +376,7 @@ function calcularAritmetica(
     if (operacao.tipo === OperacaoTipo.Venda) {
       quantidadeVenda += operacao.quantidade * fatorResidual
       receitaVendas += operacao.quantidade * operacao.precoUnitario
+      taxasVenda += operacao.taxas
     } else {
       quantidadeCompra += operacao.quantidade * fatorResidual
       custoCompras += operacao.quantidade * operacao.precoUnitario + operacao.taxas
@@ -411,6 +419,7 @@ function calcularAritmetica(
     precoCompra: compra.preco,
     taxasCompra: compra.residuo,
     precoVenda: venda.preco,
+    taxasVenda: round2(taxasVenda),
   }
 }
 
@@ -474,12 +483,14 @@ function calcularResumo(
 
   let totalCompras = 0
   let totalVendas = 0
+  let taxasVendas = 0
   for (const operacao of operacoesFinais) {
     if (!noEscopo(operacao)) continue
     if (operacao.tipo === OperacaoTipo.Compra) {
       totalCompras += operacao.quantidade * operacao.precoUnitario + operacao.taxas
     } else if (operacao.tipo === OperacaoTipo.Venda) {
       totalVendas += operacao.quantidade * operacao.precoUnitario
+      taxasVendas += operacao.taxas
     }
   }
 
@@ -488,13 +499,13 @@ function calcularResumo(
     .reduce((soma, provento) => soma + provento.valorTotal, 0)
 
   // Ticker encerrado: o lucro realizado do ticker inteiro. Ano `Completo`: como
-  // o ano começa e termina zerado, `vendas − compras` é exatamente o lucro do
-  // ano. Ano `SomenteProventos`: as operações não são tocadas (lucro 0).
+  // o ano começa e termina zerado, `vendas líquidas − compras` é exatamente o
+  // lucro do ano. Ano `SomenteProventos`: as operações não são tocadas (lucro 0).
   const lucroRealizado =
     alvo.tipo === 'ticker'
       ? calcularFluxoRealizado(ticker, operacoesFinais).lucroRealizado
       : alvo.modo === 'Completo'
-        ? round2(totalVendas - totalCompras)
+        ? round2(totalVendas - taxasVendas - totalCompras)
         : 0
 
   return {
@@ -586,7 +597,7 @@ export function calcularConsolidacao(
       ticker,
       quantidade: aritmetica.quantidadeVenda,
       precoUnitario: aritmetica.precoVenda,
-      taxas: 0,
+      taxas: aritmetica.taxasVenda,
       indexador: null,
       percentualIndexador: null,
       vencimento: null,
