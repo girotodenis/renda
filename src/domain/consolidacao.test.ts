@@ -171,6 +171,38 @@ describe('calcularConsolidacao — ticker encerrado', () => {
     )
   })
 
+  it('preserva as taxas de venda no lucro realizado', () => {
+    const comTaxas = [
+      op({ id: 't1', data: '2023-01-02', tipo: OperacaoTipo.Compra, quantidade: 100, precoUnitario: 1000, taxas: 100 }),
+      op({ id: 't2', data: '2023-03-02', tipo: OperacaoTipo.Venda, quantidade: 40, precoUnitario: 1100, taxas: 10 }),
+      op({ id: 't3', data: '2023-04-02', tipo: OperacaoTipo.Venda, quantidade: 60, precoUnitario: 1300, taxas: 20 }),
+    ]
+
+    const resultado = calcularConsolidacao(
+      { tipo: 'ticker', ticker: 'PETR4' },
+      comTaxas,
+      [],
+      { novoId: novoIdSequencial() },
+    )
+    expect('erro' in resultado).toBe(false)
+    if ('erro' in resultado) return
+
+    const venda = resultado.operacoes.find((operacao) => operacao.tipo === OperacaoTipo.Venda)
+    expect(venda?.taxas).toBe(30)
+
+    const lucroAntes = calcularFluxoRealizado('PETR4', comTaxas).lucroRealizado
+    const lucroDepois = calcularFluxoRealizado('PETR4', resultado.operacoes).lucroRealizado
+    expect(lucroAntes).toBe(21870)
+    expect(lucroDepois).toBe(lucroAntes)
+
+    expect(
+      verificarInvariantes(
+        { operacoes: comTaxas, proventos: [] },
+        { operacoes: resultado.operacoes, proventos: [] },
+      ),
+    ).toEqual([])
+  })
+
   it('ajusta quantidade por split e grupamento no meio do histórico', () => {
     const comEventos = [
       op({ id: 'b1', data: '2023-01-02', tipo: OperacaoTipo.Compra, quantidade: 100, precoUnitario: 1000 }),

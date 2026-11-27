@@ -47,7 +47,7 @@ flowchart LR
 | --- | --- |
 | **Entidades** (com identidade) | `domain/entities.ts` — `Operacao`, `Provento`, `Consolidado`, `Snapshot`, `MetaRebalanceamento`, `Ativo` |
 | **Objetos de valor / convenções** | `domain/money.ts` (centavos), `domain/dates.ts` (ISO `YYYY-MM-DD`), `domain/categoria.ts` (enum canônico) |
-| **Serviços de domínio** (lógica pura) | `domain/consolidado.ts`, `domain/dashboard.ts`, `domain/detalheAtivo.ts`, `domain/consolidacao.ts`, `domain/cotacoes.ts`, `domain/eventosCorporativos.ts`, `domain/b3Import.ts`, `domain/rebalanceamento/*` |
+| **Serviços de domínio** (lógica pura) | `domain/consolidado.ts`, `domain/fluxoCaixa.ts`, `domain/resultado.ts`, `domain/proventos.ts`, `domain/performance.ts`, `domain/dashboard.ts`, `domain/detalheAtivo.ts`, `domain/consolidacao.ts`, `domain/cotacoes.ts`, `domain/eventosCorporativos.ts`, `domain/b3Import.ts`, `domain/rebalanceamento/*` |
 | **Formato do envelope cifrado** | `domain/criptografia.ts` — magic `MINHASACOES-ENC1`, cabeçalho em claro (`v`, `kdf`, `cifra`), Base64 e validação da senha (sem Web Crypto) |
 | **Ports (contratos de repositório)** | `domain/repositories/ports.ts` — `Repository<T>`, `CrudRepository<T>` |
 | **Linguagem ubíqua** | `Operacao`, `Provento`, `Consolidado`, `Snapshot`, `Carteira`, `Aporte`, `Desvio`, `Split`, `Grupamento`, `Bonificação` |

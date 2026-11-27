@@ -1,8 +1,10 @@
 import { categoriaLabel } from '@/domain/categoria'
 import { formatarDataBR, formatarMesAnoBR } from '@/domain/dates'
+import { calcularFluxosAcumulados } from '@/domain/fluxoCaixa'
+import { proventosAtribuidos } from '@/domain/proventos'
 import { round2 } from '@/domain/money'
 import { CategoriaAtivo } from '@/domain/entities'
-import type { Consolidado, Provento, Snapshot } from '@/domain/entities'
+import type { Consolidado, Operacao, Provento, Snapshot } from '@/domain/entities'
 
 /**
  * Agregações do dashboard (RF07–RF11) — módulo **puro** e testável.
@@ -42,7 +44,20 @@ export interface EvolucaoPonto {
   rotulo: string
   patrimonioTotal: number
   totalInvestido: number
+  /**
+   * Resultado acumulado em **centavos**: variação de preço das posições abertas
+   * + lucro realizado + proventos recebidos até a data. Sem os fluxos, repete o
+   * valor gravado no snapshot (histórico legado).
+   */
   lucroAcumulado: number
+  /** Proventos recebidos até a data, em **centavos**. */
+  proventosAcumulados: number
+  /** Lucro realizado (vendas líquidas de taxas) até a data, em **centavos**. */
+  lucroRealizadoAcumulado: number
+  /** Σ compras com taxas até a data (base do percentual), em **centavos**. */
+  capitalAportado: number
+  /** Resultado acumulado sobre o capital aportado (%). */
+  retornoTotalPercent: number
 }
 
 /** Posições efetivamente abertas (quantidade ≠ 0 e ticker preenchido). */
@@ -345,16 +360,73 @@ export function totalProventos(proventos: readonly Provento[]): number {
   return round2(proventos.reduce((soma, provento) => soma + provento.valorTotal, 0))
 }
 
-/** Série de evolução patrimonial (RF09) ordenada por data crescente. */
-export function serieEvolucao(historico: readonly Snapshot[]): EvolucaoPonto[] {
-  return [...historico]
+/** Fluxos necessários para recalcular o resultado acumulado da série. */
+export interface FluxosEvolucao {
+  operacoes: readonly Operacao[]
+  proventos: readonly Provento[]
+}
+
+/**
+ * Série de evolução patrimonial (RF09) ordenada por data crescente.
+ *
+ * Com os fluxos informados, o **resultado acumulado** de cada ponto é
+ * recalculado a partir das operações e proventos até aquela data
+ * (`variação de preço + lucro realizado + proventos`), em vez de repetir o
+ * `lucroAcumulado` gravado no snapshot — que historicamente considerava apenas
+ * a variação de preço e, por isso, "desabava" no dia de uma venda.
+ *
+ * Sem os fluxos (histórico legado), os campos extras ficam zerados e o valor
+ * gravado é preservado.
+ */
+export function serieEvolucao(
+  historico: readonly Snapshot[],
+  fluxos?: FluxosEvolucao,
+): EvolucaoPonto[] {
+  const ordenado = [...historico]
     .filter((snapshot) => snapshot.data.length > 0)
     .sort((a, b) => a.data.localeCompare(b.data))
-    .map((snapshot) => ({
+
+  const acumulados = fluxos
+    ? calcularFluxosAcumulados(
+        fluxos.operacoes,
+        // Só os proventos atribuídos ao investidor na data-com entram na curva.
+        proventosAtribuidos(fluxos.operacoes, fluxos.proventos),
+        ordenado.map((snapshot) => snapshot.data),
+      )
+    : null
+
+  return ordenado.map((snapshot, indice) => {
+    const fluxo = acumulados?.[indice]
+    if (!fluxo) {
+      return {
+        data: snapshot.data,
+        rotulo: formatarDataBR(snapshot.data),
+        patrimonioTotal: snapshot.patrimonioTotal,
+        totalInvestido: snapshot.totalInvestido,
+        lucroAcumulado: snapshot.lucroAcumulado,
+        proventosAcumulados: 0,
+        lucroRealizadoAcumulado: 0,
+        capitalAportado: 0,
+        retornoTotalPercent: 0,
+      }
+    }
+
+    const variacaoPreco = round2(snapshot.patrimonioTotal - snapshot.totalInvestido)
+    const lucroAcumulado = round2(variacaoPreco + fluxo.lucroRealizado + fluxo.proventos)
+
+    return {
       data: snapshot.data,
       rotulo: formatarDataBR(snapshot.data),
       patrimonioTotal: snapshot.patrimonioTotal,
       totalInvestido: snapshot.totalInvestido,
-      lucroAcumulado: snapshot.lucroAcumulado,
-    }))
+      lucroAcumulado,
+      proventosAcumulados: fluxo.proventos,
+      lucroRealizadoAcumulado: fluxo.lucroRealizado,
+      capitalAportado: fluxo.capitalAportado,
+      retornoTotalPercent:
+        fluxo.capitalAportado === 0
+          ? 0
+          : round2((lucroAcumulado / fluxo.capitalAportado) * 100),
+    }
+  })
 }

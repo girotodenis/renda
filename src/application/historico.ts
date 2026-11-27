@@ -12,16 +12,23 @@ import type { Snapshot } from '@/domain/entities'
  * não devem bloquear o fluxo do app (RNF04).
  */
 
-/** Monta o snapshot do resumo patrimonial para uma data (ISO `YYYY-MM-DD`). */
+/**
+ * Monta o snapshot do resumo patrimonial para uma data (ISO `YYYY-MM-DD`).
+ *
+ * `lucroAcumulado` recebe o **resultado total** (`variação + realizado +
+ * proventos`) quando o chamador o informa; o padrão mantém a variação de preço,
+ * preservando o comportamento anterior.
+ */
 export function snapshotDoResumo(
   resumo: ResumoCarteira,
   data: string = toISO(new Date()),
+  lucroAcumulado: number = resumo.lucroTotal,
 ): Snapshot {
   return {
     data,
     patrimonioTotal: resumo.patrimonioTotal,
     totalInvestido: resumo.totalInvestido,
-    lucroAcumulado: resumo.lucroTotal,
+    lucroAcumulado,
   }
 }
 
@@ -61,13 +68,16 @@ export function jaTemSnapshotDeHoje(
  * outras datas e reescreve a região de dados de forma segura (preserva o
  * cabeçalho). A escrita é local-first: entra na fila do outbox e vai ao banco
  * no próximo flush.
+ *
+ * `lucroAcumulado` permite gravar o **resultado total** (com realizado e
+ * proventos) em vez da variação de preço do resumo.
  */
 export async function registrarSnapshot(
   context: RepositoryContext,
   resumo: ResumoCarteira,
-  options: { data?: string } = {},
+  options: { data?: string; lucroAcumulado?: number } = {},
 ): Promise<Snapshot> {
-  const snapshot = snapshotDoResumo(resumo, options.data)
+  const snapshot = snapshotDoResumo(resumo, options.data, options.lucroAcumulado)
   const existentes = await historicoRepo.list(context)
   await historicoRepo.replaceAll(context, upsertHistorico(existentes, snapshot))
   return snapshot

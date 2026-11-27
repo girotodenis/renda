@@ -315,6 +315,67 @@ describe('Rentabilidade Total (fluxo de caixa)', () => {
     expect(detalhe.lucroRealizado).toBe(25000)
     expect(detalhe.rentabilidadeTotalPercent).not.toBe(detalhe.rentabilidadePercent)
   })
+
+  it('desconta as taxas da venda do lucro realizado', () => {
+    const operacoes = [
+      operacao({ ticker: 'PETR4', tipo: OperacaoTipo.Compra, quantidade: 100, precoUnitario: 1000, data: '2026-01-01' }),
+      operacao({
+        ticker: 'PETR4',
+        tipo: OperacaoTipo.Venda,
+        quantidade: 50,
+        precoUnitario: 1500,
+        taxas: 30,
+        data: '2026-02-01',
+      }),
+    ]
+    const consolidado = calcularConsolidado(operacoes, new Map([['PETR4', 1200]]))
+    const detalhe = obterDetalhe('PETR4', operacoes, [], consolidado)
+
+    // 50 × 1500 − 50 × 1000 − 30 de taxas.
+    expect(detalhe.lucroRealizado).toBe(24970)
+    // 24.970 (realizado) + 10.000 (variação) ÷ 100.000 aportados.
+    expect(detalhe.retornoTotal).toBe(34970)
+    expect(detalhe.rentabilidadeTotalPercent).toBe(34.97)
+  })
+})
+
+describe('proventos atribuídos por data-com', () => {
+  const operacoes = [
+    operacao({ ticker: 'PETR4', tipo: OperacaoTipo.Compra, quantidade: 100, precoUnitario: 1000, data: '2026-01-10' }),
+    operacao({ ticker: 'PETR4', tipo: OperacaoTipo.Venda, quantidade: 100, precoUnitario: 1200, data: '2026-02-10' }),
+  ]
+
+  it('não conta provento de ciclo encerrado antes da data-com', () => {
+    const consolidado = calcularConsolidado(operacoes, new Map([['PETR4', 1200]]))
+    const proventos = [
+      provento({
+        ticker: 'PETR4',
+        dataCom: '2026-03-01',
+        dataPagamento: '2026-03-15',
+        valorTotal: 500,
+      }),
+    ]
+    const detalhe = obterDetalhe('PETR4', operacoes, proventos, consolidado)
+
+    expect(detalhe.proventosNoPeriodo).toBe(0)
+    expect(detalhe.retornoTotal).toBe(20000)
+  })
+
+  it('conta provento cuja data-com ocorreu com posição, mesmo pago após a venda', () => {
+    const consolidado = calcularConsolidado(operacoes, new Map([['PETR4', 1200]]))
+    const proventos = [
+      provento({
+        ticker: 'PETR4',
+        dataCom: '2026-01-20',
+        dataPagamento: '2026-03-15',
+        valorTotal: 500,
+      }),
+    ]
+    const detalhe = obterDetalhe('PETR4', operacoes, proventos, consolidado)
+
+    expect(detalhe.proventosNoPeriodo).toBe(500)
+    expect(detalhe.retornoTotal).toBe(20500)
+  })
 })
 
 describe('calcularDetalheAtivo (posição encerrada)', () => {
@@ -429,5 +490,42 @@ describe('séries para os gráficos', () => {
   it('serieProventosPorMes retorna vazio sem compras (janela nula)', () => {
     const proventos = [provento({ ticker: 'PETR4', dataPagamento: '2026-01-20', valorTotal: 300 })]
     expect(serieProventosPorMes(proventos, 'PETR4', null, null)).toEqual([])
+  })
+})
+
+describe('XIRR do ativo', () => {
+  it('anualiza o retorno do dinheiro entre a compra e a data de referência', () => {
+    const operacoes = [
+      operacao({
+        ticker: 'PETR4',
+        tipo: OperacaoTipo.Compra,
+        quantidade: 100,
+        precoUnitario: 1000,
+        data: '2026-01-01',
+      }),
+    ]
+    const consolidado = calcularConsolidado(operacoes, new Map([['PETR4', 1100]]))
+    const detalhe = obterDetalhe('PETR4', operacoes, [], consolidado, '2026-12-31')
+
+    // 100.000 → 110.000 em 364 dias ⇒ 1,1^(365/364) − 1 = 10,03% a.a.
+    expect(detalhe.xirrPercent).not.toBeNull()
+    expect(detalhe.xirrPercent!).toBeCloseTo(10.03, 2)
+  })
+
+  it('devolve null quando não há fluxos de sinais opostos', () => {
+    const operacoes = [
+      operacao({
+        ticker: 'PETR4',
+        tipo: OperacaoTipo.Compra,
+        quantidade: 100,
+        precoUnitario: 1000,
+        data: '2026-01-01',
+      }),
+    ]
+    // Preço atual zero (sem cotação) ⇒ só o desembolso da compra no fluxo.
+    const consolidado = calcularConsolidado(operacoes, new Map([['PETR4', 0]]))
+    const detalhe = obterDetalhe('PETR4', operacoes, [], consolidado, '2026-12-31')
+
+    expect(detalhe.xirrPercent).toBeNull()
   })
 })

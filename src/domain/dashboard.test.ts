@@ -18,8 +18,8 @@ import {
   tickersParaNavegacao,
   totalProventos,
 } from '@/domain/dashboard'
-import { CategoriaAtivo, ProventoTipo } from '@/domain/entities'
-import type { Consolidado, Provento, Snapshot } from '@/domain/entities'
+import { CategoriaAtivo, OperacaoTipo, ProventoTipo } from '@/domain/entities'
+import type { Consolidado, Operacao, Provento, Snapshot } from '@/domain/entities'
 
 /** Convenção: dinheiro em centavos. Ex.: `R$ 10,00` → `1000`. */
 
@@ -376,5 +376,114 @@ describe('serieEvolucao (RF09)', () => {
     expect(serie.map((ponto) => ponto.data)).toEqual(['2026-01-01', '2026-03-01'])
     expect(serie[0].rotulo).toBe('01/01/2026')
     expect(serie[1].patrimonioTotal).toBe(300)
+  })
+
+  it('recalcula o retorno acumulado com realizado e proventos (não desaba ao vender)', () => {
+    const historico: Snapshot[] = [
+      { data: '2026-01-31', patrimonioTotal: 120000, totalInvestido: 100000, lucroAcumulado: 20000 },
+      { data: '2026-02-28', patrimonioTotal: 0, totalInvestido: 0, lucroAcumulado: 0 },
+    ]
+    const operacoes: Operacao[] = [
+      {
+        id: 'c1',
+        data: '2026-01-10',
+        tipo: OperacaoTipo.Compra,
+        categoria: CategoriaAtivo.Acao,
+        ticker: 'PETR4',
+        quantidade: 100,
+        precoUnitario: 1000,
+        taxas: 0,
+        indexador: null,
+        percentualIndexador: null,
+        vencimento: null,
+        valorBrutoAtual: null,
+      },
+      {
+        id: 'v1',
+        data: '2026-02-15',
+        tipo: OperacaoTipo.Venda,
+        categoria: CategoriaAtivo.Acao,
+        ticker: 'PETR4',
+        quantidade: 100,
+        precoUnitario: 1300,
+        taxas: 10,
+        indexador: null,
+        percentualIndexador: null,
+        vencimento: null,
+        valorBrutoAtual: null,
+      },
+    ]
+    const proventos = [provento({ ticker: 'PETR4', dataPagamento: '2026-01-20', valorTotal: 2000 })]
+
+    const serie = serieEvolucao(historico, { operacoes, proventos })
+
+    // Antes da venda: variação (20.000) + proventos (2.000).
+    expect(serie[0].lucroAcumulado).toBe(22000)
+    expect(serie[0].proventosAcumulados).toBe(2000)
+    expect(serie[0].lucroRealizadoAcumulado).toBe(0)
+    expect(serie[0].retornoTotalPercent).toBe(22)
+
+    // Depois da venda: variação zera, mas o realizado (29.990) assume o lugar.
+    expect(serie[1].patrimonioTotal).toBe(0)
+    expect(serie[1].lucroRealizadoAcumulado).toBe(29990)
+    expect(serie[1].lucroAcumulado).toBe(31990)
+    expect(serie[1].retornoTotalPercent).toBe(31.99)
+  })
+
+  it('ignora proventos que não pertencem ao investidor na data-com', () => {
+    const historico: Snapshot[] = [
+      { data: '2026-02-28', patrimonioTotal: 0, totalInvestido: 0, lucroAcumulado: 0 },
+    ]
+    const operacoes: Operacao[] = [
+      {
+        id: 'c1',
+        data: '2026-01-10',
+        tipo: OperacaoTipo.Compra,
+        categoria: CategoriaAtivo.Acao,
+        ticker: 'PETR4',
+        quantidade: 100,
+        precoUnitario: 1000,
+        taxas: 0,
+        indexador: null,
+        percentualIndexador: null,
+        vencimento: null,
+        valorBrutoAtual: null,
+      },
+      {
+        id: 'v1',
+        data: '2026-02-10',
+        tipo: OperacaoTipo.Venda,
+        categoria: CategoriaAtivo.Acao,
+        ticker: 'PETR4',
+        quantidade: 100,
+        precoUnitario: 1000,
+        taxas: 0,
+        indexador: null,
+        percentualIndexador: null,
+        vencimento: null,
+        valorBrutoAtual: null,
+      },
+    ]
+    const proventos = [
+      // data-com durante a posse → conta
+      provento({
+        ticker: 'PETR4',
+        dataPagamento: '2026-02-20',
+        valorTotal: 500,
+        dataCom: '2026-01-20',
+      }),
+      // data-com depois da venda → não conta
+      provento({
+        ticker: 'PETR4',
+        dataPagamento: '2026-02-25',
+        valorTotal: 1000,
+        dataCom: '2026-02-15',
+      }),
+    ]
+
+    const [ponto] = serieEvolucao(historico, { operacoes, proventos })
+
+    expect(ponto.proventosAcumulados).toBe(500)
+    expect(ponto.lucroAcumulado).toBe(500)
   })
 })

@@ -8,6 +8,7 @@ Acompanhe sua carteira de investimentos direto do navegador, usando **sua conta 
 
 - Lançamento de operações (compra/venda) e proventos
 - Cálculo automático do consolidado da carteira (preço médio, lucro, % da carteira)
+- **Retorno total** por ativo e carteira (variação de preço + lucro realizado líquido de taxas + proventos), com a rentabilidade sobre o capital aportado — os proventos entram pela **posição na data-com**, a aba **Vendidos** mostra o resultado dos ativos encerrados e o resumo traz **XIRR** (retorno do dinheiro) e **TWR** (desempenho dos ativos, encadeado pelos snapshots do Histórico)
 - Dashboard com alocação por ativo/categoria e evolução patrimonial
 - Rebalanceamento por metas e aporte inteligente
 - Importação de extratos da B3 (Área do Investidor)

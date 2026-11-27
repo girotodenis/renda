@@ -28,6 +28,12 @@ interface DetalheAtivoProventosProps {
   categoria: CategoriaAtivo
   /** Proventos do dashboard (todas as abas) — filtrados pelo ticker. */
   proventos: readonly Provento[]
+  /**
+   * IDs dos proventos que **não** pertencem ao investidor (sem posição na
+   * data-com). Eles continuam listados — são lançamentos reais —, mas não somam
+   * no retorno; a lista sinaliza o motivo.
+   */
+  naoAtribuidos?: ReadonlySet<string>
   /** Recarrega os dados do dashboard após uma escrita. */
   onChanged: () => Promise<void>
 }
@@ -40,6 +46,7 @@ export function DetalheAtivoProventos({
   ticker,
   categoria,
   proventos,
+  naoAtribuidos,
   onChanged,
 }: DetalheAtivoProventosProps) {
   const { workspace, ensureAccessToken } = useAuth()
@@ -204,7 +211,15 @@ export function DetalheAtivoProventos({
                       className="px-3 py-2 text-right tabular-nums text-slate-700"
                       data-label="Valor total"
                     >
-                      {formatarBRL(fromCentavos(provento.valorTotal))}
+                      <span className="block">{formatarBRL(fromCentavos(provento.valorTotal))}</span>
+                      {naoAtribuidos?.has(provento.id) ? (
+                        <span
+                          className="mt-0.5 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800"
+                          title="Não havia posição na data-com: o provento não entra no retorno do ativo."
+                        >
+                          Fora do retorno
+                        </span>
+                      ) : null}
                     </td>
                     <td className="px-3 py-2" data-actions>
                       <div className="flex justify-end gap-1">
